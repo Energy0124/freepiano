@@ -215,6 +215,7 @@ static ASIOTime *callback_buffer_switch_timeinfo(ASIOTime *timeInfo, long index,
 	static float output_buffer[2][4096];
 
 	// call vsti process func
+	vsti_update_config((float)driver_info.sampleRate, driver_info.preferredSize);
 	vsti_process(output_buffer[0], output_buffer[1], buffSize);
 
 //#if WINDOWS && _DEBUG
@@ -236,13 +237,30 @@ static ASIOTime *callback_buffer_switch_timeinfo(ASIOTime *timeInfo, long index,
 			switch (driver_info.channelInfos[i].type)
 			{
 			case ASIOSTInt16LSB:
-				memset (driver_info.bufferInfos[i].buffers[index], 0, buffSize * 2);
+				{
+					double scale = 0x7fff  + .49999;
+
+					short * b = (short*)driver_info.bufferInfos[i].buffers[index];
+					float * o = output_buffer[driver_info.channelInfos[i].channel & 1];
+
+					for (int j = 0; j < buffSize; j++)
+					{
+						if (*o > 1) *o = 1;
+						else if (*o < -1) *o = -1;
+
+						*b = (int)(scale * (*o));
+
+						b++;
+						o++;
+					}
+				}
 				break;
+
 			case ASIOSTInt24LSB:		// used for 20 bits as well
 				memset (driver_info.bufferInfos[i].buffers[index], 0, buffSize * 3);
 				break;
+
 			case ASIOSTInt32LSB:
-				//memset (driver_info.bufferInfos[i].buffers[index], 0, buffSize * 4);
 				{
 					double scale = 0x7fffffff  + .49999;
 
@@ -461,9 +479,6 @@ int asio_open(const char * driver_name)
 	if (ASIOStart())
 		return 9;
 
-	// initialize effect
-	vsti_start_process((float)driver_info.sampleRate, driver_info.preferredSize);
-
 	return 0;
 }
 
@@ -475,4 +490,19 @@ void asio_close()
 	ASIODisposeBuffers();
 	ASIOExit();
 	close_driver();
+}
+
+// enum device
+void asio_enum_device(asio_enum_callback & callback)
+{
+	LPASIODRVSTRUCT drv = driver_list.lpdrvlist;
+
+	for (int i = 0; i < driver_list.numdrv; i++)
+	{
+		if (drv)
+		{
+			callback(drv->drvname);
+			drv = drv->next;
+		}
+	}
 }

@@ -1,11 +1,12 @@
 #include <string.h>
+#include <tchar.h>
 #include "asiodrivers.h"
 
 AsioDrivers* asioDrivers = 0;
 
-bool loadAsioDriver(const char *name);
+bool loadAsioDriver(const TCHAR *name);
 
-bool loadAsioDriver(const char *name)
+bool loadAsioDriver(const TCHAR *name)
 {
 	if(!asioDrivers)
 		asioDrivers = new AsioDrivers();
@@ -27,7 +28,7 @@ AsioDrivers::~AsioDrivers()
 {
 }
 
-bool AsioDrivers::getCurrentDriverName(char *name)
+bool AsioDrivers::getCurrentDriverName(TCHAR *name)
 {
 	if(curIndex >= 0)
 		return asioGetDriverName(curIndex, name, 32) == 0 ? true : false;
@@ -35,21 +36,21 @@ bool AsioDrivers::getCurrentDriverName(char *name)
 	return false;
 }
 
-long AsioDrivers::getDriverNames(char **names, long maxDrivers)
+long AsioDrivers::getDriverNames(TCHAR **names, long maxDrivers)
 {
 	for(long i = 0; i < asioGetNumDev() && i < maxDrivers; i++)
 		asioGetDriverName(i, names[i], 32);
 	return asioGetNumDev() < maxDrivers ? asioGetNumDev() : maxDrivers;
 }
 
-bool AsioDrivers::loadDriver(const char *name)
+bool AsioDrivers::loadDriver(const TCHAR *name)
 {
-	char dname[64];
-	char curName[64];
+	TCHAR dname[64];
+	TCHAR curName[64];
 
 	for(long i = 0; i < asioGetNumDev(); i++)
 	{
-		if(!asioGetDriverName(i, dname, 32) && !strcmp(name, dname))
+		if(!asioGetDriverName(i, dname, 32) && !_tcscmp(name, dname))
 		{
 			curName[0] = 0;
 			getCurrentDriverName(curName);	// in case we fail...
@@ -63,7 +64,7 @@ bool AsioDrivers::loadDriver(const char *name)
 			else
 			{
 				theAsioDriver = 0;
-				if(curName[0] && strcmp(dname, curName))
+				if(curName[0] && _tcscmp(dname, curName))
 					loadDriver(curName);	// try restore
 			}
 			break;

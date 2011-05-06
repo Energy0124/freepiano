@@ -1,5 +1,10 @@
 #pragma once
 
+struct midi_enum_callback
+{
+	virtual void operator ()(const char * value) = 0;
+};
+
 // open output device
 int midi_open_output(const char * name);
 
@@ -23,3 +28,9 @@ char midi_get_octshift();
 
 // modify event
 void midi_modify_event(byte & data1, byte & data2, byte & data3, byte & data4, char shift, byte velocity);
+
+// enum input
+void midi_enum_input(midi_enum_callback & callbcak);
+
+// enum input
+void midi_enum_output(midi_enum_callback & callbcak);

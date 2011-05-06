@@ -27,6 +27,10 @@ static MidiEvent key_map[256][2] = {0};
 static bool enable_keyboard = true;
 static char oct_shift[16] = {0};
 static char key_velocity[16] = {127};
+static char key_channel[16] = {0};
+
+// keyboard status
+static byte keyboard_status[256] = {0};
 
 // -----------------------------------------------------------------------------------------
 // accessibility shortcut keys
@@ -145,9 +149,6 @@ static void DisableWindowsKey(bool disable)
 // -----------------------------------------------------------------------------------------
 static DWORD __stdcall input_update_thread(void * param)
 {
-	// keyboard status
-	byte keyboard_status[256] = {0};
-
 	while (input_thread)
 	{
 		DIDEVICEOBJECTDATA key_events[DINPUT_BUFFER_SIZE];
@@ -198,25 +199,8 @@ static DWORD __stdcall input_update_thread(void * param)
 				uint code = key_events[i].dwOfs;
 				uint keydown = key_events[i].dwData;
 
-				// send keyboard event to display
-				display_keyboard_event(code, keydown);
-
-				// translate keyboard event to midi event
-				MidiEvent map = key_map[code][keydown == 0];
-
-				// send midi event
-				if (map.action)
-				{
-					// modify event
-					midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, oct_shift[map.action & 0xf], key_velocity[map.action & 0xf]);
-
-					// sent event
-					midi_send_event(map.action, map.arg1, map.arg2, map.arg3);
-				}
-
-				// keep state
-				if (code < ARRAY_COUNT(keyboard_status))
-					keyboard_status[code] = keydown;
+				// send keyboard event
+				keyboard_send_event(code, keydown);
 			}
 		}
 
@@ -330,6 +314,30 @@ void keyboard_enable(bool enable)
 	SetEvent(input_event);
 }
 
+// event message
+void keyboard_send_event(uint code, uint keydown)
+{
+	// send keyboard event to display
+	display_keyboard_event(code, keydown);
+
+	// translate keyboard event to midi event
+	MidiEvent map = key_map[code][keydown == 0];
+
+	// send midi event
+	if (map.action)
+	{
+		// modify event
+		midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, oct_shift[map.action & 0xf] + midi_get_octshift(), key_velocity[map.action & 0xf]);
+
+		// sent event
+		midi_send_event(map.action, map.arg1, map.arg2, map.arg3);
+	}
+
+	// keep state
+	if (code < ARRAY_COUNT(keyboard_status))
+		keyboard_status[code] = keydown;
+}
+
 // get keyboard map
 void keyboard_get_map(byte code, MidiEvent * keydown, MidiEvent * keyup)
 {
@@ -342,6 +350,32 @@ void keyboard_set_map(byte code, MidiEvent * keydown, MidiEvent * keyup)
 {
 	if (keydown) key_map[code][0] = *keydown;
 	if (keyup) key_map[code][1] = *keyup;
+}
+
+// get default keyup
+bool keyboard_default_keyup(MidiEvent * keydown, MidiEvent * keyup)
+{
+	keyup->action = 0;
+	keyup->arg1 = 0;
+	keyup->arg2 = 0;
+	keyup->arg3 = 0;
+
+	switch (keydown->action & 0xf0)
+	{
+	case 0x90:
+		keyup->action = 0x80 | (keydown->action & 0x0f);
+		keyup->arg1 = keydown->arg1;
+		keyup->arg2 = keydown->arg2;
+		return true;
+
+	case 0xe0:
+		keyup->action = keydown->action;
+		keyup->arg1 = 0;
+		keyup->arg2 = 0;
+		return true;
+	};
+
+	return false;
 }
 
 // set oct shift
@@ -374,4 +408,20 @@ byte keyboard_get_velocity(byte channel)
 		return key_velocity[channel];
 	else
 		return 0;
+}
+
+// get channel
+int keyboard_get_channel(byte channel)
+{
+	if (channel < ARRAY_COUNT(key_channel))
+		return key_channel[channel];
+	else
+		return 0;
+}
+
+// get channel
+void keyboard_set_channel(byte channel, byte value)
+{
+	if (channel < ARRAY_COUNT(key_channel))
+		key_channel[channel] = value;
 }

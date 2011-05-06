@@ -40,11 +40,11 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=""
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
+				AdditionalIncludeDirectories="../3rd/lpng;../3rd/zlib"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0501"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
-				RuntimeLibrary="3"
+				RuntimeLibrary="1"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="dinput8.lib dsound.lib dxguid.lib winmm.lib d3d9.lib imm32.lib"
+				AdditionalDependencies="dinput8.lib dsound.lib dxguid.lib winmm.lib d3d9.lib imm32.lib Comctl32.lib"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories=""
 				GenerateDebugInformation="true"
@@ -118,9 +118,9 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories=""
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
-				RuntimeLibrary="2"
+				AdditionalIncludeDirectories="../3rd/lpng;../3rd/zlib"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0501"
+				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
@@ -137,7 +137,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="dinput8.lib dsound.lib dxguid.lib winmm.lib d3d9.lib imm32.lib"
+				AdditionalDependencies="dinput8.lib dsound.lib dxguid.lib winmm.lib d3d9.lib imm32.lib Comctl32.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories=""
 				GenerateDebugInformation="true"
@@ -244,7 +244,15 @@
 			>
 		</File>
 		<File
-			RelativePath=".\freepiano.rc"
+			RelativePath="..\res\freepiano.rc"
+			>
+		</File>
+		<File
+			RelativePath="..\src\gui.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\src\gui.h"
 			>
 		</File>
 		<File
@@ -309,5 +317,9 @@
 		</File>
 	</Files>
 	<Globals>
+		<Global
+			Name="RESOURCE_FILE"
+			Value="freepiano.rc"
+		/>
 	</Globals>
 </VisualStudioProject>

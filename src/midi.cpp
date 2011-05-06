@@ -10,14 +10,19 @@ static HMIDIIN midi_in_device = NULL;
 // c key of midi
 static char octshift = 0;
 
+// midi thread lock
+static thread_lock_t midi_input_lock;
+static thread_lock_t midi_output_lock;
 
 // open output device
 int midi_open_output(const char * name)
 {
+	thread_lock lock(midi_output_lock);
+
 	uint device_id = -1;
 	midi_close_output();
 
-	if (name)
+	if (name && name[0])
 	{
 		for (uint i = 0; i < midiOutGetNumDevs(); i++)
 		{
@@ -44,6 +49,8 @@ int midi_open_output(const char * name)
 // close output device
 void midi_close_output()
 {
+	thread_lock lock(midi_output_lock);
+
 	if (midi_out_device)
 	{
 		midiOutClose(midi_out_device);
@@ -53,17 +60,23 @@ void midi_close_output()
 
 static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2)
 {
-	printf("%x, %08x, %08x\n", wMsg, dwParam1, dwParam2);
 	if (wMsg == MIM_DATA)
 	{
 		uint data = (uint)dwParam1;
-		midi_send_event(data >> 0, data >> 8, data >> 16, data >> 24);
+		byte data1 = data >> 0;
+		byte data2 = data >> 8;
+		byte data3 = data >> 16;
+		byte data4 = data >> 24;
+		midi_modify_event(data1, data2, data3, data4, midi_get_octshift(), 127);
+		midi_send_event(data1, data2, data3, data4);
 	}
 }
 
 // open input device
 int midi_open_input(const char * name)
 {
+	thread_lock lock(midi_input_lock);
+
 	uint device_id = -1;
 	midi_close_input();
 
@@ -96,6 +109,8 @@ int midi_open_input(const char * name)
 // close input device
 void midi_close_input()
 {
+	thread_lock lock(midi_input_lock);
+
 	if (midi_in_device)
 	{
 		midiInClose(midi_in_device);
@@ -107,21 +122,21 @@ void midi_close_input()
 // send event
 void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 {
-	// modify event
-	midi_modify_event(data1, data2, data3, data4, octshift, 127);
+	thread_lock lock(midi_output_lock);
 
 	// display midi event
 	display_midi_event(data1, data2, data3, data4);
 
+	// send midi event to vst plugin
+	if (vsti_is_instrument_loaded())
+	{
+		vsti_send_midi_event(data1, data2, data3, data4);
+	}
+
 	// send event to output device
-	if (midi_out_device)
+	else if (midi_out_device)
 	{
 		midiOutShortMsg(midi_out_device, data1 | (data2 << 8) | (data3 << 16) | (data4 << 24));
-	}
-	else
-	{
-		// send midi event to vst plugin
-		vsti_send_midi_event(data1, data2, data3, data4);
 	}
 }
 
@@ -156,8 +171,34 @@ void midi_modify_event(byte & data1, byte & data2, byte & data3, byte & data4, c
 		data3 = clamp((int)data3 * velocity / 127);
 		break;
 	}
+}
 
-	// change channel
-	data1 &= 0xf0;
+// enum input
+void midi_enum_input(midi_enum_callback & callback)
+{
+	for (uint i = 0; i < midiInGetNumDevs(); i++)
+	{
+		MIDIINCAPS caps;
 
+		// get device caps
+		if (midiInGetDevCaps(i, &caps, sizeof(caps)))
+			continue;
+
+		callback(caps.szPname);
+	}
+}
+
+// enum input
+void midi_enum_output(midi_enum_callback & callback)
+{
+	for (uint i = 0; i < midiOutGetNumDevs(); i++)
+	{
+		MIDIOUTCAPS caps;
+
+		// get device caps
+		if (midiOutGetDevCaps(i, &caps, sizeof(caps)))
+			continue;
+
+		callback(caps.szPname);
+	}
 }

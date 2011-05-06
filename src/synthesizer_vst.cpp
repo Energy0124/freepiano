@@ -1,20 +1,11 @@
 #include "pch.h"
+#include <winreg.h>
 
 #include "vst/aeffect.h"
 #include "vst/aeffectx.h"
 
 #include "synthesizer_vst.h"
 #include "display.h"
-
-struct thread_lock_t
-{
-	thread_lock_t()		{ InitializeCriticalSection(&lock); }
-	~thread_lock_t()	{ DeleteCriticalSection(&lock); }
-	void enter()		{ EnterCriticalSection(&lock); }
-	void leave()		{ LeaveCriticalSection(&lock); }
-
-	CRITICAL_SECTION lock;
-};
 
 // global vst effect instance
 static AEffect * effect = NULL;
@@ -32,7 +23,13 @@ static VstMidiEvent midi_event_buffer[256];
 static uint midi_event_count = 0;
 
 // vsti midi lock
-static thread_lock_t vsti_midi_lock;
+static thread_lock_t vsti_thread_lock;
+
+// effect process parameters
+static float effect_processing = 0;
+static float effect_samplerate = 0;
+static uint effect_blocksize = 0;
+static bool effect_show_editor = true;
 
 // -----------------------------------------------------------------------------------------
 // vsti functions
@@ -223,13 +220,15 @@ void check_effect_properties(AEffect* effect)
 // load plugin
 int vsti_load_plugin(const char * path)
 {
+	thread_lock lock(vsti_thread_lock);
+
 	// unload plugin first
 	vsti_unload_plugin();
 
 	typedef AEffect* (*PluginEntryProc) (audioMasterCallback audioMaster);
 
 	// load library
-	HMODULE module = LoadLibrary(path);
+	module = LoadLibrary(path);
 
 	if (module == NULL)
 		return -1;
@@ -253,8 +252,14 @@ int vsti_load_plugin(const char * path)
 	// open effect
 	effect->dispatcher(effect, effOpen, 0, NULL, 0, 0);
 
+	// reset effect flags
+	effect_processing = 0;
+
 	// check effect properties
 	check_effect_properties(effect);
+
+	// show editor
+	vsti_show_editor(effect_show_editor);
 
 	return 0;
 }
@@ -262,11 +267,19 @@ int vsti_load_plugin(const char * path)
 // unload plugin
 void vsti_unload_plugin()
 {
+	thread_lock lock(vsti_thread_lock);
+
+	// destroy effect window
+	if (editor_window)
+	{
+		DestroyWindow(editor_window);
+		editor_window = NULL;
+	}
+
 	// close effect
 	if (effect)
 	{
 		effect->dispatcher(effect, effClose, 0, NULL, 0, 0);
-		free(effect);
 		effect = NULL;
 	}
 
@@ -282,8 +295,7 @@ void vsti_unload_plugin()
 // send midi event to
 void vsti_send_midi_event(byte data1, byte data2, byte data3, byte data4)
 {
-	// lock vsti midi event
-	vsti_midi_lock.enter();
+	thread_lock lock(vsti_thread_lock);
 
 	if (midi_event_count < ARRAY_COUNT(midi_event_buffer))
 	{
@@ -305,47 +317,51 @@ void vsti_send_midi_event(byte data1, byte data2, byte data3, byte data4)
 		e.reserved1 = 0;
 		e.reserved2 = 0;
 	}
-
-	// unlock vsti midi lock
-	vsti_midi_lock.leave();
-}
-
-// start output
-int vsti_start_process(float samplerate, uint blocksize)
-{
-	if (effect)
-	{
-		effect->dispatcher (effect, effSetSampleRate, 0, 0, 0, samplerate);
-		effect->dispatcher (effect, effSetBlockSize, 0, blocksize, 0, 0);
-		effect->dispatcher (effect, effMainsChanged, 0, 1, 0, 0);
-
-		return 0;
-	}
-
-	return 1;
 }
 
 // stop output
 void vsti_stop_process()
 {
+	thread_lock lock(vsti_thread_lock);
+
 	if (effect)
 	{
 		effect->dispatcher (effect, effMainsChanged, 0, 0, 0, 0);
 	}
 }
 
+void vsti_update_config(float samplerate, uint blocksize)
+{
+	if (vsti_thread_lock.tryenter())
+	{
+		if (effect)
+		{
+			if (effect_processing == 0 ||
+				effect_samplerate != samplerate || 
+				effect_blocksize != blocksize)
+			{
+				effect_processing = 1;
+				effect_samplerate = samplerate;
+				effect_blocksize = blocksize;
+
+				effect->dispatcher (effect, effMainsChanged, 0, 0, 0, 0);
+				effect->dispatcher (effect, effSetSampleRate, 0, 0, 0, samplerate);
+				effect->dispatcher (effect, effSetBlockSize, 0, blocksize, 0, 0);
+				effect->dispatcher (effect, effMainsChanged, 0, 1, 0, 0);
+			}
+		}
+		vsti_thread_lock.leave();
+	}
+}
 
 // process 
 void vsti_process(float * left, float * right, uint buffer_size)
 {
-	if (effect)
+	if (vsti_thread_lock.tryenter())
 	{
-		// lock vsti midi event
-		vsti_midi_lock.enter();
-
-		// process events
-		if (midi_event_count)
+		if (effect && effect_processing)
 		{
+			// process events
 			struct MoreEvents : VstEvents
 			{
 				VstEvent * data[256];
@@ -363,23 +379,27 @@ void vsti_process(float * left, float * right, uint buffer_size)
 
 			// clear processed events
 			midi_event_count = 0;
+
+			// clear data
+			memset(left, 0, buffer_size * sizeof(float));
+			memset(right, 0, buffer_size * sizeof(float));
+
+			// TODO: vsti has it's own buffer count
+			float * outputs[] = { left, right };
+
+			effect->dispatcher(effect, effStartProcess, 0, 0, 0, 0);
+			effect->processReplacing (effect, outputs, outputs, buffer_size);
+			effect->dispatcher(effect, effStopProcess, 0, 0, 0, 0);
+
+			vsti_thread_lock.leave();
+			return;
 		}
 
-		// unlock vsti midi lock
-		vsti_midi_lock.leave();
-
-		// TODO: vsti has it's own buffer count
-		float * outputs[] = { left, right };
-
-		effect->dispatcher(effect, effStartProcess, 0, 0, 0, 0);
-		effect->processReplacing (effect, NULL, outputs, buffer_size);
-		effect->dispatcher(effect, effStopProcess, 0, 0, 0, 0);
+		vsti_thread_lock.leave();
 	}
-	else
-	{
-		memset(left, 0, buffer_size * sizeof(float));
-		memset(right, 0, buffer_size * sizeof(float));
-	}
+
+	memset(left, 0, buffer_size * sizeof(float));
+	memset(right, 0, buffer_size * sizeof(float));
 }
 
 // -----------------------------------------------------------------------------------------
@@ -392,14 +412,19 @@ static LRESULT CALLBACK vst_editor_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
 	switch (uMsg)
 	{
-		case WM_DESTROY:
-			if (effect)
-				effect->dispatcher(effect, effEditClose, 0, 0, 0, 0);
-			editor_window = NULL;
-			break;
+	case WM_CLOSE:
+		effect_show_editor = false;
+		DestroyWindow(hWnd);
+		break;
 
-		default:
-			return DefWindowProc(hWnd, uMsg, wParam, lParam);
+	case WM_DESTROY:
+		if (effect)
+			effect->dispatcher(effect, effEditClose, 0, 0, 0, 0);
+		editor_window = NULL;
+		break;
+
+	default:
+		return DefWindowProc(hWnd, uMsg, wParam, lParam);
 	}
 
 	return 0;
@@ -468,10 +493,20 @@ static HWND create_effect_window(AEffect * effect)
 	return hwnd;
 }
 
+// is show eidtor
+bool vsti_is_show_editor()
+{
+	return effect_show_editor;
+}
 
 // show effect editor
 void vsti_show_editor(bool show)
 {
+	thread_lock lock(vsti_thread_lock);
+
+	// set flag
+	effect_show_editor = show;
+
 	// no effect loaded
 	if (!effect)
 		return;
@@ -497,4 +532,85 @@ void vsti_show_editor(bool show)
 			editor_window = NULL;
 		}
 	}
+}
+
+static void search_plugins(const char * path, vsti_enum_callback & callback)
+{
+	char buffer[256] = {0};
+	_snprintf(buffer, sizeof(buffer), "%s\\*.dll", path);
+
+	WIN32_FIND_DATAA data;
+	HANDLE finddata;
+
+	finddata = FindFirstFileA(buffer, &data);
+
+	if (finddata != INVALID_HANDLE_VALUE)
+	{
+		do
+		{
+			_snprintf(buffer, sizeof(buffer), "%s\\%s", path, data.cFileName);
+			callback(buffer);
+		}
+		while (FindNextFileA(finddata, &data));
+	}
+
+	FindClose(finddata);
+
+	// serch subdirectoies
+	_snprintf(buffer, sizeof(buffer), "%s\\*", path);
+	finddata = FindFirstFileA(buffer, &data);
+
+	if (finddata != INVALID_HANDLE_VALUE)
+	{
+		do
+		{
+			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			{
+				if (strcmp(data.cFileName, ".") == 0 ||
+					strcmp(data.cFileName, "..") == 0)
+					continue;
+
+				_snprintf(buffer, sizeof(buffer), "%s\\%s", path, data.cFileName);
+				search_plugins(buffer, callback);
+			}
+		}
+		while (FindNextFileA(finddata, &data));
+	}
+
+	FindClose(finddata);
+}
+
+// vst enum plugins
+void vsti_enum_plugins(vsti_enum_callback & callback)
+{
+	HKEY key = HKEY_LOCAL_MACHINE;
+
+	char buff[256];
+	GetModuleFileNameA(NULL, buff, sizeof(buff));
+	char * pathend = strrchr(buff, '\\');
+	if (pathend)
+	{
+		pathend[0] = 0;
+		search_plugins(buff, callback);
+	}
+
+	if (ERROR_SUCCESS == RegOpenKeyEx(key, "SOFTWARE", 0, KEY_READ, &key) &&
+		ERROR_SUCCESS == RegOpenKeyEx(key, "VST", 0, KEY_READ, &key))
+	{
+		char buffer[256] = {0};
+		DWORD size = sizeof(buffer);
+
+		if (ERROR_SUCCESS == RegQueryValueExA(key, "VSTPluginsPath", NULL, NULL, (byte*)buffer, &size))
+		{
+			search_plugins(buffer, callback);
+		}
+	}
+}
+
+
+// is instrument loaded
+bool vsti_is_instrument_loaded()
+{
+	thread_lock lock(vsti_thread_lock);
+	return effect != NULL;
 }

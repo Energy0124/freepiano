@@ -13,8 +13,8 @@ struct asiodrvstruct
 {
 	int						drvID;
 	CLSID					clsid;
-	char					dllpath[MAXPATHLEN];
-	char					drvname[MAXDRVNAMELEN];
+	TCHAR					dllpath[MAXPATHLEN];
+	TCHAR					drvname[MAXDRVNAMELEN];
 	LPVOID					asiodrv;
 	struct asiodrvstruct	*next;
 };
@@ -32,8 +32,8 @@ public:
 
 	// nice to have
 	LONG asioGetNumDev (VOID);
-	LONG asioGetDriverName (int,char *,int);		
-	LONG asioGetDriverPath (int,char *,int);
+	LONG asioGetDriverName (int,TCHAR *,int);		
+	LONG asioGetDriverPath (int,TCHAR *,int);
 	LONG asioGetDriverCLSID (int,CLSID *);
 
 	// or use directly access

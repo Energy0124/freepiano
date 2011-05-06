@@ -3,10 +3,14 @@
 #include <mmsystem.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <mbctype.h>
 
 #include "output_wasapi.h"
 #include "synthesizer_vst.h"
 #include "display.h"
+
+// pkey
+static const PROPERTYKEY PKEY_Device_FriendlyName = { { 0xa45c254e, 0xdf1c, 0x4efd, { 0x80, 0x20,  0x67,  0xd1,  0x46,  0xa8,  0x50,  0xe0 } }, 14 };
 
 // global wasapi client
 static IAudioClient * client = NULL;
@@ -60,9 +64,6 @@ static DWORD __stdcall wasapi_play_thread(void * param)
 	// temp buffer for vsti process
 	float output_buffer[2][4096];
 
-	// initialize effect
-	vsti_start_process((float)pwfx->nSamplesPerSec, 32);
-
 	// start playing
 	hr = client->Start();
 
@@ -82,6 +83,9 @@ static DWORD __stdcall wasapi_play_thread(void * param)
 				if (numFramesAvailable >= numFramesProcess)
 				{
 					//printf("write %d\n", numFramesAvailable);
+
+					// update effect
+					vsti_update_config((float)pwfx->nSamplesPerSec, 32);
 
 					// call vsti process func
 					vsti_process(output_buffer[0], output_buffer[1], numFramesProcess);
@@ -148,7 +152,6 @@ int wasapi_open(const char * name)
 		goto error;
 
 
-	WAVEFORMATEXTENSIBLE * format1 = (WAVEFORMATEXTENSIBLE*)pwfx;
 	WAVEFORMATEXTENSIBLE format;
 	format.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE);
 	format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
@@ -163,7 +166,6 @@ int wasapi_open(const char * name)
 	format.Samples.wValidBitsPerSample = 32;
 	format.SubFormat = 	KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
 
-	// create input thread
 	// initialize
 	if (FAILED(hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, 0, hnsRequestedDuration, 0, &format.Format, NULL)))
 		goto error;
@@ -172,6 +174,7 @@ int wasapi_open(const char * name)
 	if (FAILED(hr = client->GetService(IID_IAudioRenderClient, (void**)&render_client)))
 		goto error;
 
+	// create input thread
 	wasapi_thread = CreateThread(NULL, 0, &wasapi_play_thread, NULL, NULL, NULL);
 
 	// change thread priority to highest
@@ -203,7 +206,8 @@ void wasapi_close()
 	CoTaskMemFree(pwfx);
 	SAFE_RELEASE(render_client);
 	SAFE_RELEASE(client);
-	CoUninitialize();
+	//CoUninitialize();
+	pwfx = NULL;
 }
 
 // set buffer size
@@ -211,9 +215,69 @@ void wasapi_set_buffer_time(double time)
 {
 	if (time > 0)
 	{
-		buffer_size = (uint)(44100.0 * time);
+		buffer_size = (uint)(44.1 * time);
 
 		if (buffer_size < 32) buffer_size = 32;
 		if (buffer_size > 4096) buffer_size = 4096;
 	}
+}
+
+// enum device
+void wasapi_enum_device(wasapi_enum_callback & callback)
+{
+	HRESULT hr;
+	IMMDeviceEnumerator * enumerator = NULL;
+	IMMDeviceCollection * devices = NULL;
+	IPropertyStore * props = NULL;
+
+	// initialize com
+	if (FAILED(hr = CoInitialize(NULL)))
+		goto error;
+
+	// create enumerator
+	if (FAILED(hr = CoCreateInstance(CLSID_MMDeviceEnumerator, NULL, CLSCTX_ALL,
+		IID_IMMDeviceEnumerator, (void**)&enumerator)))
+		goto error;
+
+
+	if (FAILED(hr = enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &devices)))
+		goto error;
+
+	uint device_count = 0;
+	if (SUCCEEDED(devices->GetCount(&device_count)))
+	{
+		for (uint i = 0; i < device_count; i++)
+		{
+			IMMDevice * device = NULL;
+			if (SUCCEEDED(devices->Item(i, &device)))
+			{
+				if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, &props)))
+				{
+					PROPVARIANT varName;
+
+					// Initialize container for property value.
+					PropVariantInit(&varName);
+
+					// Get the endpoint's friendly-name property.
+					if (SUCCEEDED(props->GetValue(PKEY_Device_FriendlyName, &varName)))
+					{
+						char buff[256];
+						WideCharToMultiByte(_getmbcp(), 0, varName.pwszVal, -1, buff, sizeof(buff), NULL, NULL);
+						callback(buff);
+					}
+
+					PropVariantClear(&varName);
+
+				}
+			}
+			SAFE_RELEASE(device);
+		}
+	}
+
+error:
+	SAFE_RELEASE(props);
+	SAFE_RELEASE(devices);
+	SAFE_RELEASE(enumerator);
+	CoUninitialize();
+
 }

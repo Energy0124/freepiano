@@ -10,9 +10,9 @@ public:
 	AsioDrivers();
 	~AsioDrivers();
 	
-	bool getCurrentDriverName(char *name);
-	long getDriverNames(char **names, long maxDrivers);
-	bool loadDriver(const char *name);
+	bool getCurrentDriverName(TCHAR *name);
+	long getDriverNames(TCHAR **names, long maxDrivers);
+	bool loadDriver(const TCHAR *name);
 	void removeCurrentDriver();
 	long getCurrentDriverIndex() {return curIndex;}
 protected:

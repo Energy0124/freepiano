@@ -1,44 +1,42 @@
 #include <windows.h>
+#include <tchar.h>
+#include <Shlwapi.h>
 #include "iasiodrv.h"
 #include "asiolist.h"
 
-#define ASIODRV_DESC		"description"
-#define INPROC_SERVER		"InprocServer32"
-#define ASIO_PATH			"software\\asio"
-#define COM_CLSID			"clsid"
+#define ASIODRV_DESC		_T("description")
+#define INPROC_SERVER		_T("InprocServer32")
+#define ASIO_PATH			_T("software\\asio")
+#define COM_CLSID			_T("clsid")
 
 // ******************************************************************
 // Local Functions 
 // ******************************************************************
-static LONG findDrvPath (char *clsidstr,char *dllpath,int dllpathsize)
+static LONG findDrvPath (TCHAR *clsidstr,TCHAR *dllpath,int dllpathsize)
 {
 	HKEY			hkEnum,hksub,hkpath;
-	char			databuf[512];
+	TCHAR			databuf[512];
 	LONG 			cr,rc = -1;
 	DWORD			datatype,datasize;
 	DWORD			index;
-	OFSTRUCT		ofs;
-	HFILE			hfile;
 	BOOL			found = FALSE;
 
-	CharLowerBuffA(clsidstr,strlen(clsidstr));
+	CharLowerBuff(clsidstr,_tcslen(clsidstr));
 	if ((cr = RegOpenKey(HKEY_CLASSES_ROOT,COM_CLSID,&hkEnum)) == ERROR_SUCCESS) {
 
 		index = 0;
 		while (cr == ERROR_SUCCESS && !found) {
 			cr = RegEnumKey(hkEnum,index++,(LPTSTR)databuf,512);
 			if (cr == ERROR_SUCCESS) {
-				CharLowerBuff(databuf,strlen(databuf));
-				if (!(strcmp(databuf,clsidstr))) {
+				CharLowerBuff(databuf,_tcslen(databuf));
+				if (!(_tcscmp(databuf,clsidstr))) {
 					if ((cr = RegOpenKeyEx(hkEnum,(LPCTSTR)databuf,0,KEY_READ,&hksub)) == ERROR_SUCCESS) {
 						if ((cr = RegOpenKeyEx(hksub,(LPCTSTR)INPROC_SERVER,0,KEY_READ,&hkpath)) == ERROR_SUCCESS) {
 							datatype = REG_SZ; datasize = (DWORD)dllpathsize;
 							cr = RegQueryValueEx(hkpath,0,0,&datatype,(LPBYTE)dllpath,&datasize);
 							if (cr == ERROR_SUCCESS) {
-								memset(&ofs,0,sizeof(OFSTRUCT));
-								ofs.cBytes = sizeof(OFSTRUCT); 
-								hfile = OpenFile(dllpath,&ofs,OF_EXIST);
-								if (hfile) rc = 0; 
+								if (PathFileExists(dllpath))
+									rc = 0;
 							}
 							RegCloseKey(hkpath);
 						}
@@ -54,11 +52,11 @@ static LONG findDrvPath (char *clsidstr,char *dllpath,int dllpathsize)
 }
 
 
-static LPASIODRVSTRUCT newDrvStruct (HKEY hkey,char *keyname,int drvID,LPASIODRVSTRUCT lpdrv)
+static LPASIODRVSTRUCT newDrvStruct (HKEY hkey,TCHAR *keyname,int drvID,LPASIODRVSTRUCT lpdrv)
 {
 	HKEY	hksub;
-	char	databuf[256];
-	char	dllpath[MAXPATHLEN];
+	TCHAR	databuf[256];
+	TCHAR	dllpath[MAXPATHLEN];
 	WORD	wData[100];
 	CLSID	clsid;
 	DWORD	datatype,datasize;
@@ -68,7 +66,7 @@ static LPASIODRVSTRUCT newDrvStruct (HKEY hkey,char *keyname,int drvID,LPASIODRV
 		if ((cr = RegOpenKeyEx(hkey,(LPCTSTR)keyname,0,KEY_READ,&hksub)) == ERROR_SUCCESS) {
 
 			datatype = REG_SZ; datasize = 256;
-			cr = RegQueryValueExA(hksub,COM_CLSID,0,&datatype,(LPBYTE)databuf,&datasize);
+			cr = RegQueryValueEx(hksub,COM_CLSID,0,&datatype,(LPBYTE)databuf,&datasize);
 			if (cr == ERROR_SUCCESS) {
 				rc = findDrvPath (databuf,dllpath,MAXPATHLEN);
 				if (rc == 0) {
@@ -82,11 +80,11 @@ static LPASIODRVSTRUCT newDrvStruct (HKEY hkey,char *keyname,int drvID,LPASIODRV
 						}
 
 						datatype = REG_SZ; datasize = 256;
-						cr = RegQueryValueExA(hksub,ASIODRV_DESC,0,&datatype,(LPBYTE)databuf,&datasize);
+						cr = RegQueryValueEx(hksub,ASIODRV_DESC,0,&datatype,(LPBYTE)databuf,&datasize);
 						if (cr == ERROR_SUCCESS) {
-							strcpy(lpdrv->drvname,databuf);
+							_tcscpy(lpdrv->drvname,databuf);
 						}
-						else strcpy(lpdrv->drvname,keyname);
+						else _tcscpy(lpdrv->drvname,keyname);
 					}
 				}
 			}
@@ -130,7 +128,7 @@ static LPASIODRVSTRUCT getDrvStruct (int drvID,LPASIODRVSTRUCT lpdrv)
 AsioDriverList::AsioDriverList ()
 {
 	HKEY			hkEnum = 0;
-	char			keyname[MAXDRVNAMELEN];
+	TCHAR			keyname[MAXDRVNAMELEN];
 	LPASIODRVSTRUCT	pdl;
 	LONG 			cr;
 	DWORD			index = 0;
@@ -139,7 +137,7 @@ AsioDriverList::AsioDriverList ()
 	numdrv		= 0;
 	lpdrvlist	= 0;
 
-	cr = RegOpenKeyA(HKEY_LOCAL_MACHINE,ASIO_PATH,&hkEnum);
+	cr = RegOpenKey(HKEY_LOCAL_MACHINE,ASIO_PATH,&hkEnum);
 	while (cr == ERROR_SUCCESS) {
 		if ((cr = RegEnumKey(hkEnum,index++,(LPTSTR)keyname,MAXDRVNAMELEN))== ERROR_SUCCESS) {
 			lpdrvlist = newDrvStruct (hkEnum,keyname,0,lpdrvlist);
@@ -213,15 +211,15 @@ LONG AsioDriverList::asioCloseDriver (int drvID)
 	return 0;
 }
 
-LONG AsioDriverList::asioGetDriverName (int drvID,char *drvname,int drvnamesize)
+LONG AsioDriverList::asioGetDriverName (int drvID,TCHAR *drvname,int drvnamesize)
 {	
 	LPASIODRVSTRUCT			lpdrv = 0;
 
 	if (!drvname) return DRVERR_INVALID_PARAM;
 
 	if ((lpdrv = getDrvStruct(drvID,lpdrvlist)) != 0) {
-		if (strlen(lpdrv->drvname) < (unsigned int)drvnamesize) {
-			strcpy(drvname,lpdrv->drvname);
+		if (_tcslen(lpdrv->drvname) < (unsigned int)drvnamesize) {
+			_tcscpy(drvname,lpdrv->drvname);
 		}
 		else {
 			memcpy(drvname,lpdrv->drvname,drvnamesize-4);
@@ -235,15 +233,15 @@ LONG AsioDriverList::asioGetDriverName (int drvID,char *drvname,int drvnamesize)
 	return DRVERR_DEVICE_NOT_FOUND;
 }
 
-LONG AsioDriverList::asioGetDriverPath (int drvID,char *dllpath,int dllpathsize)
+LONG AsioDriverList::asioGetDriverPath (int drvID,TCHAR *dllpath,int dllpathsize)
 {
 	LPASIODRVSTRUCT			lpdrv = 0;
 
 	if (!dllpath) return DRVERR_INVALID_PARAM;
 
 	if ((lpdrv = getDrvStruct(drvID,lpdrvlist)) != 0) {
-		if (strlen(lpdrv->dllpath) < (unsigned int)dllpathsize) {
-			strcpy(dllpath,lpdrv->dllpath);
+		if (_tcslen(lpdrv->dllpath) < (unsigned int)dllpathsize) {
+			_tcscpy(dllpath,lpdrv->dllpath);
 			return 0;
 		}
 		dllpath[0] = 0;

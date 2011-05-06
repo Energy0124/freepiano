@@ -1,12 +1,16 @@
 #include "pch.h"
 #include <dinput.h>
+#include <Shlwapi.h>
 
+#include "config.h"
 #include "stdio.h"
 #include "keyboard.h"
 #include "output_asio.h"
 #include "output_dsound.h"
 #include "output_wasapi.h"
 #include "synthesizer_vst.h"
+#include "display.h"
+
 
 // -----------------------------------------------------------------------------------------
 // config parse functions
@@ -537,53 +541,18 @@ static bool match_midi_event(char ** str, MidiEvent * e)
 	return true;
 }
 
-static bool default_midi_keyup_event(MidiEvent * keydown, MidiEvent * keyup)
-{
-	keyup->action = 0;
-	keyup->arg1 = 0;
-	keyup->arg2 = 0;
-	keyup->arg3 = 0;
-
-	switch (keydown->action & 0xf0)
-	{
-	case 0x90:
-		keyup->action = 0x80 | (keydown->action & 0x0f);
-		keyup->arg1 = keydown->arg1;
-		keyup->arg2 = keydown->arg2;
-		return true;
-
-	case 0xe0:
-		keyup->action = keydown->action;
-		keyup->arg1 = 0;
-		keyup->arg2 = 0;
-		return true;
-	};
-
-	return false;
-};
-
 // -----------------------------------------------------------------------------------------
 // configuration
 // -----------------------------------------------------------------------------------------
-#define	INSTRUMENT_TYPE_UNKNOWN		0
-#define	INSTRUMENT_TYPE_VSTI		1
-
-#define	OUTPUT_TYPE_UNKNOWN			0
-#define	OUTPUT_TYPE_MIDI			1
-#define	OUTPUT_TYPE_DSOUND			2
-#define	OUTPUT_TYPE_ASIO			3
-#define	OUTPUT_TYPE_WASAPI			4
-
 static name_t instrument_type_names[] = 
 {
-	{ "Unknown",		INSTRUMENT_TYPE_UNKNOWN },
+	{ "None",			INSTRUMENT_TYPE_NONE },
 	{ "VSTI",			INSTRUMENT_TYPE_VSTI },
 };
 
 static name_t output_type_names[] = 
 {
-	{ "Unknown",		OUTPUT_TYPE_UNKNOWN },
-	{ "MIDI",			OUTPUT_TYPE_MIDI },
+	{ "None",			OUTPUT_TYPE_NONE },
 	{ "DirectSound",	OUTPUT_TYPE_DSOUND },
 	{ "ASIO",			OUTPUT_TYPE_ASIO },
 	{ "wasapi",			OUTPUT_TYPE_WASAPI },
@@ -593,8 +562,81 @@ static uint	cfg_instrument_type = 0;
 static char cfg_instrument_path[256] = {0};
 static uint	cfg_output_type = 0;
 static char cfg_output_device[256] = {0};
-static uint cfg_output_delay = 0;
+static uint cfg_output_delay = 10;
 static char cfg_keymap[256] = {0};
+static char cfg_midi_input[256] = {0};
+static char cfg_midi_output[256] = {0};
+
+int config_keymap_config(char * command)
+{
+	char * s = command;
+
+	// key 
+	if (match_word(&s, "key"))
+	{
+		uint key = 0;
+		MidiEvent keydown;
+		MidiEvent keyup;
+
+		// match key name
+		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
+			return -1;
+
+		// match midi event
+		if (match_midi_event(&s, &keydown))
+		{
+			// generate default midi keyup event
+			keyboard_default_keyup(&keydown, &keyup);
+
+			// set that action
+			keyboard_set_map(key, &keydown, &keyup);
+
+			return 0;
+		}
+	}
+
+	// keydown
+	else if (match_word(&s, "keydown"))
+	{
+		uint key = 0;
+		MidiEvent keydown;
+
+		// match key name
+		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
+			return -1;
+
+		// match midi event
+		if (match_midi_event(&s, &keydown))
+		{
+			// set that action
+			keyboard_set_map(key, &keydown, NULL);
+
+			return 0;
+		}
+	}
+
+	// keyup
+	else if (match_word(&s, "keyup"))
+	{
+		uint key = 0;
+		MidiEvent keyup;
+
+		// match key name
+		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
+			return -1;
+
+		// match midi event
+		if (match_midi_event(&s, &keyup))
+		{
+			// set that action
+			keyboard_set_map(key, NULL, &keyup);
+
+			return 0;
+		}
+	}
+
+	return -1;
+}
 
 // load keymap
 int config_load_keymap(const char * filename)
@@ -615,73 +657,106 @@ int config_load_keymap(const char * filename)
 	// read lines
 	while (fgets(line, sizeof(line), fp))
 	{
-		char * s = line;
-
 		// comment
-		if (*s == '#')
+		if (*line == '#')
 			continue;
 
-		// key 
-		if (match_word(&s, "key"))
-		{
-			uint key = 0;
-			MidiEvent keydown;
-			MidiEvent keyup;
-
-			// match key name
-			if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
-				continue;
-
-			// match midi event
-			if (match_midi_event(&s, &keydown))
-			{
-				// generate default midi keyup event
-				default_midi_keyup_event(&keydown, &keyup);
-
-				// set that action
-				keyboard_set_map(key, &keydown, &keyup);
-			}
-		}
-
-		// keydown
-		else if (match_word(&s, "keydown"))
-		{
-			uint key = 0;
-			MidiEvent keydown;
-
-			// match key name
-			if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
-				continue;
-
-			// match midi event
-			if (match_midi_event(&s, &keydown))
-			{
-				// set that action
-				keyboard_set_map(key, &keydown, NULL);
-			}
-		}
-
-		// keyup
-		else if (match_word(&s, "keyup"))
-		{
-			uint key = 0;
-			MidiEvent keyup;
-
-			// match key name
-			if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
-				continue;
-
-			// match midi event
-			if (match_midi_event(&s, &keyup))
-			{
-				// set that action
-				keyboard_set_map(key, NULL, &keyup);
-			}
-		}
+		config_keymap_config(line);
 	}
 
 	fclose(fp);
 	return 0;
+}
+
+static int print_value(char * buff, int buff_size, int value, name_t * names, int name_count, const char * sep = "\t")
+{
+	for (int i = 0; i < name_count; i++)
+	{
+		if (names[i].value == value)
+		{
+			return _snprintf(buff, buff_size, "%s%s", sep, names[i].name);
+		}
+	}
+
+	return _snprintf(buff, buff_size, "%s%d", sep, value);
+}
+
+static int print_midi_event(char * buff, int buffer_size, int key, MidiEvent & e)
+{
+	char * s = buff;
+	char * end = buff + buffer_size;
+
+	s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
+	s += print_value(s, end - s, e.action >> 4, action_names, ARRAY_COUNT(action_names));
+	s += print_value(s, end - s, e.action & 0xf, NULL, 0);
+
+	switch (e.action >> 4)
+	{
+	case 0x8:
+	case 0x9:
+		s += print_value(s, end - s, e.arg1, note_names, ARRAY_COUNT(note_names));
+		if (e.arg2 != 127)
+			s += print_value(s, end - s, e.arg2, NULL, 0);
+		break;
+
+	case 0xa:
+		s += print_value(s, end - s, e.arg1, note_names, ARRAY_COUNT(note_names));
+		s += print_value(s, end - s, e.arg2, NULL, 0);
+		break;
+
+	case 0xb:
+		s += print_value(s, end - s, e.arg1, controller_names, ARRAY_COUNT(controller_names));
+		s += print_value(s, end - s, e.arg2, NULL, 0);
+		break;
+
+	default:
+		s += print_value(s, end - s, e.arg1, NULL, 0);
+		s += print_value(s, end - s, e.arg2, NULL, 0);
+		s += print_value(s, end - s, e.arg3, NULL, 0);
+		break;
+	}
+
+
+	return s - buff;
+}
+
+// save keymap
+int config_save_keymap(int key, char * buff, int buffer_size)
+{
+	char * end = buff + buffer_size;
+	char * s = buff;
+
+	MidiEvent keydown, keyup, defkeyup;
+	keyboard_get_map(key, &keydown, &keyup);
+	keyboard_default_keyup(&keydown, &defkeyup);
+
+	if (memcmp(&keyup, &defkeyup, sizeof(keyup)) == 0)
+	{
+		if (keydown.action & 0xf0)
+		{
+			s += _snprintf(s, end - s, "key");
+			s += print_midi_event(s, end - s, key, keydown);
+			s += _snprintf(s, end - s, "\r\n");
+		}
+	}
+	else
+	{
+		if (keydown.action & 0xf0)
+		{
+			s += _snprintf(s, end - s, "keydown");
+			s += print_midi_event(s, end - s, key, keydown);
+			s += _snprintf(s, end - s, "\r\n");
+		}
+
+		if (keyup.action & 0xf0)
+		{
+			s += _snprintf(s, end - s, "keyup");
+			s += print_midi_event(s, end - s, key, keyup);
+			s += _snprintf(s, end - s, "\r\n");
+		}
+	}
+
+	return s - buff;
 }
 
 // reset config
@@ -691,12 +766,13 @@ void config_reset()
 	cfg_instrument_path[0] = 0;
 	cfg_output_type = 0;
 	cfg_output_device[0] = 0;
-	cfg_output_delay = 0;
+	cfg_output_delay = 10;
 
 	for (byte ch = 0; ch < 16; ch++)
 	{
 		keyboard_set_octshift(ch, 0);
 		keyboard_set_velocity(ch, 127);
+		keyboard_set_channel(ch, 0);
 	}
 
 	midi_set_octshift(0);
@@ -710,39 +786,15 @@ static int config_apply()
 		config_load_keymap(cfg_keymap);
 
 	// load instrument
-	switch (cfg_instrument_type)
-	{
-	case INSTRUMENT_TYPE_VSTI:	vsti_load_plugin(cfg_instrument_path);	break;
-	}
+	config_select_instrument(cfg_instrument_type, cfg_instrument_path);
 
 	// open output
-	switch (cfg_output_type)
-	{
-	case OUTPUT_TYPE_MIDI:
-		{
-			midi_open_output(cfg_output_device);
-		}
-		break;
+	if (config_select_output(cfg_output_type, cfg_output_device))
+		cfg_output_device[0] = 0;
 
-	case OUTPUT_TYPE_DSOUND:
-		{
-			dsound_open(cfg_output_device);
-		}
-		break;
-
-	case OUTPUT_TYPE_ASIO:
-		{
-			asio_open(cfg_output_device);
-		}
-		break;
-
-	case OUTPUT_TYPE_WASAPI:
-		{
-			wasapi_open(cfg_output_device);
-			wasapi_set_buffer_time(cfg_output_delay);
-		}
-		break;
-	}
+	// open midi output and input
+	config_select_midi_output(cfg_midi_output);
+	config_select_midi_input(cfg_midi_input);
 	return 0;
 }
 
@@ -827,6 +879,18 @@ int config_load(const char * filename)
 				}
 			}
 
+			else if (match_word(&s, "channel"))
+			{
+				uint channel;
+				uint value;
+
+				if (match_number(&s, &channel) &&
+					match_number(&s, &value))
+				{
+					keyboard_set_channel(channel, value);
+				}
+			}
+
 			else if (match_word(&s, "map"))
 			{
 				match_line(&s, cfg_keymap, sizeof(cfg_keymap));
@@ -845,6 +909,16 @@ int config_load(const char * filename)
 					midi_set_octshift(value);
 				}
 			}
+
+			else if (match_word(&s, "output"))
+			{
+				match_line(&s, cfg_midi_output, sizeof(cfg_midi_output));
+			}
+
+			else if (match_word(&s, "input"))
+			{
+				match_line(&s, cfg_midi_input, sizeof(cfg_midi_input));
+			}
 		}
 	}
 
@@ -856,15 +930,323 @@ int config_load(const char * filename)
 // save
 int config_save(const char * filename)
 {
+	FILE * fp = fopen(filename, "w");
+	if (!fp)
+		return -1;
+
+	if (cfg_instrument_type)
+	{
+		fprintf(fp, "instrument type %s\n", instrument_type_names[cfg_instrument_type]);
+		if (cfg_instrument_path[0])
+			fprintf(fp, "instrument path %s\n", cfg_instrument_path);
+	}
+
+	if (cfg_output_type)
+	{
+		fprintf(fp, "output type %s\n", output_type_names[cfg_output_type]);
+
+		if (cfg_output_device[0])
+			fprintf(fp, "output device %s\n", cfg_output_device);
+
+		fprintf(fp, "output delay %d\n", cfg_output_delay);
+	}
+
+	if (cfg_keymap[0])
+		fprintf(fp, "keyboard map %s\n", cfg_keymap);
+
+	for (int i = 0; i < 16; i ++)
+	{
+		if (keyboard_get_octshift(i))
+			fprintf(fp, "keyboard shift %d %d\n", i, keyboard_get_octshift(i));
+
+		if (keyboard_get_velocity(i) != 127)
+			fprintf(fp, "keyboard velocity %d %d\n", i, keyboard_get_velocity(i));
+
+		if (keyboard_get_channel(i))
+			fprintf(fp, "keyboard channel %d %d\n", i, keyboard_get_channel(i));
+	}
+
+
+	if (cfg_midi_output[0])
+		fprintf(fp, "midi output %s\n", cfg_midi_output);
+
+	if (cfg_midi_input[0])
+		fprintf(fp, "midi input %s\n", cfg_midi_input);
+
+	if (midi_get_octshift())
+		fprintf(fp, "midi shift %d\n", midi_get_octshift());
+
+	fclose(fp);
+	return 0;
+}
+
+// initialize config
+int config_init()
+{
+	config_reset();
 	return 0;
 }
 
 // close config
-void config_close()
+void config_shutdown()
 {
 	midi_close_input();
 	midi_close_output();
+	vsti_unload_plugin();
 	asio_close();
 	dsound_close();
 	wasapi_close();
+}
+
+
+// select instrument
+int config_select_instrument(int type, const char * name)
+{
+	int result = -1;
+
+	if (type == INSTRUMENT_TYPE_NONE)
+	{
+		vsti_unload_plugin();
+		cfg_instrument_type = type;
+		strncpy(cfg_instrument_path, name, sizeof(cfg_instrument_path));
+		result = 0;
+	}
+
+	else if (type == INSTRUMENT_TYPE_VSTI)
+	{
+		if (name == NULL || name[0] == '\0')
+		{
+			vsti_unload_plugin();
+			cfg_instrument_path[0] = 0;
+			result = 0;
+		}
+
+		else if (PathIsFileSpec(name))
+		{
+			struct select_instrument_cb : vsti_enum_callback
+			{
+				void operator ()(const char * value)
+				{
+					if (!found)
+					{
+						if (_stricmp(PathFindFileName(value), name) == 0)
+						{
+							strncpy(name, value, sizeof(name));
+							found = true;
+						}
+					}
+				}
+
+				char name[256];
+				bool found;
+			};
+
+			select_instrument_cb callback;
+			_snprintf(callback.name, sizeof(callback.name), "%s.dll", name);
+			callback.found = false;
+
+			vsti_enum_plugins(callback);
+
+			if (callback.found)
+			{
+				vsti_unload_plugin();
+
+				// load plugin
+				result = vsti_load_plugin(callback.name);
+				if (result == 0)
+				{
+					cfg_instrument_type = type;
+					strncpy(cfg_instrument_path, callback.name, sizeof(cfg_instrument_path));
+				}
+			}
+		}
+		else
+		{
+			vsti_unload_plugin();
+
+			// load plugin
+			result = vsti_load_plugin(name);
+			if (result == 0)
+			{
+				cfg_instrument_type = type;
+				strncpy(cfg_instrument_path, name, sizeof(cfg_instrument_path));
+			}
+		}
+	}
+
+	return result;
+}
+
+const char * config_get_instrument_path()
+{
+	return cfg_instrument_path;
+}
+
+// select output
+int config_select_output(int type, const char * device)
+{
+	int result = -1;
+	asio_close();
+	dsound_close();
+	wasapi_close();
+	midi_close_output();
+
+	// open output
+	switch (type)
+	{
+	case OUTPUT_TYPE_NONE:
+		result = 0;
+		break;
+
+	case OUTPUT_TYPE_DSOUND:
+		{
+			result = dsound_open(device);
+			dsound_set_buffer_time(cfg_output_delay);
+		}
+		break;
+
+	case OUTPUT_TYPE_WASAPI:
+		{
+			result = wasapi_open(device);
+			wasapi_set_buffer_time(cfg_output_delay);
+		}
+		break;
+
+	case OUTPUT_TYPE_ASIO:
+		{
+			result = asio_open(device);
+		}
+		break;
+	}
+
+	// success
+	if (result == 0)
+	{
+		cfg_output_type = type;
+		strncpy(cfg_output_device, device, sizeof(cfg_output_device));
+	}
+
+	return result;
+}
+
+
+// select midi input
+int config_select_midi_input(const char * device)
+{
+	int result = -1;
+	if (result = midi_open_input(device))
+	{
+		cfg_midi_input[0] = 0;
+		return result;
+	}
+
+	strncpy(cfg_midi_input, device, sizeof(cfg_midi_input));
+	return result;
+}
+
+// get midi input
+const char * config_get_midi_input()
+{
+	return cfg_midi_input;
+}
+
+// select midi output
+int config_select_midi_output(const char * device)
+{
+	int result = -1;
+	if (result = midi_open_output(device))
+	{
+		return result;
+	}
+
+	strncpy(cfg_midi_output, device, sizeof(cfg_midi_output));
+	return result;
+}
+
+// get midi output
+const char * config_get_midi_output()
+{
+	return cfg_midi_output;
+}
+
+// get output delay
+int config_get_output_delay()
+{
+	return cfg_output_delay;
+}
+
+// get output delay
+void config_set_output_delay(int delay)
+{
+	if (delay < 0)
+		delay = 0;
+	else if (delay > 500)
+		delay = 500;
+
+	cfg_output_delay = delay;
+
+	// open output
+	switch (cfg_output_type)
+	{
+	case OUTPUT_TYPE_NONE:
+		break;
+
+	case OUTPUT_TYPE_DSOUND:
+		dsound_set_buffer_time(cfg_output_delay);
+		break;
+
+	case OUTPUT_TYPE_WASAPI:
+		wasapi_set_buffer_time(cfg_output_delay);
+		break;
+
+	case OUTPUT_TYPE_ASIO:
+		break;
+	}
+}
+
+// get output type
+int config_get_output_type()
+{
+	return cfg_output_type;
+}
+
+// get output device
+const char * config_get_output_device()
+{
+	return cfg_output_device;
+}
+
+// get keymap
+const char * config_get_keymap()
+{
+	return cfg_keymap;
+}
+
+// set keymap
+int config_set_keymap(const char * mapname)
+{
+	int result;
+	if (result = config_load_keymap(mapname))
+	{
+		cfg_keymap[0] = 0;
+	}
+	else
+	{
+		strncpy(cfg_keymap, mapname, sizeof(cfg_keymap));
+	}
+	return result;
+}
+
+
+
+// set midi shift
+void config_set_midishift(int shift)
+{
+	midi_set_octshift(shift);
+}
+
+// get midi shift
+int config_get_midi_shift()
+{
+	return midi_get_octshift();
 }

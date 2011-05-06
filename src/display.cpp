@@ -2,21 +2,34 @@
 #include <d3d9.h>
 #include <dinput.h>
 #include <math.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <windowsx.h>
+#include <gdiplus.h>
+
+#include "png.h"
 
 #include "display.h"
 #include "keyboard.h"
+#include "gui.h"
+#include "../res/resource"
 
-#define WM_KEYBOARD_EVENT	WM_USER + 1
-#define WM_MIDI_EVENT		WM_USER + 2
 
-// main window handle.
-static HWND mainhwnd = NULL;
+using namespace display_resource;
 
 // directX device handle.
 static LPDIRECT3D9 d3d9 = NULL;
 static LPDIRECT3DDEVICE9 device = NULL;
-static LPDIRECT3DTEXTURE9 white_texture = NULL;
 static LPDIRECT3DTEXTURE9 resource_texture = NULL;
+
+// main window handle.
+static HWND display_hwnd = NULL;
+static HFONT default_font = NULL;
+
+static int display_width = 600;
+static int display_height = 260;
+
+#define SCALE_DISPLAY 1
 
 // vertex format
 struct Vertex
@@ -27,8 +40,6 @@ struct Vertex
 };
 
 // draw entire main window
-static void draw_mainwindow();
-
 // identity matrix
 static D3DMATRIX matrix_identity = {
 	1, 0, 0, 0,
@@ -38,6 +49,496 @@ static D3DMATRIX matrix_identity = {
 };
 
 static inline float round(float x) { return floor(x + 0.5f); }
+
+// -----------------------------------------------------------------------------------------
+// texture management
+// -----------------------------------------------------------------------------------------
+struct texture_node_t
+{
+	// child
+	texture_node_t * parent;
+	texture_node_t * child1;
+	texture_node_t * child2;
+
+	// rect in texture
+	int min_u, min_v, max_u, max_v;
+
+	// size
+	int width, height;
+
+	// used
+	bool used;
+
+	// constructor
+	texture_node_t(texture_node_t * parent, int x1, int y1, int x2, int y2)
+		: min_u(x1)
+		, min_v(y1)
+		, max_u(x2)
+		, max_v(y2)
+		, width(x2 - x1)
+		, height(y2 - y1)
+		, used(false)
+		, parent(parent)
+		, child1(NULL)
+		, child2(NULL)
+	{
+	}
+
+	// destructor
+	~texture_node_t()
+	{
+		if (child1) delete child1;
+		if (child2) delete child2;
+	}
+
+	// search
+	texture_node_t * search(int width, int height)
+	{
+		int usize = max_u - min_u;
+		int vsize = max_v - min_v;
+
+		if (width > usize || height > vsize)
+			return NULL;
+
+		texture_node_t * result = NULL;
+
+		int area = usize * vsize;
+
+		// use this node
+		if (!used && width <= this->width && height <= this->height)
+		{
+			result = this;
+			area = this->width * this->height;
+		}
+
+		// try child
+		if (child1)
+		{
+			texture_node_t * temp = child1->search(width, height);
+
+			if (temp)
+			{
+				int temp_area = temp->width * temp->height;
+				if (temp_area < area)
+				{
+					area = temp_area;
+					result = temp;
+				}
+			}
+		}
+
+		// try child2
+		if (child2)
+		{
+			texture_node_t * temp = child2->search(width, height);
+
+			if (temp)
+			{
+				int temp_area = temp->width * temp->height;
+				if (temp_area < area)
+				{
+					area = temp_area;
+					result = temp;
+				}
+			}
+		}
+
+		return result;
+	}
+
+	// use
+	bool use(int usize, int vsize)
+	{
+		if (used)
+			return false;
+
+		if (usize > width || vsize > height)
+			return false;
+
+		int uleft = width - usize;
+		int vleft = height - vsize;
+
+		used = true;
+		width = usize;
+		height = vsize;
+
+		if (uleft >= vleft)
+		{
+			if (child1 == NULL && uleft > 0)
+				child1 = new texture_node_t(this, min_u + usize, min_v, max_u, max_v);
+
+			if (child2 == NULL && vleft > 0)
+				child2 = new texture_node_t(this, min_u, min_v + vsize, min_u + usize, max_v);
+		}
+		else
+		{
+			if (child1 == NULL && uleft > 0)
+				child1 = new texture_node_t(this, min_u + usize, min_v, max_u, min_v + vsize);
+
+			if (child2 == NULL && vleft > 0)
+				child2 = new texture_node_t(this, min_u, min_v + vsize, max_u, max_v);
+		}
+
+		return true;
+	}
+
+	// unuse this node
+	void unuse()
+	{
+		used = false;
+
+		if (child1)
+		{
+			if (child1->used ||
+				child1->child1 ||
+				child1->child2)
+				return;
+		}
+
+		if (child2)
+		{
+			if (child2->used ||
+				child2->child1 ||
+				child2->child2)
+				return;
+		}
+
+		width = max_u - min_u;
+		height = max_v - min_v;
+		SAFE_DELETE(child1);
+		SAFE_DELETE(child2);
+
+		if (parent)
+		{
+			if (!parent->used)
+				parent->unuse();
+		}
+	}
+
+
+	// insert
+	texture_node_t * allocate(int width, int height)
+	{
+		texture_node_t * result = search(width, height);
+
+		if (result)
+		{
+
+			result->use(width, height);
+		}
+
+		return result;
+	}
+};
+
+// root texture node.
+static texture_node_t * root_texture_node = NULL;
+
+// create texture from png
+static texture_node_t * create_texture_from_png(png_structp png_ptr, png_infop info_ptr)
+{
+	texture_node_t * node = NULL;
+
+		// only rgba png is supported.
+	if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGBA)
+	{
+		int width = png_get_image_width(png_ptr, info_ptr);
+		int height = png_get_image_height(png_ptr, info_ptr);
+
+		// allocates a texture node.
+		node = root_texture_node->allocate(width, height);
+
+		if (node)
+		{
+			byte ** data = png_get_rows(png_ptr, info_ptr);
+			uint rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+
+			RECT data_rect;
+			data_rect.left = (int)node->min_u;
+			data_rect.right = (int)node->min_u + width;
+			data_rect.top = (int)node->min_v;
+			data_rect.bottom = (int)node->min_v + height;
+
+			D3DLOCKED_RECT lock_rect;
+			if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
+			{
+				uint pixelsize = 4;
+				byte * dst = (byte*)lock_rect.pBits;
+
+				for (short y = 0; y < height; y++)
+				{
+					byte * src = data[y];
+					memcpy(dst, src, pixelsize * width);
+					dst += lock_rect.Pitch;
+				}
+
+				resource_texture->UnlockRect(0);
+			}
+		}
+	}
+
+	return node;
+}
+
+// load png texture
+static texture_node_t * load_png_from_file(const char * filename)
+{
+	png_structp png_ptr;
+	png_infop info_ptr;
+	texture_node_t * node = NULL;
+	FILE *fp;
+
+	// open file
+	if ((fp = fopen(filename, "rb")) == NULL)
+		return (NULL);
+
+	// create png read struct
+	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+	if (png_ptr == NULL)
+	{
+		fclose(fp);
+		return NULL;
+	}
+
+	// Allocate/initialize the memory for image information.
+	info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL)
+	{
+		fclose(fp);
+		png_destroy_read_struct(&png_ptr, NULL, NULL);
+		return NULL;
+	}
+
+	// Set error handling
+	if (setjmp(png_jmpbuf(png_ptr)))
+	{
+		// Free all of the memory associated with the png_ptr and info_ptr
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		fclose(fp);
+
+		// If we get here, we had a problem reading the file
+		return NULL;
+	}
+
+	// initialize io
+	png_init_io(png_ptr, fp);
+
+	// read png
+	png_read_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
+
+	// create texture node from png image
+	node = create_texture_from_png(png_ptr, info_ptr);
+
+	// Clean up after the read, and free any memory allocated
+	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+
+	// Close the file
+	fclose(fp);
+
+	return node;
+}
+
+
+// load png texture
+static texture_node_t * load_png_from_resource(const char * name)
+{
+	struct resource_file
+	{
+		resource_file()
+			: hrc(NULL)
+			, data(NULL)
+			, end(NULL)
+		{
+		}
+
+		bool open(const char * name, const char * type)
+		{
+			// find resource
+			HRSRC hrsrc = FindResource(0, name, "BINARY");
+			if(hrsrc == 0)
+				return false;
+
+			// load resource
+			hrc = LoadResource(0, hrsrc);
+			if (hrc == 0)
+				return false;
+
+			data = (byte*)LockResource(hrc);
+			end  = data + SizeofResource(NULL, hrsrc);
+
+			return true;
+		}
+
+		~resource_file()
+		{
+			FreeResource(hrc);
+		}
+
+		static void read_data(png_structp png_ptr, png_bytep data, png_size_t length)
+		{
+			png_size_t check = 0;
+			resource_file * file = (resource_file*)png_get_io_ptr(png_ptr);
+
+			if (file != NULL)
+			{
+				if (file->data + length <= file->end)
+				{
+					memcpy(data, file->data, length);
+					file->data += length;
+					check = length;
+				}
+			}
+
+			if (check != length)
+			{
+				png_error(png_ptr, "Read Error!");
+			}
+		}
+
+		HGLOBAL hrc;
+		byte * data;
+		byte * end;
+	};
+
+	png_structp png_ptr;
+	png_infop info_ptr;
+	texture_node_t * node = NULL;
+	resource_file * file = new resource_file;
+
+	if (!file->open(name, "BINARY"))
+	{
+		delete file;
+		return NULL;
+	}
+
+	// create png read struct
+	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+	if (png_ptr == NULL)
+	{
+		delete file;
+		return NULL;
+	}
+
+	// Allocate/initialize the memory for image information.
+	info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL)
+	{
+		delete file;
+		png_destroy_read_struct(&png_ptr, NULL, NULL);
+		return NULL;
+	}
+
+	// Set error handling
+	if (setjmp(png_jmpbuf(png_ptr)))
+	{
+		// Free all of the memory associated with the png_ptr and info_ptr
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+		delete file;
+
+		// If we get here, we had a problem reading the file
+		return NULL;
+	}
+
+	// set read function
+	png_set_read_fn(png_ptr, (png_voidp)file, &resource_file::read_data);
+
+
+	// read png
+	png_read_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
+
+	// create texture node from png image
+	node = create_texture_from_png(png_ptr, info_ptr);
+
+	// Clean up after the read, and free any memory allocated
+	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+
+	// Close the file
+	delete file;
+
+	return node;
+
+}
+
+
+
+// load png texture
+static texture_node_t * create_string_texture(const char * str)
+{
+	HDC hdcWindow = GetDC(NULL);
+	HDC hdcMemDC = CreateCompatibleDC(hdcWindow); 
+	int len = strlen(str);
+
+	// get text size
+	SIZE size;
+	SelectObject(hdcMemDC, default_font);
+	GetTextExtentPoint32(hdcMemDC, str, len, &size);
+
+	// set text and background color
+	SetTextColor(hdcMemDC, RGB(255,255,255));
+	SetBkColor(hdcMemDC, 0);
+
+	// create bitmap
+	BITMAPINFO bmi;
+	ZeroMemory(&bmi.bmiHeader, sizeof(BITMAPINFOHEADER));
+	bmi.bmiHeader.biSize		= sizeof(BITMAPINFOHEADER);
+	bmi.bmiHeader.biWidth		= size.cx;
+	bmi.bmiHeader.biHeight		= -size.cy;
+	bmi.bmiHeader.biPlanes		= 1;
+	bmi.bmiHeader.biBitCount	= 32;
+	bmi.bmiHeader.biCompression = BI_RGB;
+
+	uint * pBits;
+	HBITMAP hBmp = CreateDIBSection(hdcMemDC, &bmi, DIB_RGB_COLORS, (void **) &pBits, NULL, 0);
+
+	if (NULL == hBmp || NULL == pBits)
+	{
+		DeleteDC(hdcWindow);
+		DeleteDC(hdcMemDC);
+		return NULL;
+	}
+
+	SelectObject(hdcMemDC, hBmp);
+
+	// draw text
+	TextOut(hdcMemDC, 0, 0, str, len);
+
+	// allocates texture node
+	texture_node_t * node = root_texture_node->allocate(size.cx, size.cy);
+
+	RECT data_rect;
+	data_rect.left = (int)node->min_u;
+	data_rect.right = (int)node->min_u + (int)node->width;
+	data_rect.top = (int)node->min_v;
+	data_rect.bottom = (int)node->min_v + (int)node->height;
+
+	D3DLOCKED_RECT lock_rect;
+	if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
+	{
+		for (int y = 0; y < size.cy; ++y)
+		{
+			uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * y);
+			uint * src = (uint*)pBits + size.cx * y;
+
+			for (int x = 0; x < size.cx; x++)
+			{
+				*dst = *src | 0xff000000;
+				dst++;
+				src++;
+			}
+		}
+
+		resource_texture->UnlockRect(0);
+
+	}
+
+	DeleteObject(hBmp);
+	DeleteDC(hdcMemDC);
+	DeleteDC(hdcWindow);
+
+	return node;
+}
 
 // -----------------------------------------------------------------------------------------
 // directx functions
@@ -56,17 +557,23 @@ static void d3d_reset_parameters(D3DPRESENT_PARAMETERS & params, HWND hwnd)
 	params.SwapEffect = D3DSWAPEFFECT_COPY;
 	params.Windowed = TRUE;
 	params.FullScreen_RefreshRateInHz = 0;
+	params.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
 	params.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
 	params.EnableAutoDepthStencil = FALSE;
 	params.AutoDepthStencilFormat = D3DFMT_D24S8;
 
+#if SCALE_DISPLAY
+	params.BackBufferWidth = display_width;
+	params.BackBufferHeight = display_height;
+#else
 	RECT rect1, rect2;
 	GetWindowRect(hwnd, &rect1);
 	SetRect(&rect2, 0, 0, 0, 0);
-	AdjustWindowRect(&rect2, GetWindowLong(hwnd, GWL_STYLE), FALSE);
+	AdjustWindowRect(&rect2, GetWindowLong(hwnd, GWL_STYLE), GetMenu(hwnd) != NULL);
 
 	params.BackBufferWidth = (rect1.right - rect1.left) - (rect2.right - rect2.left);
 	params.BackBufferHeight = (rect1.bottom - rect1.top) - (rect2.bottom - rect2.top);
+#endif
 }
 
 
@@ -92,7 +599,7 @@ struct TgaHeader
 #pragma pack(pop)
 
 // load texture
-static int load_texture_from_resource(const char * name, LPDIRECT3DTEXTURE9 * texture)
+static int load_tga_from_resource(const char * name, LPDIRECT3DTEXTURE9 * texture)
 {
 	HRESULT hr;
 
@@ -177,8 +684,8 @@ static void d3d_shutdown()
 {
 	d3d_device_lost();
 
+	SAFE_DELETE(root_texture_node);
 	SAFE_RELEASE(resource_texture);
-	SAFE_RELEASE(white_texture);
 	SAFE_RELEASE(device);
 	SAFE_RELEASE(d3d9);
 }
@@ -186,10 +693,12 @@ static void d3d_shutdown()
 // initialize d3d9
 static int d3d_initialize(HWND hwnd)
 {
+	HRESULT hr;
+
 	// create direct3d 9 object
 	d3d9 = Direct3DCreate9(D3D_SDK_VERSION);
 	if (d3d9 == NULL)
-		return -1;
+		return E_FAIL;
 
 	// initialize params
 	D3DPRESENT_PARAMETERS params;
@@ -198,37 +707,25 @@ static int d3d_initialize(HWND hwnd)
 	d3d_reset_parameters(params, hwnd);
 
 	// create device
-	if (FAILED(d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &params, &device)))
+	if (FAILED(hr = d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &params, &device)))
 	{
 		// try again with software vertex processing
-		if (FAILED(d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device)))
-		{
-			d3d_shutdown();
-			return -1;
-		}
+		if (FAILED(hr = d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device)))
+			goto error;
 	}
 
-	// create white texture
-	if (FAILED(device->CreateTexture(1, 1, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &white_texture, NULL)))
-	{
-		d3d_shutdown();
-		return -1;
-	}
+	// create resource texture
+	if (FAILED(hr = device->CreateTexture(512, 512, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &resource_texture, NULL)))
+		goto error;
 
-	D3DLOCKED_RECT lock_rect;
-	if (SUCCEEDED(white_texture->LockRect(0, &lock_rect, NULL, D3DLOCK_DISCARD)))
-	{
-		uint * colors = (uint*)lock_rect.pBits;
-		colors[0] = 0xffffffff;
-		white_texture->UnlockRect(0);
-	}
+	// create root texture node
+	root_texture_node = new texture_node_t(NULL, 0, 0, 512, 512);
 
-	if (FAILED(load_texture_from_resource("RESOURCE", &resource_texture)))
-	{
-		d3d_shutdown();
-		return -1;
-	}
-	return 0;
+	return S_OK;
+
+error:
+	d3d_shutdown();
+	return hr;
 }
 
 // device lost
@@ -250,7 +747,7 @@ static int d3d_reset_device()
 	}
 
 	// update parameters
-	d3d_reset_parameters(params, mainhwnd);
+	d3d_reset_parameters(params, display_hwnd);
 
 	// reset device
 	if (FAILED(hr = device->Reset(&params)))
@@ -293,14 +790,11 @@ static int d3d_reset_device()
 	// set white texture
 	set_texture(resource_texture);
 
-	// draw main window
-	draw_mainwindow();
 	return 0;
 }
 
 struct KeyboardState
 {
-	byte action;
 	float x1;
 	float y1;
 	float x2;
@@ -310,13 +804,14 @@ struct KeyboardState
 
 struct MidiKeyState
 {
-	float x;
-	float y;
-	float width;
-	float height;
+	float x1;
+	float y1;
+	float x2;
+	float y2;
 	bool black;
 	byte status;
 };
+
 
 static MidiKeyState midi_key_states[127] = {0};
 static KeyboardState keyboard_states[256] = {0};
@@ -418,7 +913,7 @@ static void init_keyboard_states()
 		{ DIK_APPS,			0,	1.25,	1.0f,	},
 		{ DIK_RCONTROL,		0,	1.25,	1.0f,	},
 
-		{ 0,				3,	15.5,	0.0f,	},
+		{ 0,				3,	15.45f,	0.0f,	},
 		{ DIK_SYSRQ,		0,	1.0f,	1.0f,	},
 		{ DIK_SCROLL,		0,	1.0f,	1.0f,	},
 		{ DIK_PAUSE,		0,	1.0f,	1.0f,	},
@@ -437,7 +932,7 @@ static void init_keyboard_states()
 		{ DIK_DOWN,			0,	1.0f,	1.0f,	},
 		{ DIK_RIGHT,		0,	1.0f,	1.0f,	},
 
-		{ 0,				3,	19.0f,	1.2f,	},
+		{ 0,				3,	18.9f,	1.2f,	},
 		{ DIK_NUMLOCK,		0,	1.0f,	1.0f,	},
 		{ DIK_NUMPADSLASH,	0,	1.0f,	1.0f,	},
 		{ DIK_NUMPADSTAR,	0,	1.0f,	1.0f,	},
@@ -469,11 +964,10 @@ static void init_keyboard_states()
 		if (key->code)
 		{
 			KeyboardState & state = keyboard_states[key->code];
-			state.x1 = round(12 + x * 25);
-			state.y1 = round(12 + y * 25);
-			state.x2 = round(12 + x * 25 + key->x * 25);
-			state.y2 = round(12 + y * 25 + key->y * 25);
-			state.action = key->action;
+			state.x1 = round(14 + x * 25);
+			state.y1 = round(14 + y * 25);
+			state.x2 = round(14 + x * 25 + key->x * 25);
+			state.y2 = round(14 + y * 25 + key->y * 25);
 			x += key->x;
 		}
 		else
@@ -489,8 +983,8 @@ static void init_midi_keyboard_states()
 {
 	static byte key_flags[12] = { 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0 };
 
-	float x = 10;
-	float y = 340;
+	float x = 14;
+	float y = 194;
 
 	for (int i = 21; i < 21 + 88; i++)
 	{
@@ -499,21 +993,58 @@ static void init_midi_keyboard_states()
 		// black key
 		if (key_flags[(i) % 12])
 		{
-			key.x = x - 4;
-			key.y = y;
-			key.width = 6;
-			key.height  = 30;
+			key.x1 = x - 4;
+			key.y1 = y;
+			key.x2 = key.x1 + 6;
+			key.y2 = key.y1 + 30;
 			key.black = true;
 		}
 		else
 		{
-			key.x = x;
-			key.y = y;
-			key.width = 11;
-			key.height = 50;
+			key.x1 = x;
+			key.y1 = y;
+			key.x2 = x + 11;
+			key.y2 = y + 50;
 			x = x + 11;
 			key.black = false;
 		}
+	}
+}
+
+
+struct DisplayResource
+{
+	texture_node_t * texture;
+
+	DisplayResource()
+		: texture(NULL)
+	{
+	}
+};
+
+static DisplayResource resources[resource_count];
+
+// set display image
+void display_set_image(uint type, const char * name)
+{
+	if (type < resource_count)
+	{
+		if (resources[type].texture)
+			resources[type].texture->unuse();
+
+		resources[type].texture = load_png_from_file(name);
+	}
+}
+
+// set display default skin
+void display_default_skin()
+{
+	for (int i = 0; i < 9; i++)
+	{
+		if (resources[i].texture)
+			resources[i].texture->unuse();
+
+		resources[i].texture = load_png_from_resource(MAKEINTRESOURCE(IDR_SKIN_RES1) + i);
 	}
 }
 
@@ -529,6 +1060,19 @@ static void draw_sprite(float x1, float y1, float x2, float y2, float u1, float 
 	};
 
 	device->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, v, sizeof(Vertex));
+}
+
+// draw image
+static void draw_image(uint resource_id, float x1, float x2, float y1, float y2, uint color)
+{
+	if (resource_id < resource_count)
+	{
+		texture_node_t * t = resources[resource_id].texture;
+		if (t)
+		{
+			draw_sprite(x1, x2, y1, y2, (float)t->min_u, (float)t->min_v, (float)t->min_u + (float)t->width, (float)t->min_v + (float)t->height, color);
+		}
+	}
 }
 
 // draw scaleable sprite
@@ -583,10 +1127,19 @@ static void draw_sprite_border(float x1, float y1, float x2, float y2, float u1,
 
 }
 
-// draw menu
-static void draw_menu()
+// draw image
+static void draw_image_border(uint resource_id, float x1, float x2, float y1, float y2, float lm, float rm, float tm, float bm, uint color)
 {
+	if (resource_id < resource_count)
+	{
+		texture_node_t * t = resources[resource_id].texture;
+		if (t)
+		{
+			draw_sprite_border(x1, x2, y1, y2, (float)t->min_u, (float)t->min_v, (float)t->min_u + (float)t->width, (float)t->min_v + (float)t->height, lm, rm, tm, bm, color);
+		}
+	}
 }
+
 
 // draw keyboard
 static void draw_keyboard()
@@ -607,23 +1160,19 @@ static void draw_keyboard()
 			float y1 = key->y1;
 			float x2 = key->x2;
 			float y2 = key->y2;
-			float u1 = 0.f;
-			float v1 = 0.f;
+
+			uint img;
 
 			switch (map.action & 0xf0)
 			{
-			case 0x00:	u1 = 0; break;
-			case 0x80:	u1 = 25; break;
-			case 0x90:	u1 = 25; break;
-			case 0xb0:	u1 = 75; break;
-			default:	u1 = 75; break;
+			case 0x80:	img = keyboard_note_down; break;
+			case 0x90:	img = keyboard_note_down; break;
+			case 0xb0:	img = keyboard_note_down; break;
+			default:	img = keyboard_unmapped_down; break;
 			}
 
-			float u2 = u1 + 25;
-			float v2 = v1 + 25;
-
-			if (key->status) { v1 += 25.f; v2 += 25.f; }
-			draw_sprite_border(x1, y1, x2, y2, u1, v1, u2, v2, 6, 6, 6, 6, 0xffffffff);
+			if (!key->status) img ++;
+			draw_image_border(img, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
 
 			if ((map.action & 0xF0) == 0x90)
 			{
@@ -631,15 +1180,20 @@ static void draw_keyboard()
 
 				if (note > 12)
 				{
-					float x3 = round(x1 + (x2 - x1 - 25.f) * 0.5f);
-					float x4 = x3 + 25.f;
-					float y3 = round(y1 + (y2 - y1 - 25.f) * 0.5f);
-					float y4 = y3 + 25.f;
-					float u3 = (note % 12) * 25.f;
-					float v3 = (note / 12) * 25.f + 25.f;
-					float u4 = u3 + 25.f;
-					float v4 = v3 + 25.f;
-					draw_sprite(x3, y3, x4, y4, u3, v3, u4, v4, 0xff000000);
+					if (resources[notes].texture)
+					{
+						float x3 = round(x1 + (x2 - x1 - 25.f) * 0.5f);
+						float x4 = x3 + 25.f;
+						float y3 = round(y1 + (y2 - y1 - 25.f) * 0.5f);
+						float y4 = y3 + 25.f;
+						float u3 = resources[notes].texture->min_u + ((note - 12) % 12) * 25.f;
+						float v3 = resources[notes].texture->min_v + ((note - 12) / 12) * 25.f;
+						float u4 = u3 + 25.f;
+						float v4 = v3 + 25.f;
+
+						draw_sprite(x3, y3, x4, y4, u3, v3, u4, v4, 0xffffffff);
+					}
+
 				}
 			}
 		}
@@ -653,18 +1207,10 @@ static void draw_midi_keyboard()
 	{
 		if (!key->black)
 		{
-			if (key->width && key->height)
+			if (key->x2 > key->x1) 
 			{
-				float l = key->x;
-				float t = key->y;
-				float r = key->x + key->width;
-				float b = key->y + key->height;
-				float u1 = 100;
-				float v1 = 0;
-				float u2 = 111;
-				float v2 = 50;
-				if (key->status) { u1 += 11; u2 += 11; }
-				draw_sprite(l, t, r, b, u1, v1, u2, v2, 0xffffffff);
+				uint img = key->status ? midi_white_down : midi_white_up;
+				draw_image(img, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
 			}
 		}
 	}
@@ -673,29 +1219,22 @@ static void draw_midi_keyboard()
 	{
 		if (key->black)
 		{
-			if (key->width && key->height)
+			if (key->x2 > key->x1) 
 			{
-				float l = key->x;
-				float t = key->y;
-				float r = key->x + key->width;
-				float b = key->y + key->height;
-				float u1 = 125;
-				float v1 = 0;
-				float u2 = 131;
-				float v2 = 30;
-				if (key->status) { u1 += 6; u2 += 6; }
-				draw_sprite(l, t, r, b, u1, v1, u2, v2, 0xffffffff);
+				uint img = key->status ? midi_black_down : midi_black_up;
+				draw_image(img, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
 			}
 		}
 	}
 }
 
-// draw entire main window
-static void draw_mainwindow()
+// draw main window
+ void display_render()
 {
 	// begin scene
 	if (FAILED(device->BeginScene()))
 	{
+		d3d_reset_device();
 		device->Present(NULL, NULL, NULL, NULL);
 		return;
 	}
@@ -720,144 +1259,36 @@ static void draw_mainwindow()
 
 		device->SetTransform(D3DTS_PROJECTION, &projection);
 		device->SetTransform(D3DTS_VIEW, &matrix_identity);
+
 	}
 
-	draw_menu();
-	draw_keyboard();
-	draw_midi_keyboard();
+	if (GetAsyncKeyState(VK_F1))
+	{
+		draw_sprite(0, 0, 512, 512, 0, 0, 512, 512, 0xffffffff);
+	}
+	else
+	{
+		draw_keyboard();
+		draw_midi_keyboard();
+	}
 
 	device->EndScene();
 	device->Present(NULL, NULL, NULL, NULL);
 }
 
-
-// -----------------------------------------------------------------------------------------
-// window functions
-// -----------------------------------------------------------------------------------------
-static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	static bool in_sizemove = false;
-
-	switch (uMsg)
-	{
-	case WM_CREATE:
-		in_sizemove = false;
-		break;
-
-	case WM_ACTIVATE:
-		keyboard_enable(WA_INACTIVE != LOWORD(wParam));
-		break;
-
-	case WM_PAINT:
-		if (device)
-		{
-			draw_mainwindow();
-			device->Present(NULL, NULL, NULL, NULL);
-		}
-
-		// validate entire window rect
-		ValidateRect(hWnd, NULL);
-		return 0;
-
-	case WM_KEYBOARD_EVENT:
-		{
-			byte code = wParam;
-			keyboard_states[code].status = lParam;
-			InvalidateRect(hWnd, NULL, false);
-		}
-		break;
-
-	case WM_MIDI_EVENT:
-		{
-			byte data1 = (byte)(lParam >> 0);
-			byte data2 = (byte)(lParam >> 8);
-			byte data3 = (byte)(lParam >> 16);
-
-			switch(data1 & 0xf0)
-			{
-			case 0x90:	midi_key_states[data2].status = data3; break;
-			case 0x80:	midi_key_states[data2].status = 0; break;
-			}
-			InvalidateRect(hWnd, NULL, false);
-		}
-		break;
-
-	case WM_CLOSE:
-		DestroyWindow(hWnd);
-		break;
-
-	case WM_SYSCOMMAND:
-		// disable sys menu
-		if (wParam == SC_KEYMENU)
-			return 0;
-		break;
-
-	case WM_EXITSIZEMOVE:
-		in_sizemove = false;
-		puts("WM_EXITSIZEMOVE");
-		d3d_reset_device();
-		break;
-
-	case WM_DESTROY:
-		// quit application
-		PostQuitMessage(0);
-		break;
-	}
-
-	return DefWindowProc(hWnd, uMsg, wParam, lParam);
-}
-
-
 // init display
-int display_init()
+int display_init(HWND hwnd)
 {
-	// register window class
-	WNDCLASSEX wc = { sizeof(wc), 0 };
-	wc.style = CS_DBLCLKS;
-	wc.lpfnWndProc = &windowproc;
-	wc.cbClsExtra = 0;
-	wc.cbWndExtra = 0;
-	wc.hInstance = GetModuleHandle(NULL);
-	wc.hIcon = NULL;
-	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wc.hbrBackground = NULL;
-	wc.lpszMenuName = NULL;
-	wc.lpszClassName = "EPianoMainWnd";
-	wc.hIconSm = NULL;
+	display_hwnd = hwnd;
 
-	RegisterClassEx(&wc);
-	
-	int width = 600;
-	int height = 400;
-	uint style = WS_OVERLAPPEDWINDOW;
-
-	int screenwidth = GetSystemMetrics(SM_CXSCREEN);
-	int screenheight = GetSystemMetrics(SM_CYSCREEN);
-
-	RECT rect;
-	rect.left = (screenwidth - width) / 2;
-	rect.top = (screenheight - height) / 2;
-	rect.right = rect.left + width;
-	rect.bottom = rect.top + height;
-
-	AdjustWindowRect(&rect, style, FALSE);
-
-	// create window
-	mainhwnd = CreateWindow("EPianoMainWnd", APP_NAME, style,
-		rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
-		NULL, NULL, GetModuleHandle(NULL), NULL);
-
-	if (mainhwnd == NULL)
-	{
-		fprintf(stderr, "failed to create window");
-		return -1;
-	}
-
-	// disable ime
-	ImmAssociateContext(mainhwnd, NULL);
+	// create default font
+	LOGFONT fontinfo;
+	GetObject(GetStockObject(DEFAULT_GUI_FONT), sizeof(fontinfo), &fontinfo);
+	fontinfo.lfHeight = -12;
+	default_font = CreateFontIndirect(&fontinfo);
 
 	// initialize directx 9
-	if (d3d_initialize(mainhwnd))
+	if (d3d_initialize(display_hwnd))
 	{
 		fprintf(stderr, "failed to initialize d3d");
 		return -1;
@@ -865,6 +1296,9 @@ int display_init()
 
 	// reset device
 	d3d_reset_device();
+
+	// load default skin
+	display_default_skin();
 
 	// initialize keyboard display
 	init_keyboard_states();
@@ -876,41 +1310,195 @@ int display_init()
 // shutdown display
 int display_shutdown()
 {
-	if (mainhwnd)
-	{
-		DestroyWindow(mainhwnd);
-		mainhwnd = NULL;
-	}
-
 	d3d_shutdown();
+	display_hwnd = NULL;
+
 	return 0;
 }
 
 // get display window handle
 HWND display_get_hwnd()
 {
-	return mainhwnd;
-}
-
-
-// show main window
-void display_show()
-{
-	// show main window
-	ShowWindow(mainhwnd, SW_SHOW);
-
-	// draw keyboard 
-	draw_mainwindow();
+	return display_hwnd;
 }
 
 // display set key down
 void display_keyboard_event(byte code, uint status)
 {
-	PostMessage(mainhwnd, WM_KEYBOARD_EVENT, code, status);
+	keyboard_states[code].status = status;
+	PostMessage(display_hwnd, WM_TIMER, 0, 0);
 }
 
 // display update midi
 void display_midi_event(byte data1, byte data2, byte data3, byte data4)
 {
-	PostMessage(mainhwnd, WM_MIDI_EVENT, 0, data1 | (data2 << 8) | (data3 << 16) | (data4 << 24));
+	switch(data1 & 0xf0)
+	{
+	case 0x90:	midi_key_states[data2].status = data3; break;
+	case 0x80:	midi_key_states[data2].status = 0; break;
+	}
+
+	PostMessage(display_hwnd, WM_TIMER, 0, 0);
+}
+
+// find keyboard key
+static int find_keyboard_key(int x, int y)
+{
+	// find pointed key
+	for (KeyboardState * key = keyboard_states; key < keyboard_states + 256; key++)
+	{
+		if (key->x2 > key->x1)
+		{
+			if (x >= key->x1 && x < key->x2 && y >= key->y1 && y < key->y2)
+			{
+				return key - keyboard_states;
+			}
+		}
+	}
+	return -1;
+}
+
+// find midi note
+static int find_midi_note(int x, int y, int * velocity = NULL)
+{
+	for (int black = 0; black < 2; black ++)
+	{
+		for (MidiKeyState * key = midi_key_states; key < midi_key_states + sizeof(midi_key_states) / sizeof(midi_key_states[0]); key++)
+		{
+			if ((int)key->black != black)
+			{
+				if (key->x2 > key->x1) 
+				{
+					if (x >= key->x1 && x < key->x2 && y >= key->y1 && y < key->y2)
+					{
+						if (velocity)
+							*velocity = (int)(127 * (y - key->y1) / (key->y2 - key->y1));
+
+						return key - midi_key_states;
+					}
+				}
+			}
+		}
+	}
+
+	return -1;
+}
+
+// mouse control note
+static int mouse_control(int x, int y, bool mousedown)
+{
+	static int previous_keycode = -1;
+	static int previous_midi_note = -1;
+
+	int keycode = -1;
+	int midinote = -1;
+	int velocity = 127;
+
+#if SCALE_DISPLAY
+	RECT rect;
+	GetClientRect(display_hwnd, &rect);
+
+	if (rect.right > rect.left &&
+		rect.bottom > rect.top)
+	{
+		x = x * display_width / (rect.right - rect.left);
+		y = y * display_height / (rect.bottom - rect.top);
+	}
+#endif
+
+	if (mousedown)
+	{
+		keycode = find_keyboard_key(x, y);
+		midinote = find_midi_note(x, y, &velocity);
+	}
+
+	if (keycode != previous_keycode)
+	{
+		if (previous_keycode != -1)
+			keyboard_send_event(previous_keycode, 0);
+
+		if (keycode != -1)
+			keyboard_send_event(keycode, 1);
+
+		previous_keycode = keycode;
+	}
+
+	if (midinote != previous_midi_note)
+	{
+		if (previous_midi_note != -1)
+			midi_send_event(0x80, previous_midi_note, 0, 0);
+
+		if (midinote != -1)
+			midi_send_event(0x90, midinote, velocity, 0);
+
+
+		previous_midi_note = midinote;
+	}
+
+	return 0;
+}
+
+// mouse menu
+static void mouse_menu(int x, int y)
+{
+	POINT point = {x, y};
+
+#if SCALE_DISPLAY
+	RECT rect;
+	GetClientRect(display_hwnd, &rect);
+
+	if (rect.right > rect.left &&
+		rect.bottom > rect.top)
+	{
+		x = x * display_width / (rect.right - rect.left);
+		y = y * display_height / (rect.bottom - rect.top);
+	}
+#endif
+
+	int keycode = find_keyboard_key(x, y);
+
+	if (keycode != -1)
+	{
+		ClientToScreen(display_hwnd, &point);
+		gui_popup_keymenu(keycode, point.x, point.y);
+	}
+}
+
+// display process emssage
+int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg)
+	{
+	case WM_ACTIVATE:
+		if (WA_INACTIVE == LOWORD(wParam))
+		{
+			ReleaseCapture();
+			mouse_control(-1, -1, false);
+		}
+		break;
+
+	case WM_LBUTTONDOWN:
+	case WM_LBUTTONDBLCLK:
+		SetCapture(hWnd);
+		mouse_control(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), true);
+		break;
+
+	case WM_LBUTTONUP:
+		mouse_control(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), false);
+		ReleaseCapture();
+		break;
+
+	case WM_MOUSEMOVE:
+		if (GetCapture() == hWnd)
+			mouse_control(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), true);
+		break;
+
+
+	case WM_RBUTTONUP:
+		mouse_menu(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		break;
+
+	}
+
+	return 0;
 }

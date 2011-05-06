@@ -26,3 +26,31 @@ typedef unsigned long ulong;
 #define ARRAY_END(a)	(a + sizeof(a) / sizeof(a[0]))
 
 #define APP_NAME	"FreePiano"
+
+
+struct thread_lock_t
+{
+	thread_lock_t()		{ InitializeCriticalSection(&lock); }
+	~thread_lock_t()	{ DeleteCriticalSection(&lock); }
+	void enter()		{ EnterCriticalSection(&lock); }
+	void leave()		{ LeaveCriticalSection(&lock); }
+	bool tryenter()		{ return 0 != TryEnterCriticalSection(&lock); }
+
+	CRITICAL_SECTION lock;
+};
+
+struct thread_lock
+{
+	thread_lock(thread_lock_t & lock)
+		: lock(lock)
+	{
+		lock.enter();
+	}
+
+	~thread_lock()
+	{
+		lock.leave();
+	}
+
+	thread_lock_t & lock;
+};

@@ -1,10 +1,8 @@
 #include "pch.h"
 #include "keyboard.h"
 #include "display.h"
-
 #include "config.h"
-#include "synthesizer_vst.h"
-
+#include "gui.h"
 
 #ifdef _DEBUG
 int main()
@@ -12,15 +10,26 @@ int main()
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 #endif
 {
+	// config init
+	if (config_init())
+	{
+		MessageBox(NULL, "error while initialize config.", APP_NAME, MB_OK);
+		return 1;
+	}
+
+	// init gui
+	if (gui_init())
+	{
+		MessageBox(NULL, "error while initialize gui.", APP_NAME, MB_OK);
+		return 1;
+	}
+
 	// init display
-	if (display_init())
+	if (display_init(gui_get_window()))
 	{
 		MessageBox(NULL, "error while initialize display.", APP_NAME, MB_OK);
 		return 1;
 	}
-
-	// show display
-	display_show();
 
 	// intialize keyboard
 	if (keyboard_init())
@@ -29,23 +38,26 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		return 1;
 	}
 
-	// load default config
-	config_load("default.cfg");
+	// show gui
+	gui_show();
 
-	vsti_show_editor(true);
+	// load default config
+	config_load("freepiano.cfg");
 
 	MSG msg;
-	while (GetMessage(&msg, NULL, 0, 0))
+	while (GetMessage(&msg, NULL, NULL, NULL))
 	{
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
 
+	config_save("freepiano.cfg");
+
 	// shutdown keyboard
 	keyboard_shutdown();
 
-	// close devices
-	config_close();
+	// shutdown config
+	config_shutdown();
 
 	// shutdown display
 	display_shutdown();
