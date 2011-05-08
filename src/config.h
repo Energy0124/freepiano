@@ -69,12 +69,8 @@ int config_set_keymap(const char * mapname);
 // save keymap
 int config_save_keymap(int key, char * buff, int buffer_size);
 
-// set midi shift
-void config_set_midishift(int shift);
-
-// get midi shift
-int config_get_midi_shift();
-
-
 // keymap config
 int config_keymap_config(char * command);
+
+// get media path
+void config_get_media_path(char * buff, int buff_size, const char * path);

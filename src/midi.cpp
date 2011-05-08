@@ -8,7 +8,7 @@ static HMIDIIN midi_in_device = NULL;
 
 
 // c key of midi
-static char octshift = 0;
+static char key_signature = 0;
 
 // midi thread lock
 static thread_lock_t midi_input_lock;
@@ -67,7 +67,7 @@ static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR d
 		byte data2 = data >> 8;
 		byte data3 = data >> 16;
 		byte data4 = data >> 24;
-		midi_modify_event(data1, data2, data3, data4, midi_get_octshift(), 127);
+		midi_modify_event(data1, data2, data3, data4, midi_get_key_signature(), 127);
 		midi_send_event(data1, data2, data3, data4);
 	}
 }
@@ -140,16 +140,16 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 	}
 }
 
-// set octshift
-void midi_set_octshift(char shift)
+// set key signature
+void midi_set_key_signature(char shift)
 {
-	octshift = shift;
+	key_signature = shift;
 }
 
 // get oct shift
-char midi_get_octshift()
+char midi_get_key_signature()
 {
-	return octshift;
+	return key_signature;
 }
 
 static inline byte clamp(int data, byte min = 0, byte max = 127)

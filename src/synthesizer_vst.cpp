@@ -6,6 +6,7 @@
 
 #include "synthesizer_vst.h"
 #include "display.h"
+#include "config.h"
 
 // global vst effect instance
 static AEffect * effect = NULL;
@@ -586,13 +587,8 @@ void vsti_enum_plugins(vsti_enum_callback & callback)
 	HKEY key = HKEY_LOCAL_MACHINE;
 
 	char buff[256];
-	GetModuleFileNameA(NULL, buff, sizeof(buff));
-	char * pathend = strrchr(buff, '\\');
-	if (pathend)
-	{
-		pathend[0] = 0;
-		search_plugins(buff, callback);
-	}
+	config_get_media_path(buff, sizeof(buff), "");
+	search_plugins(buff, callback);
 
 	if (ERROR_SUCCESS == RegOpenKeyEx(key, "SOFTWARE", 0, KEY_READ, &key) &&
 		ERROR_SUCCESS == RegOpenKeyEx(key, "VST", 0, KEY_READ, &key))

@@ -4,6 +4,8 @@
 #include "keyboard.h"
 #include "vst/aeffectx.h"
 #include "display.h"
+#include "config.h"
+#include "song.h"
 
 extern AEffect * effect;
 
@@ -21,7 +23,7 @@ static HANDLE input_event = NULL;
 static HANDLE input_thread = NULL;
 
 // key map
-static MidiEvent key_map[256][2] = {0};
+static KeyboardEvent key_map[256][2];
 
 // keyboard enable
 static bool enable_keyboard = true;
@@ -200,7 +202,7 @@ static DWORD __stdcall input_update_thread(void * param)
 				uint keydown = key_events[i].dwData;
 
 				// send keyboard event
-				keyboard_send_event(code, keydown);
+				keyboard_send_event(0, code, keydown, 0);
 			}
 		}
 
@@ -314,20 +316,25 @@ void keyboard_enable(bool enable)
 	SetEvent(input_event);
 }
 
-// event message
-void keyboard_send_event(uint code, uint keydown)
+// keyboard event
+static void keyboard_event(int code, int keydown)
 {
+	song_record_event(0, code, keydown, 0);
+
 	// send keyboard event to display
 	display_keyboard_event(code, keydown);
 
 	// translate keyboard event to midi event
-	MidiEvent map = key_map[code][keydown == 0];
+	KeyboardEvent map = key_map[code][keydown == 0];
 
 	// send midi event
 	if (map.action)
 	{
 		// modify event
-		midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, oct_shift[map.action & 0xf] + midi_get_octshift(), key_velocity[map.action & 0xf]);
+		midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, oct_shift[map.action & 0xf] * 12 + midi_get_key_signature(), key_velocity[map.action & 0xf]);
+
+		// remap channel
+		map.action = (map.action & 0xf0) | key_channel[map.action & 0xf];
 
 		// sent event
 		midi_send_event(map.action, map.arg1, map.arg2, map.arg3);
@@ -338,22 +345,35 @@ void keyboard_send_event(uint code, uint keydown)
 		keyboard_status[code] = keydown;
 }
 
+// event message
+void keyboard_send_event(byte a, byte b, byte c, byte d)
+{
+	switch (a)
+	{
+	case 0:	keyboard_event(b, c); break;
+	case 1: midi_set_key_signature(b); break;
+	case 2: keyboard_set_octshift(b, c); break;
+	case 3: keyboard_set_velocity(b, c); break;
+	case 4: keyboard_set_channel(b, c); break;
+	}
+}
+
 // get keyboard map
-void keyboard_get_map(byte code, MidiEvent * keydown, MidiEvent * keyup)
+void keyboard_get_map(byte code, KeyboardEvent * keydown, KeyboardEvent * keyup)
 {
 	if (keydown) *keydown = key_map[code][0];
 	if (keyup) *keyup = key_map[code][1];
 }
 
 // set keyboard action
-void keyboard_set_map(byte code, MidiEvent * keydown, MidiEvent * keyup)
+void keyboard_set_map(byte code, KeyboardEvent * keydown, KeyboardEvent * keyup)
 {
 	if (keydown) key_map[code][0] = *keydown;
 	if (keyup) key_map[code][1] = *keyup;
 }
 
 // get default keyup
-bool keyboard_default_keyup(MidiEvent * keydown, MidiEvent * keyup)
+bool keyboard_default_keyup(KeyboardEvent * keydown, KeyboardEvent * keyup)
 {
 	keyup->action = 0;
 	keyup->arg1 = 0;
@@ -425,3 +445,31 @@ void keyboard_set_channel(byte channel, byte value)
 	if (channel < ARRAY_COUNT(key_channel))
 		key_channel[channel] = value;
 }
+
+
+// enum keymap
+void keyboard_enum_keymap(keymap_enum_callback & callback)
+{
+	char path[256];
+	char buff[256];
+	config_get_media_path(path, sizeof(path), "");
+
+	_snprintf(buff, sizeof(buff), "%s\\*.map", path);
+
+	WIN32_FIND_DATAA data;
+	HANDLE finddata = FindFirstFileA(buff, &data);
+
+	if (finddata != INVALID_HANDLE_VALUE)
+	{
+		do
+		{
+			_snprintf(buff, sizeof(buff), "%s\\%s", path, data.cFileName);
+			callback(buff);
+		}
+		while (FindNextFileA(finddata, &data));
+	}
+
+	FindClose(finddata);
+}
+
+

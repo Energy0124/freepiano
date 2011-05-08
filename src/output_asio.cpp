@@ -8,6 +8,7 @@
 #include "output_asio.h"
 #include "keyboard.h"
 #include "synthesizer_vst.h"
+#include "song.h"
 
 static IASIO* driver = NULL;
 static int driver_index = -1;
@@ -213,6 +214,10 @@ static ASIOTime *callback_buffer_switch_timeinfo(ASIOTime *timeInfo, long index,
 
 
 	static float output_buffer[2][4096];
+
+	// update 
+	song_update(1000.0 * (double)driver_info.preferredSize / (double)driver_info.sampleRate);
+
 
 	// call vsti process func
 	vsti_update_config((float)driver_info.sampleRate, driver_info.preferredSize);

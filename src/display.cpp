@@ -26,8 +26,8 @@ static LPDIRECT3DTEXTURE9 resource_texture = NULL;
 static HWND display_hwnd = NULL;
 static HFONT default_font = NULL;
 
-static int display_width = 600;
-static int display_height = 260;
+static int display_width = 0;
+static int display_height = 0;
 
 #define SCALE_DISPLAY 1
 
@@ -235,57 +235,90 @@ struct texture_node_t
 static texture_node_t * root_texture_node = NULL;
 
 // create texture from png
-static texture_node_t * create_texture_from_png(png_structp png_ptr, png_infop info_ptr)
+static LPDIRECT3DTEXTURE9 create_texture_from_png(png_structp png_ptr, png_infop info_ptr)
 {
-	texture_node_t * node = NULL;
+	LPDIRECT3DTEXTURE9 texture = NULL;
 
-		// only rgba png is supported.
-	if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGBA)
+	int width = png_get_image_width(png_ptr, info_ptr);
+	int height = png_get_image_height(png_ptr, info_ptr);
+	uint color_type = png_get_color_type(png_ptr, info_ptr);
+
+	// only rgba png is supported.
+	if (color_type == PNG_COLOR_TYPE_RGBA)
 	{
-		int width = png_get_image_width(png_ptr, info_ptr);
-		int height = png_get_image_height(png_ptr, info_ptr);
-
-		// allocates a texture node.
-		node = root_texture_node->allocate(width, height);
-
-		if (node)
+		if (SUCCEEDED(device->CreateTexture(width, height, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, NULL)))
 		{
 			byte ** data = png_get_rows(png_ptr, info_ptr);
 			uint rowbytes = png_get_rowbytes(png_ptr, info_ptr);
 
-			RECT data_rect;
-			data_rect.left = (int)node->min_u;
-			data_rect.right = (int)node->min_u + width;
-			data_rect.top = (int)node->min_v;
-			data_rect.bottom = (int)node->min_v + height;
-
 			D3DLOCKED_RECT lock_rect;
-			if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
+			if (SUCCEEDED(texture->LockRect(0, &lock_rect, NULL, D3DLOCK_DISCARD)))
 			{
-				uint pixelsize = 4;
-				byte * dst = (byte*)lock_rect.pBits;
+				byte * line = (byte*)lock_rect.pBits;
 
 				for (short y = 0; y < height; y++)
 				{
 					byte * src = data[y];
-					memcpy(dst, src, pixelsize * width);
-					dst += lock_rect.Pitch;
+					byte * dst = line;
+					for (short x = 0; x < width; x++)
+					{
+						dst[0] = src[2];
+						dst[1] = src[1];
+						dst[2] = src[0];
+						dst[3] = src[3];
+
+						dst += 4;
+						src += 4;
+					}
+					line += lock_rect.Pitch;
 				}
 
-				resource_texture->UnlockRect(0);
+				texture->UnlockRect(0);
+			}
+		}
+	}
+	else if (color_type == PNG_COLOR_TYPE_RGB)
+	{
+		if (SUCCEEDED(device->CreateTexture(width, height, 1, 0, D3DFMT_R8G8B8, D3DPOOL_MANAGED, &texture, NULL)))
+		{
+			byte ** data = png_get_rows(png_ptr, info_ptr);
+			uint rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+
+			D3DLOCKED_RECT lock_rect;
+			if (SUCCEEDED(texture->LockRect(0, &lock_rect, NULL, D3DLOCK_DISCARD)))
+			{
+				byte * line = (byte*)lock_rect.pBits;
+
+				for (short y = 0; y < height; y++)
+				{
+					byte * src = data[y];
+					byte * dst = line;
+					for (short x = 0; x < width; x++)
+					{
+						dst[0] = src[2];
+						dst[1] = src[1];
+						dst[2] = src[0];
+
+						dst += 3;
+						src += 3;
+					}
+					line += lock_rect.Pitch;
+				}
+
+				texture->UnlockRect(0);
 			}
 		}
 	}
 
-	return node;
+	return texture;
 }
 
 // load png texture
-static texture_node_t * load_png_from_file(const char * filename)
+static LPDIRECT3DTEXTURE9 load_png_from_file(const char * filename)
 {
 	png_structp png_ptr;
 	png_infop info_ptr;
-	texture_node_t * node = NULL;
+	LPDIRECT3DTEXTURE9 texture = NULL;
 	FILE *fp;
 
 	// open file
@@ -328,7 +361,7 @@ static texture_node_t * load_png_from_file(const char * filename)
 	png_read_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
 
 	// create texture node from png image
-	node = create_texture_from_png(png_ptr, info_ptr);
+	texture = create_texture_from_png(png_ptr, info_ptr);
 
 	// Clean up after the read, and free any memory allocated
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
@@ -336,12 +369,12 @@ static texture_node_t * load_png_from_file(const char * filename)
 	// Close the file
 	fclose(fp);
 
-	return node;
+	return texture;
 }
 
 
 // load png texture
-static texture_node_t * load_png_from_resource(const char * name)
+static LPDIRECT3DTEXTURE9 load_png_from_resource(const char * name)
 {
 	struct resource_file
 	{
@@ -403,7 +436,7 @@ static texture_node_t * load_png_from_resource(const char * name)
 
 	png_structp png_ptr;
 	png_infop info_ptr;
-	texture_node_t * node = NULL;
+	LPDIRECT3DTEXTURE9 texture = NULL;
 	resource_file * file = new resource_file;
 
 	if (!file->open(name, "BINARY"))
@@ -449,7 +482,7 @@ static texture_node_t * load_png_from_resource(const char * name)
 	png_read_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
 
 	// create texture node from png image
-	node = create_texture_from_png(png_ptr, info_ptr);
+	texture = create_texture_from_png(png_ptr, info_ptr);
 
 	// Clean up after the read, and free any memory allocated
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
@@ -457,7 +490,7 @@ static texture_node_t * load_png_from_resource(const char * name)
 	// Close the file
 	delete file;
 
-	return node;
+	return texture;
 
 }
 
@@ -562,10 +595,6 @@ static void d3d_reset_parameters(D3DPRESENT_PARAMETERS & params, HWND hwnd)
 	params.EnableAutoDepthStencil = FALSE;
 	params.AutoDepthStencilFormat = D3DFMT_D24S8;
 
-#if SCALE_DISPLAY
-	params.BackBufferWidth = display_width;
-	params.BackBufferHeight = display_height;
-#else
 	RECT rect1, rect2;
 	GetWindowRect(hwnd, &rect1);
 	SetRect(&rect2, 0, 0, 0, 0);
@@ -573,6 +602,13 @@ static void d3d_reset_parameters(D3DPRESENT_PARAMETERS & params, HWND hwnd)
 
 	params.BackBufferWidth = (rect1.right - rect1.left) - (rect2.right - rect2.left);
 	params.BackBufferHeight = (rect1.bottom - rect1.top) - (rect2.bottom - rect2.top);
+
+#if SCALE_DISPLAY
+	display_width = 760;
+	display_height = 340;
+#else
+	display_width = params.BackBufferWidth;
+	display_height = BackBufferHeight;
 #endif
 }
 
@@ -734,7 +770,7 @@ static void d3d_device_lost()
 }
 
 // reset 
-static int d3d_reset_device()
+static int d3d_device_reset()
 {
 	HRESULT hr;
 	D3DPRESENT_PARAMETERS params;
@@ -786,9 +822,6 @@ static int d3d_reset_device()
 
 	// set vertex declaration
 	device->SetFVF(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1);
-
-	// set white texture
-	set_texture(resource_texture);
 
 	return 0;
 }
@@ -958,16 +991,18 @@ static void init_keyboard_states()
 
 	float x = 0;
 	float y = 0;
+	float key_width = 32;
+	float key_height = 29;
 
 	for (Key * key = keys1; key < keys1 + sizeof(keys1) / sizeof(Key); key++)
 	{
 		if (key->code)
 		{
 			KeyboardState & state = keyboard_states[key->code];
-			state.x1 = round(14 + x * 25);
-			state.y1 = round(14 + y * 25);
-			state.x2 = round(14 + x * 25 + key->x * 25);
-			state.y2 = round(14 + y * 25 + key->y * 25);
+			state.x1 = round(14 + x * key_width);
+			state.y1 = round(14 + y * key_height);
+			state.x2 = round(14 + x * key_width + key->x * key_width);
+			state.y2 = round(14 + y * key_height + key->y * key_height);
 			x += key->x;
 		}
 		else
@@ -984,7 +1019,11 @@ static void init_midi_keyboard_states()
 	static byte key_flags[12] = { 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0 };
 
 	float x = 14;
-	float y = 194;
+	float y = 250;
+	float w1 = 9;
+	float h1 = 54;
+	float w2 = 14;
+	float h2 = 90;
 
 	for (int i = 21; i < 21 + 88; i++)
 	{
@@ -995,17 +1034,17 @@ static void init_midi_keyboard_states()
 		{
 			key.x1 = x - 4;
 			key.y1 = y;
-			key.x2 = key.x1 + 6;
-			key.y2 = key.y1 + 30;
+			key.x2 = key.x1 + w1;
+			key.y2 = key.y1 + h1;
 			key.black = true;
 		}
 		else
 		{
 			key.x1 = x;
 			key.y1 = y;
-			key.x2 = x + 11;
-			key.y2 = y + 50;
-			x = x + 11;
+			key.x2 = x + w2;
+			key.y2 = y + h2;
+			x = x + w2;
 			key.black = false;
 		}
 	}
@@ -1014,7 +1053,7 @@ static void init_midi_keyboard_states()
 
 struct DisplayResource
 {
-	texture_node_t * texture;
+	LPDIRECT3DTEXTURE9 texture;
 
 	DisplayResource()
 		: texture(NULL)
@@ -1030,7 +1069,7 @@ void display_set_image(uint type, const char * name)
 	if (type < resource_count)
 	{
 		if (resources[type].texture)
-			resources[type].texture->unuse();
+			resources[type].texture->Release();
 
 		resources[type].texture = load_png_from_file(name);
 	}
@@ -1039,12 +1078,38 @@ void display_set_image(uint type, const char * name)
 // set display default skin
 void display_default_skin()
 {
-	for (int i = 0; i < 9; i++)
+	const char * default_skins[] = {
+		"background.png",
+		"notes.png",
+		"keyboard_unmapped_down.png",
+		"keyboard_unmapped_up.png",
+		"keyboard_note_down.png",
+		"keyboard_note_up.png",
+		"midi_black_down.png",
+		"midi_black_up.png",
+		"midi_white_down.png",
+		"midi_white_up.png",
+	};
+
+	for (int i = 0; i < resource_count; i++)
 	{
 		if (resources[i].texture)
-			resources[i].texture->unuse();
+			resources[i].texture->Release();
 
-		resources[i].texture = load_png_from_resource(MAKEINTRESOURCE(IDR_SKIN_RES1) + i);
+		char temp[256];
+
+#ifdef _DEBUG
+		// try to load texture from develop path
+		_snprintf(temp, sizeof(temp), "..\\res\\%s", default_skins[i]);
+		resources[i].texture = load_png_from_file(temp);
+#else
+		// try to load texture from skin path
+		_snprintf(temp, sizeof(temp), "skin\\%s", default_skins[i]);
+		resources[i].texture = load_png_from_file(temp);
+#endif
+
+		if (resources[i].texture == NULL)
+			resources[i].texture = load_png_from_resource(MAKEINTRESOURCE(IDR_SKIN_RES0) + i);
 	}
 }
 
@@ -1067,10 +1132,22 @@ static void draw_image(uint resource_id, float x1, float x2, float y1, float y2,
 {
 	if (resource_id < resource_count)
 	{
-		texture_node_t * t = resources[resource_id].texture;
-		if (t)
+		LPDIRECT3DTEXTURE9 texture = resources[resource_id].texture;
+		if (texture)
 		{
-			draw_sprite(x1, x2, y1, y2, (float)t->min_u, (float)t->min_v, (float)t->min_u + (float)t->width, (float)t->min_v + (float)t->height, color);
+			D3DSURFACE_DESC desc;
+			texture->GetLevelDesc(0, &desc);
+			float w = (float)desc.Width;
+			float h = (float)desc.Height;
+			D3DMATRIX matrix = {
+				1.0f / w, 0, 0, 0,
+				0, 1.0f / h, 0, 0,
+				0, 0, 1, 0,
+				0, 0, 0, 1,
+			};
+			device->SetTexture(0, texture);
+			device->SetTransform(D3DTS_TEXTURE0, &matrix);
+			draw_sprite(x1, x2, y1, y2, 0, 0, w, h, color);
 		}
 	}
 }
@@ -1130,12 +1207,24 @@ static void draw_sprite_border(float x1, float y1, float x2, float y2, float u1,
 // draw image
 static void draw_image_border(uint resource_id, float x1, float x2, float y1, float y2, float lm, float rm, float tm, float bm, uint color)
 {
-	if (resource_id < resource_count)
+		if (resource_id < resource_count)
 	{
-		texture_node_t * t = resources[resource_id].texture;
-		if (t)
+		LPDIRECT3DTEXTURE9 texture = resources[resource_id].texture;
+		if (texture)
 		{
-			draw_sprite_border(x1, x2, y1, y2, (float)t->min_u, (float)t->min_v, (float)t->min_u + (float)t->width, (float)t->min_v + (float)t->height, lm, rm, tm, bm, color);
+			D3DSURFACE_DESC desc;
+			texture->GetLevelDesc(0, &desc);
+			float w = (float)desc.Width;
+			float h = (float)desc.Height;
+			D3DMATRIX matrix = {
+				1.0f / w, 0, 0, 0,
+				0, 1.0f / h, 0, 0,
+				0, 0, 1, 0,
+				0, 0, 0, 1,
+			};
+			device->SetTexture(0, texture);
+			device->SetTransform(D3DTS_TEXTURE0, &matrix);
+			draw_sprite_border(x1, x2, y1, y2, 0, 0, w, h, lm, rm, tm, bm, color);
 		}
 	}
 }
@@ -1148,13 +1237,13 @@ static void draw_keyboard()
 	{
 		if (key->x2 > key->x1)
 		{
-			MidiEvent map;
+			KeyboardEvent map;
 
 			// get keyboard map
 			keyboard_get_map(key - keyboard_states, &map, NULL);
 			
 			// modify keyboard map
-			midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, keyboard_get_octshift(map.action & 0xf), keyboard_get_velocity(map.action & 0xf));
+			midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, keyboard_get_octshift(map.action & 0xf) * 12, keyboard_get_velocity(map.action & 0xf));
 
 			float x1 = key->x1;
 			float y1 = key->y1;
@@ -1186,11 +1275,12 @@ static void draw_keyboard()
 						float x4 = x3 + 25.f;
 						float y3 = round(y1 + (y2 - y1 - 25.f) * 0.5f);
 						float y4 = y3 + 25.f;
-						float u3 = resources[notes].texture->min_u + ((note - 12) % 12) * 25.f;
-						float v3 = resources[notes].texture->min_v + ((note - 12) / 12) * 25.f;
+						float u3 = ((note - 12) % 12) * 25.f;
+						float v3 = ((note - 12) / 12) * 25.f;
 						float u4 = u3 + 25.f;
 						float v4 = v3 + 25.f;
 
+						set_texture(resources[notes].texture);
 						draw_sprite(x3, y3, x4, y4, u3, v3, u4, v4, 0xffffffff);
 					}
 
@@ -1234,21 +1324,19 @@ static void draw_midi_keyboard()
 	// begin scene
 	if (FAILED(device->BeginScene()))
 	{
-		d3d_reset_device();
+		d3d_device_lost();
+		d3d_device_reset();
 		device->Present(NULL, NULL, NULL, NULL);
 		return;
 	}
 
-	// clear backbuffer
-	device->Clear(0, NULL, D3DCLEAR_TARGET, 0xff000000, 0, 0);
-
 	{
-		D3DVIEWPORT9 vp;
-		device->GetViewport(&vp);
-		float sx = 2.0f / (float)vp.Width;
-		float sy = -2.0f / (float)vp.Height;
-		float tx = -1 - sx * 0.5f;
+		float sx = 2.0f / (float)display_width;
+		float sy = -2.0f / (float)display_height;
+		float tx = -1 + sx * 0.5f;
 		float ty = 1 + sy * 0.5f;
+		tx = -1 - sx * 0.5f;
+		ty = 1 - sy * 0.5f;
 
 		D3DMATRIX projection = {
 			sx, 0, 0, 0,
@@ -1259,15 +1347,24 @@ static void draw_midi_keyboard()
 
 		device->SetTransform(D3DTS_PROJECTION, &projection);
 		device->SetTransform(D3DTS_VIEW, &matrix_identity);
-
 	}
 
+#ifdef _DEBUG
 	if (GetAsyncKeyState(VK_F1))
 	{
+		// clear backbuffer
+		device->Clear(0, NULL, D3DCLEAR_TARGET, 0xff000000, 0, 0);
+
+		// set white texture
+		set_texture(resource_texture);
+
+		// draw resource texture
 		draw_sprite(0, 0, 512, 512, 0, 0, 512, 512, 0xffffffff);
 	}
 	else
+#endif
 	{
+		draw_image(background, 0, 0, (float)display_width, (float)display_height, 0xffffffff);
 		draw_keyboard();
 		draw_midi_keyboard();
 	}
@@ -1295,7 +1392,7 @@ int display_init(HWND hwnd)
 	}
 
 	// reset device
-	d3d_reset_device();
+	d3d_device_reset();
 
 	// load default skin
 	display_default_skin();
@@ -1310,6 +1407,12 @@ int display_init(HWND hwnd)
 // shutdown display
 int display_shutdown()
 {
+	for (int i = 0; i < resource_count; i++)
+	{
+		if (resources[i].texture)
+			resources[i].texture->Release();
+	}
+
 	d3d_shutdown();
 	display_hwnd = NULL;
 
@@ -1394,7 +1497,6 @@ static int mouse_control(int x, int y, bool mousedown)
 	int midinote = -1;
 	int velocity = 127;
 
-#if SCALE_DISPLAY
 	RECT rect;
 	GetClientRect(display_hwnd, &rect);
 
@@ -1404,7 +1506,6 @@ static int mouse_control(int x, int y, bool mousedown)
 		x = x * display_width / (rect.right - rect.left);
 		y = y * display_height / (rect.bottom - rect.top);
 	}
-#endif
 
 	if (mousedown)
 	{
@@ -1415,10 +1516,10 @@ static int mouse_control(int x, int y, bool mousedown)
 	if (keycode != previous_keycode)
 	{
 		if (previous_keycode != -1)
-			keyboard_send_event(previous_keycode, 0);
+			keyboard_send_event(0, previous_keycode, 0, 0);
 
 		if (keycode != -1)
-			keyboard_send_event(keycode, 1);
+			keyboard_send_event(0, keycode, 1, 0);
 
 		previous_keycode = keycode;
 	}
@@ -1443,7 +1544,6 @@ static void mouse_menu(int x, int y)
 {
 	POINT point = {x, y};
 
-#if SCALE_DISPLAY
 	RECT rect;
 	GetClientRect(display_hwnd, &rect);
 
@@ -1453,7 +1553,6 @@ static void mouse_menu(int x, int y)
 		x = x * display_width / (rect.right - rect.left);
 		y = y * display_height / (rect.bottom - rect.top);
 	}
-#endif
 
 	int keycode = find_keyboard_key(x, y);
 
@@ -1475,6 +1574,11 @@ int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			ReleaseCapture();
 			mouse_control(-1, -1, false);
 		}
+		break;
+
+	case WM_SIZE:
+		d3d_device_lost();
+		d3d_device_reset();
 		break;
 
 	case WM_LBUTTONDOWN:

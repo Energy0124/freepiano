@@ -6,6 +6,7 @@
 #include "output_dsound.h"
 #include "synthesizer_vst.h"
 #include "gui.h"
+#include "song.h"
 
 // global directsound object
 static LPDIRECTSOUND dsound = NULL;
@@ -94,6 +95,9 @@ static DWORD __stdcall dsound_play_thread(void * param)
 
 			// samples
 			uint samples = write_size / format.nBlockAlign;
+
+			// update 
+			song_update(1000.0 * (double)samples / (double)format.nSamplesPerSec);
 
 			// call vsti process func
 			vsti_update_config((float)format.nSamplesPerSec, 4096);

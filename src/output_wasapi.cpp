@@ -8,6 +8,7 @@
 #include "output_wasapi.h"
 #include "synthesizer_vst.h"
 #include "display.h"
+#include "song.h"
 
 // pkey
 static const PROPERTYKEY PKEY_Device_FriendlyName = { { 0xa45c254e, 0xdf1c, 0x4efd, { 0x80, 0x20,  0x67,  0xd1,  0x46,  0xa8,  0x50,  0xe0 } }, 14 };
@@ -83,6 +84,9 @@ static DWORD __stdcall wasapi_play_thread(void * param)
 				if (numFramesAvailable >= numFramesProcess)
 				{
 					//printf("write %d\n", numFramesAvailable);
+
+					// update song
+					song_update(1000.0 * (double)32 / (double)pwfx->nSamplesPerSec);
 
 					// update effect
 					vsti_update_config((float)pwfx->nSamplesPerSec, 32);

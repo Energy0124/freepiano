@@ -473,7 +473,7 @@ static bool match_value(char ** str, name_t * names, uint count, uint * value)
 }
 
 // match action
-static bool match_midi_event(char ** str, MidiEvent * e)
+static bool match_midi_event(char ** str, KeyboardEvent * e)
 {
 	uint action = 0;
 	uint channel = 0;
@@ -554,8 +554,8 @@ static name_t output_type_names[] =
 {
 	{ "None",			OUTPUT_TYPE_NONE },
 	{ "DirectSound",	OUTPUT_TYPE_DSOUND },
+	{ "Wasapi",			OUTPUT_TYPE_WASAPI },
 	{ "ASIO",			OUTPUT_TYPE_ASIO },
-	{ "wasapi",			OUTPUT_TYPE_WASAPI },
 };
 
 static uint	cfg_instrument_type = 0;
@@ -575,8 +575,8 @@ int config_keymap_config(char * command)
 	if (match_word(&s, "key"))
 	{
 		uint key = 0;
-		MidiEvent keydown;
-		MidiEvent keyup;
+		KeyboardEvent keydown;
+		KeyboardEvent keyup;
 
 		// match key name
 		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
@@ -599,7 +599,7 @@ int config_keymap_config(char * command)
 	else if (match_word(&s, "keydown"))
 	{
 		uint key = 0;
-		MidiEvent keydown;
+		KeyboardEvent keydown;
 
 		// match key name
 		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
@@ -619,7 +619,7 @@ int config_keymap_config(char * command)
 	else if (match_word(&s, "keyup"))
 	{
 		uint key = 0;
-		MidiEvent keyup;
+		KeyboardEvent keyup;
 
 		// match key name
 		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
@@ -642,15 +642,16 @@ int config_keymap_config(char * command)
 int config_load_keymap(const char * filename)
 {
 	char line[256];
+	config_get_media_path(line, sizeof(line), filename);
 
-	FILE * fp = fopen(filename, "r");
+	FILE * fp = fopen(line, "r");
 	if (!fp)
 		return -1;
 
 	// reset keyboard map
 	for (int code = 0; code < 256; code++)
 	{
-		MidiEvent empty = {0, 0, 0, 0};
+		KeyboardEvent empty;
 		keyboard_set_map(code, &empty, &empty);
 	}
 
@@ -681,7 +682,7 @@ static int print_value(char * buff, int buff_size, int value, name_t * names, in
 	return _snprintf(buff, buff_size, "%s%d", sep, value);
 }
 
-static int print_midi_event(char * buff, int buffer_size, int key, MidiEvent & e)
+static int print_midi_event(char * buff, int buffer_size, int key, KeyboardEvent & e)
 {
 	char * s = buff;
 	char * end = buff + buffer_size;
@@ -726,7 +727,7 @@ int config_save_keymap(int key, char * buff, int buffer_size)
 	char * end = buff + buffer_size;
 	char * s = buff;
 
-	MidiEvent keydown, keyup, defkeyup;
+	KeyboardEvent keydown, keyup, defkeyup;
 	keyboard_get_map(key, &keydown, &keyup);
 	keyboard_default_keyup(&keydown, &defkeyup);
 
@@ -775,7 +776,7 @@ void config_reset()
 		keyboard_set_channel(ch, 0);
 	}
 
-	midi_set_octshift(0);
+	midi_set_key_signature(0);
 }
 
 // apply config
@@ -803,6 +804,7 @@ static int config_apply()
 int config_load(const char * filename)
 {
 	char line[256];
+	config_get_media_path(line, sizeof(line), filename);
 
 	FILE * fp = fopen(filename, "r");
 	if (!fp)
@@ -831,6 +833,13 @@ int config_load(const char * filename)
 			else if (match_word(&s, "path"))
 			{
 				match_line(&s, cfg_instrument_path, sizeof(cfg_instrument_path));
+			}
+
+			else if (match_word(&s, "showui"))
+			{
+				uint showui = 1;
+				match_value(&s, NULL, 0, &showui);
+				vsti_show_editor(showui != 0);
 			}
 		}
 
@@ -900,13 +909,13 @@ int config_load(const char * filename)
 		// midi
 		else if (match_word(&s, "midi"))
 		{
-			if (match_word(&s, "shift"))
+			if (match_word(&s, "key"))
 			{
 				int value;
 
 				if (match_number(&s, &value))
 				{
-					midi_set_octshift(value);
+					midi_set_key_signature(value);
 				}
 			}
 
@@ -930,6 +939,9 @@ int config_load(const char * filename)
 // save
 int config_save(const char * filename)
 {
+	char file_path[256];
+	config_get_media_path(file_path, sizeof(file_path), filename);
+
 	FILE * fp = fopen(filename, "w");
 	if (!fp)
 		return -1;
@@ -939,7 +951,10 @@ int config_save(const char * filename)
 		fprintf(fp, "instrument type %s\n", instrument_type_names[cfg_instrument_type]);
 		if (cfg_instrument_path[0])
 			fprintf(fp, "instrument path %s\n", cfg_instrument_path);
+
+		fprintf(fp, "instrument showui %d\n", vsti_is_show_editor());
 	}
+
 
 	if (cfg_output_type)
 	{
@@ -973,8 +988,8 @@ int config_save(const char * filename)
 	if (cfg_midi_input[0])
 		fprintf(fp, "midi input %s\n", cfg_midi_input);
 
-	if (midi_get_octshift())
-		fprintf(fp, "midi shift %d\n", midi_get_octshift());
+	if (midi_get_key_signature())
+		fprintf(fp, "midi key %d\n", midi_get_key_signature());
 
 	fclose(fp);
 	return 0;
@@ -1238,15 +1253,21 @@ int config_set_keymap(const char * mapname)
 }
 
 
-
-// set midi shift
-void config_set_midishift(int shift)
+// get exe path
+void config_get_media_path(char * buff, int buff_size, const char * path)
 {
-	midi_set_octshift(shift);
-}
-
-// get midi shift
-int config_get_midi_shift()
-{
-	return midi_get_octshift();
+	GetModuleFileNameA(NULL, buff, buff_size);
+	char * pathend = strrchr(buff, '\\');
+	if (pathend)
+	{
+#ifdef _DEBUG
+		_snprintf(pathend, buff + buff_size - pathend, "\\..\\%s", path);
+#else
+		_snprintf(pathend, buff + buff_size - pathend, "\\%s", path);
+#endif
+	}
+	else
+	{
+		strncpy(buff, path, buff_size);
+	}
 }

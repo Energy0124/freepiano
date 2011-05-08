@@ -3,6 +3,7 @@
 #include "display.h"
 #include "config.h"
 #include "gui.h"
+#include "song.h"
 
 #ifdef _DEBUG
 int main()
@@ -43,6 +44,10 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
 	// load default config
 	config_load("freepiano.cfg");
+
+	// open lyt
+	//song_open_lyt("test3.lyt");
+	//song_start_playback();
 
 	MSG msg;
 	while (GetMessage(&msg, NULL, NULL, NULL))

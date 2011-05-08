@@ -308,6 +308,18 @@
 			>
 		</File>
 		<File
+			RelativePath="..\res\resource"
+			>
+		</File>
+		<File
+			RelativePath="..\src\song.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\src\song.h"
+			>
+		</File>
+		<File
 			RelativePath="..\src\synthesizer_vst.cpp"
 			>
 		</File>

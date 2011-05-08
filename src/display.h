@@ -5,6 +5,7 @@ namespace display_resource
 {
 	enum resource_type
 	{
+		background,
 		notes,
 		keyboard_unmapped_down,
 		keyboard_unmapped_up,
