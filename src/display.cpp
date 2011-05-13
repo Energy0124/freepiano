@@ -6,12 +6,27 @@
 #include <stdio.h>
 #include <windowsx.h>
 #include <gdiplus.h>
+#include <mbctype.h>
+
+#include <set>
 
 #include "png.h"
+
+#define USE_LIB_FREE_TYPE		1
+
+#if USE_LIB_FREE_TYPE
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include <Knownfolders.h>
+#include <Shlobj.h>
+#endif
+
 
 #include "display.h"
 #include "keyboard.h"
 #include "gui.h"
+#include "config.h"
+#include "song.h"
 #include "../res/resource"
 
 
@@ -24,7 +39,6 @@ static LPDIRECT3DTEXTURE9 resource_texture = NULL;
 
 // main window handle.
 static HWND display_hwnd = NULL;
-static HFONT default_font = NULL;
 
 static int display_width = 0;
 static int display_height = 0;
@@ -94,6 +108,9 @@ struct texture_node_t
 	// search
 	texture_node_t * search(int width, int height)
 	{
+		if (width <= 0 || height <= 0)
+			return NULL;
+
 		int usize = max_u - min_u;
 		int vsize = max_v - min_v;
 
@@ -223,7 +240,6 @@ struct texture_node_t
 
 		if (result)
 		{
-
 			result->use(width, height);
 		}
 
@@ -233,6 +249,483 @@ struct texture_node_t
 
 // root texture node.
 static texture_node_t * root_texture_node = NULL;
+
+#if USE_LIB_FREE_TYPE
+
+// free type library
+static FT_Library font_library = NULL;
+
+// default font face
+static FT_Face font_face1 = NULL;
+static FT_Face font_face2 = NULL;
+
+// font character
+struct font_character_t
+{
+	wchar_t ch;
+	int size;
+	int advance_x;
+	int bmp_left;
+	int bmp_top;
+	texture_node_t * texture;
+};
+
+struct font_character_less
+{
+	bool operator()(const font_character_t & l, const font_character_t & r) const
+	{
+		if (l.ch < r.ch) return true; 
+		if (l.ch > r.ch) return false;
+		if (l.size < r.size) return true;
+		if (l.size > r.size) return false;
+		return false;
+	}
+};
+
+// font character map
+typedef std::set<font_character_t, font_character_less> character_set_t;
+static character_set_t font_character_set;
+
+// preload character
+static void preload_characters(const wchar_t * text, int len, int size)
+{
+	bool retry = true;
+
+	if (len <= 0)
+		len = wcslen(text);
+
+	// set font size in pixels
+	FT_Set_Pixel_Sizes(font_face1, 0, size);
+
+	for (int i = 0; i < len; i++)
+	{
+		font_character_t cache;
+		cache.ch = text[i];
+		cache.size = size;
+		cache.advance_x = 0;
+		cache.bmp_left = 0;
+		cache.bmp_top = 0;
+		cache.texture = NULL;
+
+		character_set_t::const_iterator it = font_character_set.find(cache);
+
+		// character is not cached.
+		if (it == font_character_set.end())
+		{
+			// load glyph image into the slot (erase previous one)
+			int error = FT_Load_Char(font_face1, cache.ch, FT_LOAD_RENDER);
+			if (error == 0)
+			{
+				FT_GlyphSlot slot = font_face1->glyph;
+
+				// size
+				int size_x = slot->bitmap.width;
+				int size_y = slot->bitmap.rows;
+
+				if (size_x > 0 && size_y > 0)
+				{
+					// allocates texture node
+					texture_node_t * node = root_texture_node->allocate(size_x + 2, size_y + 2);
+
+					if (node)
+					{
+						RECT data_rect;
+						data_rect.left = (int)node->min_u;
+						data_rect.right = (int)node->min_u + (int)node->width;
+						data_rect.top = (int)node->min_v;
+						data_rect.bottom = (int)node->min_v + (int)node->height;
+
+						D3DLOCKED_RECT lock_rect;
+						if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
+						{
+							for (int y = 0; y < slot->bitmap.rows; ++y)
+							{
+								uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * (y + 1) + 4);
+								byte * src = slot->bitmap.buffer + slot->bitmap.pitch * y;
+
+								for (int x = 0; x < slot->bitmap.width; x++)
+								{
+									*dst = (*src << 24) | 0xffffff;
+									dst++;
+									src++;
+								}
+							}
+
+							resource_texture->UnlockRect(0);
+						}
+
+						// set cache attributes
+						cache.advance_x = slot->advance.x >> 6;
+						cache.bmp_left = slot->bitmap_left;
+						cache.bmp_top = font_face1->size->metrics.ascender / 64 - slot->bitmap_top;
+						cache.texture = node;
+					}
+					else
+					{
+						if (retry)
+						{
+							SAFE_DELETE(root_texture_node->child1);
+							SAFE_DELETE(root_texture_node->child2);
+							root_texture_node->unuse();
+
+							font_character_set.clear();
+							i = 0;
+							retry = false;
+							continue;
+						}
+						else
+						{
+							return;
+						}
+					}
+				}
+			}
+
+			// insert cache to character map
+			font_character_set.insert(cache);
+		}
+	}
+}
+
+// build string vertex
+static int build_string_vertex(const wchar_t * text, int len, int size, float x, float y, uint color, Vertex * vertex_buffer, int vertex_count, int h_align, int v_align)
+{
+	if (len <= 0)
+		len = wcslen(text);
+
+	float width = 0;
+	float height = 0;
+	float pen_x = x;
+	float pen_y = y;
+	Vertex * v = vertex_buffer;
+
+	for (int i = 0; i < len; i++)
+	{
+		font_character_t cache;
+		cache.ch = text[i];
+		cache.size = size;
+
+		character_set_t::const_iterator it = font_character_set.find(cache);
+
+		// character is not cached.
+		if (it != font_character_set.end())
+		{
+			cache = *it;
+
+			if (cache.texture && v + 6 < vertex_buffer + vertex_count)
+			{
+				v[0].x = pen_x + cache.bmp_left;
+				v[0].y = pen_y + cache.bmp_top;
+				v[0].z = 0;
+				v[0].u = (float)cache.texture->min_u;
+				v[0].v = (float)cache.texture->min_v;
+				v[0].color = color;
+
+				v[1].x = v[0].x + cache.texture->width;
+				v[1].y = v[0].y;
+				v[1].z = 0;
+				v[1].u = v[0].u + cache.texture->width;
+				v[1].v = v[0].v;
+				v[1].color = color;
+
+				v[2].x = v[0].x;
+				v[2].y = v[0].y + cache.texture->height;
+				v[2].z = 0;
+				v[2].u = v[0].u;
+				v[2].v = v[0].v + cache.texture->height;
+				v[3].color = color;
+
+				v[3] = v[1];
+				v[4] = v[2];
+
+				v[5].x = v[1].x;
+				v[5].y = v[2].y;
+				v[5].z = 0;
+				v[5].u = v[1].u;
+				v[5].v = v[2].v;
+				v[5].color = color;
+
+				v += 6;
+				pen_x += cache.advance_x;
+
+				if (width < pen_x)
+					width = pen_x;
+
+				if (height < pen_y + cache.bmp_top + cache.texture->height)
+					height = pen_y + cache.bmp_top + cache.texture->height;
+			}
+		}
+	}
+
+	if (h_align || v_align)
+	{
+		float x_offset = 0;
+		float y_offset = 0;
+
+		if (h_align == 1) x_offset = -floor(0.5f * (width - x));
+		if (v_align == 1) y_offset = -floor(0.5f * (height - y));
+
+		for (Vertex * v1 = vertex_buffer; v1 < v; v1++)
+		{
+			v1->x += x_offset;
+			v1->y += y_offset;
+		}
+	}
+
+	return v - vertex_buffer;
+}
+
+// create string texture
+static texture_node_t * create_string_texture(const char * text, int height)
+{
+	int error;
+
+	// set font size in pixels
+	error = FT_Set_Pixel_Sizes(font_face1, 0, height);
+
+	if (error)
+		return NULL;
+
+
+	int pen_x = 0;
+	int pen_y = 0;
+	int size_x = 0;
+	int size_y = 0;
+	int num_chars = strlen(text);
+
+	// go over and calculate size
+	for (int n = 0; n < num_chars; n++)
+	{
+		FT_GlyphSlot slot = font_face1->glyph;
+
+		// load glyph image into the slot (erase previous one)
+		error = FT_Load_Char(font_face1, text[n], FT_LOAD_RENDER);
+		if ( error )
+			continue; 
+
+		// size
+		int width = (slot->bitmap_left) + slot->bitmap.width;
+		int height = font_face1->size->metrics.height / 64;
+
+		// max size
+		if (pen_x + width > size_x) size_x = pen_x + width;
+		if (pen_y + height > size_y) size_y = pen_y + height;
+
+		// increment pen position
+		pen_x += slot->advance.x >> 6;
+	}
+
+	// allocates texture node
+	texture_node_t * node = root_texture_node->allocate(size_x, size_y);
+
+	// reset pen
+	pen_x = 0;
+	pen_y = 0;
+
+	RECT data_rect;
+	data_rect.left = (int)node->min_u;
+	data_rect.right = (int)node->min_u + (int)node->width;
+	data_rect.top = (int)node->min_v;
+	data_rect.bottom = (int)node->min_v + (int)node->height;
+
+	D3DLOCKED_RECT lock_rect;
+	if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
+	{
+		// go over again and draw text
+		for (int n = 0; n < num_chars; n++)
+		{
+			FT_GlyphSlot slot = font_face1->glyph;
+
+			// load glyph image into the slot (erase previous one)
+			error = FT_Load_Char(font_face1, text[n], FT_LOAD_RENDER);
+			if ( error )
+				continue;
+
+			// darwing position
+			int dx = pen_x + (slot->bitmap_left);
+			int dy = pen_y + font_face1->size->metrics.ascender / 64 - (slot->bitmap_top);
+
+			for (int y = 0; y < slot->bitmap.rows; ++y)
+			{
+				uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * (dy + y) + 4 * dx);
+				byte * src = slot->bitmap.buffer + slot->bitmap.pitch * y;
+
+
+				for (int x = 0; x < slot->bitmap.width; x++)
+				{
+					*dst = (*src << 24) | 0xffffff;
+					dst++;
+					src++;
+				}
+			}
+
+			// increment pen position
+			pen_x += slot->advance.x >> 6;
+		}
+
+		resource_texture->UnlockRect(0);
+	}
+
+	return node;
+}
+
+// initialize fonts
+static int font_initialize()
+{
+	int error;
+
+	// intialize free type library
+	error = FT_Init_FreeType(&font_library);
+	if (error)
+	{
+		fprintf(stderr, "an error occurred during font library initialization\n");
+		return -1;
+	}
+
+	// get font path
+	char font_path[MAX_PATH];
+	char buffer[MAX_PATH];
+	SHGetFolderPath(NULL, CSIDL_FONTS, NULL, SHGFP_TYPE_CURRENT,  font_path);
+
+	// load default fonts.
+	_snprintf(buffer, sizeof(buffer), "%s\\arial.ttf", font_path);
+	error = FT_New_Face(font_library, buffer, 0, &font_face1);
+	if (error)
+	{
+		fprintf(stderr, "an error occurred during font library initialization\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+// shutdown font
+static void font_shutdown()
+{
+	FT_Done_Face(font_face1);
+	FT_Done_Face(font_face2);
+	FT_Done_FreeType(font_library);
+}
+
+#else
+
+// default windows font
+static HFONT default_font = NULL;
+
+// create string texture
+static texture_node_t * create_string_texture(const char * str)
+{
+	HDC hdcWindow = GetDC(NULL);
+	HDC hdcMemDC = CreateCompatibleDC(hdcWindow); 
+	int len = strlen(str);
+
+	// get text size
+	SIZE size;
+	SelectObject(hdcMemDC, default_font);
+	GetTextExtentPoint32(hdcMemDC, str, len, &size);
+
+	// set text and background color
+	SetTextColor(hdcMemDC, RGB(255,255,255));
+	SetBkColor(hdcMemDC, 0);
+
+	// create bitmap
+	BITMAPINFO bmi;
+	ZeroMemory(&bmi.bmiHeader, sizeof(BITMAPINFOHEADER));
+	bmi.bmiHeader.biSize		= sizeof(BITMAPINFOHEADER);
+	bmi.bmiHeader.biWidth		= size.cx;
+	bmi.bmiHeader.biHeight		= -size.cy;
+	bmi.bmiHeader.biPlanes		= 1;
+	bmi.bmiHeader.biBitCount	= 32;
+	bmi.bmiHeader.biCompression = BI_RGB;
+
+	uint * pBits;
+	HBITMAP hBmp = CreateDIBSection(hdcMemDC, &bmi, DIB_RGB_COLORS, (void **) &pBits, NULL, 0);
+
+	if (NULL == hBmp || NULL == pBits)
+	{
+		DeleteDC(hdcWindow);
+		DeleteDC(hdcMemDC);
+		return NULL;
+	}
+
+	SelectObject(hdcMemDC, hBmp);
+
+	// draw text
+	TextOut(hdcMemDC, 0, 0, str, len);
+
+	// allocates texture node
+	texture_node_t * node = root_texture_node->allocate(size.cx, size.cy);
+
+	RECT data_rect;
+	data_rect.left = (int)node->min_u;
+	data_rect.right = (int)node->min_u + (int)node->width;
+	data_rect.top = (int)node->min_v;
+	data_rect.bottom = (int)node->min_v + (int)node->height;
+
+	D3DLOCKED_RECT lock_rect;
+	if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
+	{
+		for (int y = 0; y < size.cy; ++y)
+		{
+			uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * y);
+			uint * src = (uint*)pBits + size.cx * y;
+
+			for (int x = 0; x < size.cx; x++)
+			{
+				*dst = *src | 0xff000000;
+				dst++;
+				src++;
+			}
+		}
+
+		resource_texture->UnlockRect(0);
+
+	}
+
+	DeleteObject(hBmp);
+	DeleteDC(hdcMemDC);
+	DeleteDC(hdcWindow);
+
+	return node;
+}
+
+// initialize fonts
+static int font_initialize()
+{
+	SystemParametersInfo(SPI_SETFONTSMOOTHING, TRUE, 0, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+	SystemParametersInfo(SPI_SETFONTSMOOTHINGTYPE, FE_FONTSMOOTHINGSTANDARD, 0, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE); 
+
+	LOGFONT lfont;
+	lfont.lfHeight = -12;
+	lfont.lfWidth = 0;
+	lfont.lfEscapement = 0;
+	lfont.lfOrientation = 0;
+	lfont.lfWeight = FW_MEDIUM;
+	lfont.lfItalic = 0;
+	lfont.lfUnderline = 0;
+	lfont.lfStrikeOut = 0;
+	lfont.lfCharSet = ANSI_CHARSET;
+	lfont.lfOutPrecision = OUT_DEFAULT_PRECIS;
+	lfont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
+	lfont.lfQuality = CLEARTYPE_QUALITY;
+	lfont.lfPitchAndFamily = VARIABLE_PITCH | FF_ROMAN;
+	lstrcpy(lfont.lfFaceName,"Arial");
+	default_font = CreateFontIndirect(&lfont);
+
+	return 0;
+}
+
+// shutdown font
+static void font_shutdown()
+{
+	DeleteObject(default_font);
+}
+
+#endif
+
+// -----------------------------------------------------------------------------------------
+// texture loading funcs
+// -----------------------------------------------------------------------------------------
 
 // create texture from png
 static LPDIRECT3DTEXTURE9 create_texture_from_png(png_structp png_ptr, png_infop info_ptr)
@@ -492,85 +985,6 @@ static LPDIRECT3DTEXTURE9 load_png_from_resource(const char * name)
 
 	return texture;
 
-}
-
-
-
-// load png texture
-static texture_node_t * create_string_texture(const char * str)
-{
-	HDC hdcWindow = GetDC(NULL);
-	HDC hdcMemDC = CreateCompatibleDC(hdcWindow); 
-	int len = strlen(str);
-
-	// get text size
-	SIZE size;
-	SelectObject(hdcMemDC, default_font);
-	GetTextExtentPoint32(hdcMemDC, str, len, &size);
-
-	// set text and background color
-	SetTextColor(hdcMemDC, RGB(255,255,255));
-	SetBkColor(hdcMemDC, 0);
-
-	// create bitmap
-	BITMAPINFO bmi;
-	ZeroMemory(&bmi.bmiHeader, sizeof(BITMAPINFOHEADER));
-	bmi.bmiHeader.biSize		= sizeof(BITMAPINFOHEADER);
-	bmi.bmiHeader.biWidth		= size.cx;
-	bmi.bmiHeader.biHeight		= -size.cy;
-	bmi.bmiHeader.biPlanes		= 1;
-	bmi.bmiHeader.biBitCount	= 32;
-	bmi.bmiHeader.biCompression = BI_RGB;
-
-	uint * pBits;
-	HBITMAP hBmp = CreateDIBSection(hdcMemDC, &bmi, DIB_RGB_COLORS, (void **) &pBits, NULL, 0);
-
-	if (NULL == hBmp || NULL == pBits)
-	{
-		DeleteDC(hdcWindow);
-		DeleteDC(hdcMemDC);
-		return NULL;
-	}
-
-	SelectObject(hdcMemDC, hBmp);
-
-	// draw text
-	TextOut(hdcMemDC, 0, 0, str, len);
-
-	// allocates texture node
-	texture_node_t * node = root_texture_node->allocate(size.cx, size.cy);
-
-	RECT data_rect;
-	data_rect.left = (int)node->min_u;
-	data_rect.right = (int)node->min_u + (int)node->width;
-	data_rect.top = (int)node->min_v;
-	data_rect.bottom = (int)node->min_v + (int)node->height;
-
-	D3DLOCKED_RECT lock_rect;
-	if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
-	{
-		for (int y = 0; y < size.cy; ++y)
-		{
-			uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * y);
-			uint * src = (uint*)pBits + size.cx * y;
-
-			for (int x = 0; x < size.cx; x++)
-			{
-				*dst = *src | 0xff000000;
-				dst++;
-				src++;
-			}
-		}
-
-		resource_texture->UnlockRect(0);
-
-	}
-
-	DeleteObject(hBmp);
-	DeleteDC(hdcMemDC);
-	DeleteDC(hdcWindow);
-
-	return node;
 }
 
 // -----------------------------------------------------------------------------------------
@@ -1018,7 +1432,7 @@ static void init_midi_keyboard_states()
 {
 	static byte key_flags[12] = { 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0 };
 
-	float x = 14;
+	float x = 16;
 	float y = 250;
 	float w1 = 9;
 	float h1 = 54;
@@ -1111,6 +1525,30 @@ void display_default_skin()
 		if (resources[i].texture == NULL)
 			resources[i].texture = load_png_from_resource(MAKEINTRESOURCE(IDR_SKIN_RES0) + i);
 	}
+
+}
+
+// darw string
+static void draw_string(float x, float y, uint color, const char * text, int size, int h_align, int v_align)
+{
+	wchar_t buff[1024];
+	static Vertex vertex_buff[1024 * 6];
+
+	// convert text to unicode
+	int len = MultiByteToWideChar(_getmbcp(), 0, text, -1, buff, 1024);
+
+	if (len == 0)
+		return;
+
+	// preload characters
+	preload_characters(buff, len - 1, size);
+
+	// build string vertex
+	int count = build_string_vertex(buff, len - 1, size, x, y, color, vertex_buff, ARRAY_COUNT(vertex_buff), h_align, v_align);
+
+	// draw primitives
+	set_texture(resource_texture);
+	device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, count / 3, vertex_buff, sizeof(Vertex));
 }
 
 // draw sprite
@@ -1148,6 +1586,31 @@ static void draw_image(uint resource_id, float x1, float x2, float y1, float y2,
 			device->SetTexture(0, texture);
 			device->SetTransform(D3DTS_TEXTURE0, &matrix);
 			draw_sprite(x1, x2, y1, y2, 0, 0, w, h, color);
+		}
+	}
+}
+
+// draw texture node
+static void draw_node_unscaled(float x, float y, texture_node_t * node, uint color)
+{
+	if (node)
+	{
+		if (resource_texture)
+		{
+			D3DSURFACE_DESC desc;
+			resource_texture->GetLevelDesc(0, &desc);
+			float w = (float)desc.Width;
+			float h = (float)desc.Height;
+			D3DMATRIX matrix = {
+				1.0f / w, 0, 0, 0,
+				0, 1.0f / h, 0, 0,
+				0, 0, 1, 0,
+				0, 0, 0, 1,
+			};
+			device->SetTexture(0, resource_texture);
+			device->SetTransform(D3DTS_TEXTURE0, &matrix);
+
+			draw_sprite(x, y, x + node->width, y + node->height, (float)node->min_u, (float)node->min_v, (float)node->min_u + (float)node->width, (float)node->min_v + (float)node->height, color);
 		}
 	}
 }
@@ -1288,6 +1751,7 @@ static void draw_keyboard()
 			}
 		}
 	}
+
 }
 
 // draw midi keyboard
@@ -1315,6 +1779,78 @@ static void draw_midi_keyboard()
 				draw_image(img, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
 			}
 		}
+	}
+}
+
+// darw keyboard controls
+static void draw_keyboard_controls()
+{
+	char buff[256];
+
+	static struct midi_key_t
+	{
+		const char * name;
+		int shift;
+	}
+	midi_key_items[] = {
+		{ "C(0)",	0 },
+		{ "bD(+1)",	1 },
+		{ "D(+2)",	2 },
+		{ "bE(+3)",	3 },
+		{ "E(+4)",	4 },
+		{ "F(+5)",	5 },
+		{ "#F(+6)",	6 },
+		{ "G(+7)",	7 },
+		{ "bA(-4)",	-4 },
+		{ "A(-3)",	-3 },
+		{ "bB(-2)",	-2 },
+		{ "B(-1)",	-1 },
+	};
+
+	// volume
+	_snprintf(buff, sizeof(buff), "%d", config_get_output_volume());
+	draw_string(92, 222, 0xff6e6e6e, buff, 11, 1, 0);
+
+	// midi key
+	switch (midi_get_key_signature())
+	{
+	case 0:		strcpy(buff, "C(0)"); break;
+	case 1:		strcpy(buff, "bD(+1)"); break;
+	case 2:		strcpy(buff, "D(+2)"); break;
+	case 3:		strcpy(buff, "bE(+3)"); break;
+	case 4:		strcpy(buff, "E(+4)"); break;
+	case 5:		strcpy(buff, "F(+5)"); break;
+	case 6:		strcpy(buff, "#F(+6)"); break;
+	case 7:		strcpy(buff, "G(+7)"); break;
+	case -4:	strcpy(buff, "bA(-4)"); break;
+	case -3:	strcpy(buff, "A(-3)"); break;
+	case -2:	strcpy(buff, "bB(-2)"); break;
+	case -1:	strcpy(buff, "B(-1)"); break;
+	default:	_snprintf(buff, sizeof(buff), "%d", midi_get_key_signature()); break;
+	}
+
+	draw_string(202, 222, 0xff6e6e6e, buff, 11, 1, 0);
+
+	// timer
+	_snprintf(buff, sizeof(buff), "%d:%02d", song_get_time() / 1000 / 60, song_get_time() / 1000 % 60);
+	draw_string(332, 222, 0xff6e6e6e, buff, 11, 1, 0);
+
+	// velocity
+	_snprintf(buff, sizeof(buff), "%d", keyboard_get_velocity(0));
+	draw_string(512, 222, 0xff6e6e6e, buff, 11, 1, 0);
+	_snprintf(buff, sizeof(buff), "%d", keyboard_get_velocity(1));
+	draw_string(554, 222, 0xff6e6e6e, buff, 11, 1, 0);
+
+	// octshift
+	{
+		int s1 = keyboard_get_octshift(0);
+		int s2 = keyboard_get_octshift(1);
+
+		_snprintf(buff, sizeof(buff), "%s%d", s1 > 0 ? "+" : s1 < 0 ? "-" : "", abs(s1));
+		draw_string(672, 222, 0xff6e6e6e, buff, 11, 1, 0);
+
+		_snprintf(buff, sizeof(buff), "%s%d", s2 > 0 ? "+" : s2 < 0 ? "-" : "", abs(s2));
+		draw_string(716, 222, 0xff6e6e6e, buff, 11, 1, 0);
 	}
 }
 
@@ -1367,6 +1903,7 @@ static void draw_midi_keyboard()
 		draw_image(background, 0, 0, (float)display_width, (float)display_height, 0xffffffff);
 		draw_keyboard();
 		draw_midi_keyboard();
+		draw_keyboard_controls();
 	}
 
 	device->EndScene();
@@ -1378,11 +1915,12 @@ int display_init(HWND hwnd)
 {
 	display_hwnd = hwnd;
 
-	// create default font
-	LOGFONT fontinfo;
-	GetObject(GetStockObject(DEFAULT_GUI_FONT), sizeof(fontinfo), &fontinfo);
-	fontinfo.lfHeight = -12;
-	default_font = CreateFontIndirect(&fontinfo);
+	// initialize font
+	if (font_initialize())
+	{
+		fprintf(stderr, "failed to initialize fonts");
+		return -1;
+	}
 
 	// initialize directx 9
 	if (d3d_initialize(display_hwnd))
@@ -1487,7 +2025,7 @@ static int find_midi_note(int x, int y, int * velocity = NULL)
 	return -1;
 }
 
-// mouse control note
+// mouse control
 static int mouse_control(int x, int y, bool mousedown)
 {
 	static int previous_keycode = -1;

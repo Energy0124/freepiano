@@ -45,3 +45,6 @@ int song_save(const char * filename);
 
 // open song
 int song_open(const char * filename);
+
+// get time
+int song_get_time();

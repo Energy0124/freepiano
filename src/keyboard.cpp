@@ -319,8 +319,6 @@ void keyboard_enable(bool enable)
 // keyboard event
 static void keyboard_event(int code, int keydown)
 {
-	song_record_event(0, code, keydown, 0);
-
 	// send keyboard event to display
 	display_keyboard_event(code, keydown);
 
@@ -330,14 +328,20 @@ static void keyboard_event(int code, int keydown)
 	// send midi event
 	if (map.action)
 	{
-		// modify event
-		midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, oct_shift[map.action & 0xf] * 12 + midi_get_key_signature(), key_velocity[map.action & 0xf]);
+		// midi event is recored by keydown and keyup
+		if (map.action >= 0x80)
+		{
+			song_record_event(0, code, keydown, 0);
 
-		// remap channel
-		map.action = (map.action & 0xf0) | key_channel[map.action & 0xf];
+			// modify event
+			midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, oct_shift[map.action & 0xf] * 12 + midi_get_key_signature(), key_velocity[map.action & 0xf]);
 
-		// sent event
-		midi_send_event(map.action, map.arg1, map.arg2, map.arg3);
+			// remap channel
+			map.action = (map.action & 0xf0) | key_channel[map.action & 0xf];
+
+			// sent event
+			midi_send_event(map.action, map.arg1, map.arg2, map.arg3);
+		}
 	}
 
 	// keep state
@@ -402,7 +406,10 @@ bool keyboard_default_keyup(KeyboardEvent * keydown, KeyboardEvent * keyup)
 void keyboard_set_octshift(byte channel, char shift)
 {
 	if (channel < ARRAY_COUNT(oct_shift))
+	{
+		song_record_event(2, channel, shift, 0);
 		oct_shift[channel] = shift;
+	}
 }
 
 // get oct shift
@@ -418,7 +425,10 @@ char keyboard_get_octshift(byte channel)
 void keyboard_set_velocity(byte channel, byte velocity)
 {
 	if (channel < ARRAY_COUNT(key_velocity))
+	{
+		song_record_event(3, channel, velocity, 0);
 		key_velocity[channel] = velocity;
+	}
 }
 
 // get velocity
@@ -443,9 +453,11 @@ int keyboard_get_channel(byte channel)
 void keyboard_set_channel(byte channel, byte value)
 {
 	if (channel < ARRAY_COUNT(key_channel))
+	{
+		song_record_event(4, channel, value, 0);
 		key_channel[channel] = value;
+	}
 }
-
 
 // enum keymap
 void keyboard_enum_keymap(keymap_enum_callback & callback)

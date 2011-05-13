@@ -92,13 +92,21 @@ bool song_is_empty()
 	return song_end == NULL;
 }
 
+
+// get time
+int song_get_time()
+{
+	return (int)song_timer;
+}
+
 // update
 void song_update(double time_elapsed)
 {
 	if (GetAsyncKeyState(VK_ESCAPE))
 		return;
 
-	song_timer += time_elapsed;
+	if (song_is_playing() || song_is_recording())
+		song_timer += time_elapsed;
 
 	// playback
 	while (play_position && song_end)
@@ -153,6 +161,11 @@ void song_record_event(byte a, byte b, byte c, byte d)
 {
 	song_add_event(song_timer, a, b, c, d);
 }
+
+
+// -----------------------------------------------------------------------------------------
+// load and save functions
+// -----------------------------------------------------------------------------------------
 
 static void read(void * buff, int size, FILE * fp)
 {

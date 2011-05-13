@@ -9,6 +9,7 @@
 #include "keyboard.h"
 #include "synthesizer_vst.h"
 #include "song.h"
+#include "config.h"
 
 static IASIO* driver = NULL;
 static int driver_index = -1;
@@ -180,6 +181,44 @@ static unsigned long get_sys_reference_time()
 	return timeGetTime();
 }
 
+static void write_buffer(short * dst, float * src, int size)
+{
+	const float scale = 0x7fff  + .49999f;
+	float volume = config_get_output_volume() / 100.f;
+
+	while (size--)
+	{
+		float v = *src * scale * volume;
+
+		if (v < -0x7fff) v = -0x7fff;
+		if (v > 0x7fff) v = 0x7fff;
+
+		*dst = (short)v;
+
+		src++;
+		dst++;
+	}
+}
+
+static void write_buffer(int * dst, float * src, int size)
+{
+	const double scale = 0x7fffffff  + .49999f;
+	double volume = config_get_output_volume() / 100.f;
+
+	while (size--)
+	{
+		double v = *src * scale * volume;
+
+		if (v < -0x7fffffff) v = -0x7fffffff;
+		if (v > 0x7fffffff) v = 0x7fffffff;
+
+		*dst = (int)v;
+
+		src++;
+		dst++;
+	}
+}
+
 static ASIOTime *callback_buffer_switch_timeinfo(ASIOTime *timeInfo, long index, ASIOBool processNow)
 {	// the actual processing callback.
 	// Beware that this is normally in a seperate thread, hence be sure that you take care
@@ -242,23 +281,7 @@ static ASIOTime *callback_buffer_switch_timeinfo(ASIOTime *timeInfo, long index,
 			switch (driver_info.channelInfos[i].type)
 			{
 			case ASIOSTInt16LSB:
-				{
-					double scale = 0x7fff  + .49999;
-
-					short * b = (short*)driver_info.bufferInfos[i].buffers[index];
-					float * o = output_buffer[driver_info.channelInfos[i].channel & 1];
-
-					for (int j = 0; j < buffSize; j++)
-					{
-						if (*o > 1) *o = 1;
-						else if (*o < -1) *o = -1;
-
-						*b = (int)(scale * (*o));
-
-						b++;
-						o++;
-					}
-				}
+				write_buffer((short*)driver_info.bufferInfos[i].buffers[index], output_buffer[driver_info.channelInfos[i].channel & 1], buffSize);
 				break;
 
 			case ASIOSTInt24LSB:		// used for 20 bits as well
@@ -266,28 +289,13 @@ static ASIOTime *callback_buffer_switch_timeinfo(ASIOTime *timeInfo, long index,
 				break;
 
 			case ASIOSTInt32LSB:
-				{
-					double scale = 0x7fffffff  + .49999;
-
-					int * b = (int*)driver_info.bufferInfos[i].buffers[index];
-					float * o = output_buffer[driver_info.channelInfos[i].channel & 1];
-
-					for (int j = 0; j < buffSize; j++)
-					{
-						if (*o > 1) *o = 1;
-						else if (*o < -1) *o = -1;
-
-						*b = (int)(scale * (*o));
-
-						b++;
-						o++;
-					}
-				}
-
+				write_buffer((int*)driver_info.bufferInfos[i].buffers[index], output_buffer[driver_info.channelInfos[i].channel & 1], buffSize);
 				break;
+
 			case ASIOSTFloat32LSB:		// IEEE 754 32 bit float, as found on Intel x86 architecture
 				memset (driver_info.bufferInfos[i].buffers[index], 0, buffSize * 4);
 				break;
+
 			case ASIOSTFloat64LSB: 		// IEEE 754 64 bit double float, as found on Intel x86 architecture
 				memset (driver_info.bufferInfos[i].buffers[index], 0, buffSize * 8);
 				break;

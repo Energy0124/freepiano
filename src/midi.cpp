@@ -2,6 +2,7 @@
 #include "midi.h"
 #include "synthesizer_vst.h"
 #include "display.h"
+#include "song.h"
 
 static HMIDIOUT midi_out_device = NULL;
 static HMIDIIN midi_in_device = NULL;
@@ -143,6 +144,7 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 // set key signature
 void midi_set_key_signature(char shift)
 {
+	song_record_event(1, shift, 0, 0);
 	key_signature = shift;
 }
 

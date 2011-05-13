@@ -7,6 +7,7 @@
 #include "synthesizer_vst.h"
 #include "gui.h"
 #include "song.h"
+#include "config.h"
 
 // global directsound object
 static LPDIRECTSOUND dsound = NULL;
@@ -24,17 +25,20 @@ static uint buffer_size = 441;
 static void write_buffer(short * dst, float * left, float * right, int size)
 {
 	const float scale = 0x7fff  + .49999f;
+	float volume = config_get_output_volume() / 100.f;
 
 	while (size--)
 	{
-		if (*left > 1) *left = 1;
-		else if (*left < -1) *left = -1;
+		float l = *left * scale * volume;
+		float r = *right * scale * volume;
 
-		if (*right > 1) *right = 1;
-		else if (*right < -1) *right = -1;
+		if (l < -0x7fff) l = -0x7fff;
+		if (l > 0x7fff) l = 0x7fff;
+		if (r < -0x7fff) r = -0x7fff;
+		if (r > 0x7fff) r = 0x7fff;
 
-		dst[0] = (short)(scale * (*left));
-		dst[1] = (short)(scale * (*right));
+		dst[0] = (short)l;
+		dst[1] = (short)r;
 
 		left++;
 		right++;
@@ -203,10 +207,10 @@ int dsound_open(const char * name)
 	format.nAvgBytesPerSec = format.nBlockAlign * format.nSamplesPerSec;
 	format.cbSize = sizeof(format);
 
-
+#define USE_PRIMIARY_WRITE 0
 #if USE_PRIMIARY_WRITE
 	// set cooperative level
-	if (FAILED(hr = dsound->SetCooperativeLevel(display_get_hwnd(), DSSCL_WRITEPRIMARY)))
+	if (FAILED(hr = dsound->SetCooperativeLevel(gui_get_window(), DSSCL_WRITEPRIMARY)))
 		goto error;
 
 	// initialize parameters 
@@ -231,7 +235,7 @@ int dsound_open(const char * name)
 	DSBUFFERDESC desc;
 	memset(&desc, 0, sizeof(desc));
     desc.dwSize = sizeof(desc);
-    desc.dwFlags = DSBCAPS_GETCURRENTPOSITION2;
+    desc.dwFlags = DSBCAPS_GETCURRENTPOSITION2 | DSBCAPS_GLOBALFOCUS;
 	desc.dwBufferBytes = 4096 * format.nBlockAlign;
 	desc.lpwfxFormat = &format;
 

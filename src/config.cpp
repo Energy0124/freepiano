@@ -566,6 +566,7 @@ static uint cfg_output_delay = 10;
 static char cfg_keymap[256] = {0};
 static char cfg_midi_input[256] = {0};
 static char cfg_midi_output[256] = {0};
+static int cfg_output_volume = 100;
 
 int config_keymap_config(char * command)
 {
@@ -768,6 +769,7 @@ void config_reset()
 	cfg_output_type = 0;
 	cfg_output_device[0] = 0;
 	cfg_output_delay = 10;
+	cfg_output_volume = 100;
 
 	for (byte ch = 0; ch < 16; ch++)
 	{
@@ -792,6 +794,9 @@ static int config_apply()
 	// open output
 	if (config_select_output(cfg_output_type, cfg_output_device))
 		cfg_output_device[0] = 0;
+
+	config_set_output_volume(cfg_output_volume);
+	config_set_output_delay(cfg_output_delay);
 
 	// open midi output and input
 	config_select_midi_output(cfg_midi_output);
@@ -858,6 +863,10 @@ int config_load(const char * filename)
 			else if (match_word(&s, "delay"))
 			{
 				match_number(&s, &cfg_output_delay);
+			}
+			else if (match_word(&s, "volume"))
+			{
+				match_number(&s, &cfg_output_volume);
 			}
 		}
 
@@ -964,6 +973,7 @@ int config_save(const char * filename)
 			fprintf(fp, "output device %s\n", cfg_output_device);
 
 		fprintf(fp, "output delay %d\n", cfg_output_delay);
+		fprintf(fp, "output volume %d\n", cfg_output_volume);
 	}
 
 	if (cfg_keymap[0])
@@ -1114,23 +1124,15 @@ int config_select_output(int type, const char * device)
 		break;
 
 	case OUTPUT_TYPE_DSOUND:
-		{
-			result = dsound_open(device);
-			dsound_set_buffer_time(cfg_output_delay);
-		}
+		result = dsound_open(device);
 		break;
 
 	case OUTPUT_TYPE_WASAPI:
-		{
-			result = wasapi_open(device);
-			wasapi_set_buffer_time(cfg_output_delay);
-		}
+		result = wasapi_open(device);
 		break;
 
 	case OUTPUT_TYPE_ASIO:
-		{
-			result = asio_open(device);
-		}
+		result = asio_open(device);
 		break;
 	}
 
@@ -1270,4 +1272,18 @@ void config_get_media_path(char * buff, int buff_size, const char * path)
 	{
 		strncpy(buff, path, buff_size);
 	}
+}
+
+// get volume
+int config_get_output_volume()
+{
+	return cfg_output_volume;
+}
+
+// set volume
+void config_set_output_volume(int volume)
+{
+	if (volume < 0) volume = 0;
+	if (volume > 100) volume = 100;
+	cfg_output_volume = volume;
 }

@@ -9,6 +9,7 @@
 #include "synthesizer_vst.h"
 #include "display.h"
 #include "song.h"
+#include "config.h"
 
 // pkey
 static const PROPERTYKEY PKEY_Device_FriendlyName = { { 0xa45c254e, 0xdf1c, 0x4efd, { 0x80, 0x20,  0x67,  0xd1,  0x46,  0xa8,  0x50,  0xe0 } }, 14 };
@@ -37,10 +38,12 @@ static const IID IID_IAudioRenderClient = __uuidof(IAudioRenderClient);
 // write buffer
 static void write_buffer(float * dst, float * left, float * right, int size)
 {
+	float volume = config_get_output_volume() / 100.f;
+
 	while (size--)
 	{
-		dst[0] = *left;
-		dst[1] = *right;
+		dst[0] = *left * volume;
+		dst[1] = *right * volume;
 
 		left++;
 		right++;

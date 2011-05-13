@@ -40,7 +40,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="../3rd/lpng;../3rd/zlib"
+				AdditionalIncludeDirectories="../3rd/lpng;../3rd/zlib;../3rd/freetype2/include"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0501"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -118,7 +118,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="../3rd/lpng;../3rd/zlib"
+				AdditionalIncludeDirectories="../3rd/lpng;../3rd/zlib;../3rd/freetype2/include"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0501"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"

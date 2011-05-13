@@ -74,3 +74,9 @@ int config_keymap_config(char * command);
 
 // get media path
 void config_get_media_path(char * buff, int buff_size, const char * path);
+
+// get volume
+int config_get_output_volume();
+
+// set volume
+void config_set_output_volume(int volume);
