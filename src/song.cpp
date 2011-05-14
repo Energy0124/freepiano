@@ -3,6 +3,8 @@
 #include <dinput.h>
 #include <Shlwapi.h>
 
+#include <zlib.h>
+
 #include "song.h"
 #include "display.h"
 #include "midi.h"
@@ -20,6 +22,7 @@ struct song_event_t
 
 // record buffer (1M events should be enough.)
 static song_event_t song_event_buffer[1024 * 1024];
+static song_event_t song_temp_buffer[1024 * 1024];
 
 // record or play position
 static song_event_t * play_position = NULL;
@@ -32,13 +35,91 @@ static char song_author[256];
 static char song_description[256];
 static bool song_protected = false;
 
-// start record
-void song_start_record()
+
+// add event
+static void song_add_event(double time, byte a, byte b, byte c, byte d)
+{
+	if (record_position)
+	{
+		record_position->time = time;
+		record_position->a = a;
+		record_position->b = b;
+		record_position->c = c;
+		record_position->d = d;
+
+		if (++record_position >= ARRAY_END(song_event_buffer))
+			record_position = NULL;
+
+		// just simple set song end to record posision
+		song_end = record_position;
+	}
+}
+
+// add event
+void song_record_event(byte a, byte b, byte c, byte d)
+{
+	song_add_event(song_timer, a, b, c, d);
+}
+
+// init record
+static void song_init_record()
 {
 	song_timer = 0;
 	record_position = song_event_buffer;
 	play_position = NULL;
 	song_end = song_event_buffer;
+	song_protected = true;
+}
+
+// start record
+void song_start_record()
+{
+	song_init_record();
+
+	// record current configs
+	song_add_event(0, 1, midi_get_key_signature(), 0, 0);
+	for (int i = 0; i < 16; i++)
+	{
+		song_add_event(0, 2, i, keyboard_get_octshift(i), 0);
+		song_add_event(0, 3, i, keyboard_get_velocity(i), 0);
+		song_add_event(0, 4, i, keyboard_get_channel(i), 0);
+	}
+
+	// record keymaps
+	for (int i = 0; i < 256; i ++)
+	{
+		KeyboardEvent keydown, keyup, keydef;
+		keyboard_get_map(i, &keydown, &keyup);
+		
+		if (keydown.action)
+		{
+			if (keyup.action)
+			{
+				keyboard_default_keyup(&keydown, &keydef);
+
+				if (memcpy(&keyup, &keydef, sizeof(keyup)) == 0)
+				{
+					song_add_event(0, 0, 1, i, 0);
+					song_add_event(0, keydown.action, keydown.arg1, keydown.arg2, keydown.arg3);
+					continue;
+				}
+			}
+
+			song_add_event(0, 0, 1, i, 1);
+			song_add_event(0, keydown.action, keydown.arg1, keydown.arg2, keydown.arg3);
+		}
+
+		if (keyup.action)
+		{
+			song_add_event(0, 0, 1, i, 2);
+			song_add_event(0, keyup.action, keyup.arg1, keyup.arg2, keyup.arg3);
+		}
+	}
+
+	// pedal
+	song_add_event(0, 0xb0, 0x40, midi_get_controller_value(0x40), 0);
+
+	// mark song is not protected
 	song_protected = false;
 }
 
@@ -64,6 +145,8 @@ void song_start_playback()
 // stop playback
 void song_stop_playback()
 {
+	keyboard_reset();
+	midi_reset();
 	play_position = NULL;
 }
 
@@ -113,21 +196,10 @@ void song_update(double time_elapsed)
 	{
 		if (play_position->time <= song_timer)
 		{
-			byte a = play_position->a;
-			byte b = play_position->b;
-			byte c = play_position->c;
-			byte d = play_position->d;
+			// send event to keyboard
+			keyboard_send_event(play_position->a, play_position->b, play_position->c, play_position->d);
 
-			if ((a & 0xf0) < 0x80)
-			{
-				keyboard_send_event(a, b, c, d);
-			}
-			else
-			{
-				midi_send_event(a, b, c, d);
-			}
-
-			if (++play_position > song_end)
+			if (++play_position >= song_end)
 			{
 				play_position = NULL;
 			}
@@ -137,30 +209,6 @@ void song_update(double time_elapsed)
 	}
 }
 
-// add event
-static void song_add_event(double time, byte a, byte b, byte c, byte d)
-{
-	if (record_position)
-	{
-		record_position->time = time;
-		record_position->a = a;
-		record_position->b = b;
-		record_position->c = c;
-		record_position->d = d;
-
-		if (++record_position >= ARRAY_END(song_event_buffer))
-			record_position = NULL;
-
-		// just simple set song end to record posision
-		song_end = record_position;
-	}
-}
-
-// add event
-void song_record_event(byte a, byte b, byte c, byte d)
-{
-	song_add_event(song_timer, a, b, c, d);
-}
 
 
 // -----------------------------------------------------------------------------------------
@@ -247,6 +295,9 @@ int song_open_lyt(const char * filename)
 		read_idp_string(song_author, 19, fp);
 		read_idp_string(song_description, 255, fp);
 
+		// start record
+		song_init_record();
+
 		// keymapping
 		struct keymap_t
 		{
@@ -263,20 +314,20 @@ int song_open_lyt(const char * filename)
 			int unknown4;
 		};
 
+
 		keymap_t map;
 		read(&map, sizeof(map), fp);
 
-		midi_set_key_signature(map.midi_shift);
-		keyboard_set_velocity(0, map.velocity_left);
-		keyboard_set_velocity(1, map.velocity_right);
-		keyboard_set_octshift(0, map.shift_left);
-		keyboard_set_octshift(1, map.shift_right);
+		// record set params command
+		song_add_event(0, 1, map.midi_shift, 0, 0);
+		song_add_event(0, 2, 0, map.shift_left, 0);
+		song_add_event(0, 2, 1, map.shift_right, 0);
+		song_add_event(0, 3, 0, map.velocity_left, 0);
+		song_add_event(0, 3, 1, map.velocity_right, 0);
 
-		// start record
-		song_start_record();
-
-		// push down right padel
-		song_add_event(0, 0xb0, 0x40, 127, 0);
+		// push down padel
+		if (map.voice1 > 0 || map.voice2 > 0)
+			song_add_event(0, 0xb0, 0x40, 127, 0);
 
 		if (version > 1)
 		{
@@ -308,7 +359,7 @@ int song_open_lyt(const char * filename)
 				DIK_0,
 				DIK_MINUS, 
 				DIK_EQUALS,
-				DIK_APOSTROPHE,
+				DIK_BACKSLASH,
 				DIK_BACKSPACE,
 				DIK_TAB,
 				DIK_Q,
@@ -425,8 +476,9 @@ int song_open_lyt(const char * filename)
 					keydown.arg1 = 12 + key.octive * 12 + notes[key.note % 8] + shifts[key.shift % 3];
 					keydown.arg2 = 127;
 
-					keyboard_default_keyup(&keydown, &keyup);
-					keyboard_set_map(keycode[i], &keydown, &keyup);
+					// add keymap event
+					song_add_event(0, 0, 1, keycode[i], 0);
+					song_add_event(0, keydown.action, keydown.arg1, keydown.arg2, keydown.arg3);
 				}
 			}
 
@@ -458,8 +510,8 @@ int song_open_lyt(const char * filename)
 
 			switch (type)
 			{	
-			case 1: song_add_event(time, 0, key, 1, 0); break; // keydown
-			case 2: song_add_event(time, 0, key, 0, 0); break; // keyup
+			case 1: song_add_event(time, 0, 0, key, 1); break; // keydown
+			case 2: song_add_event(time, 0, 0, key, 0); break; // keyup
 			case 3: song_add_event(time, 2, 1, key, 0); break; // set oct shift
 			case 4: song_add_event(time, 2, 0, key, 0); break; // set oct shift
 			case 5: song_add_event(time, 1, key, 0, 0); break; // set midi oct shift
@@ -471,7 +523,6 @@ int song_open_lyt(const char * filename)
 		}
 
 		song_stop_record();
-		song_protected = true;
 		fclose(fp);
 	}
 	catch (int err)
@@ -520,50 +571,23 @@ int song_open(const char * filename)
 		// instrument
 		read_string(instrument, sizeof(instrument), fp);
 
-		//// midi key
-		//char midi_key;
-		//read(&midi_key, sizeof(midi_key), fp);
-		//midi_set_key_signature(midi_key);
-
-		//// keyboard info
-		//for (int i = 0; i < 16; i++)
-		//{
-		//	byte velocity;
-		//	char octshift;
-		//	byte channel;
-
-		//	read(&velocity, sizeof(velocity), fp);
-		//	read(&octshift, sizeof(octshift), fp);
-		//	read(&channel, sizeof(channel), fp);
-
-		//	keyboard_set_velocity(i, velocity);
-		//	keyboard_set_octshift(i, octshift);
-		//	keyboard_set_channel(i, channel);
-		//}
-
-		//// keymap
-		//for (int i = 0; i < 256; i++)
-		//{
-		//	KeyboardEvent keydown, keyup;
-		//	read(&keydown, sizeof(keydown), fp);
-		//	read(&keyup, sizeof(keyup), fp);
-		//	keyboard_set_map(i, &keydown, &keyup);
-		//}
-
 		// start record
-		song_start_record();
+		song_init_record();
 
-		// events
-		uint event_count;
-		read(&event_count, sizeof(event_count), fp);
-		for (uint i = 0; i < event_count; i++)
-		{
-			song_event_t e;
-			read(&e, sizeof(e), fp);
-			song_add_event(e.time, e.a, e.b, e.c, e.d);
-		}
+		// read events
+		uint temp_size;
+		read(&temp_size, sizeof(temp_size), fp);
+		if (temp_size > sizeof(song_temp_buffer))
+			throw 1;
 
+		read(song_temp_buffer, temp_size, fp);
+
+		uint data_size = sizeof(song_event_buffer);
+		uncompress((byte*)song_event_buffer, (uLongf*)&data_size, (Bytef*)song_temp_buffer, temp_size);
+
+		song_end = record_position = song_event_buffer + data_size / sizeof(song_event_t);
 		song_stop_record();
+
 		song_protected = true;
 		fclose(fp);
 		return 0;
@@ -605,12 +629,12 @@ int song_save(const char * filename)
 			}
 
 			// write events
-			uint event_count = song_end - song_event_buffer;
-			write(&event_count, sizeof(event_count), fp);
-			for (uint i = 0; i < event_count; i++)
-			{
-				write(&song_event_buffer[i], sizeof(song_event_t), fp);
-			}
+			uint temp_size = sizeof(song_temp_buffer);
+
+			compress((Bytef*)song_temp_buffer, (uLongf*)&temp_size, (byte*)song_event_buffer, (song_end - song_event_buffer) * sizeof(song_event_t));
+
+			write(&temp_size, sizeof(temp_size), fp);
+			write(song_temp_buffer, temp_size, fp);
 
 			fclose(fp);
 			return 0;

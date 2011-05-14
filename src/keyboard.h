@@ -70,3 +70,6 @@ void keyboard_send_event(byte a, byte b, byte c, byte d);
 
 // enum keymap
 void keyboard_enum_keymap(keymap_enum_callback & callback);
+
+// reset keyboard
+void keyboard_reset();

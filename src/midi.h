@@ -34,3 +34,9 @@ void midi_enum_input(midi_enum_callback & callbcak);
 
 // enum input
 void midi_enum_output(midi_enum_callback & callbcak);
+
+// rest midi
+void midi_reset();
+
+// get controller value
+char midi_get_controller_value(byte control);

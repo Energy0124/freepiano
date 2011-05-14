@@ -15,6 +15,12 @@ static char key_signature = 0;
 static thread_lock_t midi_input_lock;
 static thread_lock_t midi_output_lock;
 
+// note state
+static byte note_states[16][128] = {0};
+
+// controllers
+static byte controllers[128] = {0};
+
 // open output device
 int midi_open_output(const char * name)
 {
@@ -128,6 +134,14 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 	// display midi event
 	display_midi_event(data1, data2, data3, data4);
 
+	// check note down and note up
+	switch (data1 & 0xf0)
+	{
+	case 0x80:	note_states[data1 & 0xf][data2 & 0x7f] = 1; break;
+	case 0x90:	note_states[data1 & 0xf][data2 & 0x7f] = 0; break;
+	case 0xb0:	controllers[data2 & 0x7f] = data3; break;
+	}
+
 	// send midi event to vst plugin
 	if (vsti_is_instrument_loaded())
 	{
@@ -203,4 +217,24 @@ void midi_enum_output(midi_enum_callback & callback)
 
 		callback(caps.szPname);
 	}
+}
+
+// midi reset
+void midi_reset()
+{
+	for (int ch = 0; ch < 16; ch++)
+	{
+		for (int note = 0; note < 128; note++)
+		{
+			if (note_states[ch][note])
+				midi_send_event(0x90 | ch, note, 0, 0);
+		}
+	}
+}
+
+
+// get controller value
+char midi_get_controller_value(byte controller)
+{
+	return controllers[controller & 0x7f];
 }

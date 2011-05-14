@@ -951,7 +951,7 @@ int config_save(const char * filename)
 	char file_path[256];
 	config_get_media_path(file_path, sizeof(file_path), filename);
 
-	FILE * fp = fopen(filename, "w");
+	FILE * fp = fopen(file_path, "w");
 	if (!fp)
 		return -1;
 
