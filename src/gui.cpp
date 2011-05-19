@@ -13,7 +13,7 @@
 #include "display.h"
 #include "keyboard.h"
 #include "song.h"
-#include "../res/resource"
+#include "../res/resource.h"
 
 #pragma comment(lib, "Shlwapi.lib")
 
@@ -133,7 +133,9 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
 static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	static char buffer_size_text_format[256];
+	static char output_delay_text_format[256];
+	static char output_volume_text_format[256];
+
 	static const char * output_types[] = 
 	{
 		"NONE",
@@ -169,6 +171,11 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
 					count ++;
 				}
 
+				void operator ()(const char * value, void * device)
+				{
+					operator()(value);
+				}
+
 				callback(int type, HWND list)
 					: type(type)
 					, list(list)
@@ -201,22 +208,38 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
 			asio_enum_device(callback(OUTPUT_TYPE_ASIO, output_list));
 
 			// output delay
-			GetDlgItemText(hWnd, IDC_OUTPUT_BUFFER_SIZE_TEXT, buffer_size_text_format, sizeof(buffer_size_text_format));
+			GetDlgItemText(hWnd, IDC_OUTPUT_DELAY_TEXT, output_delay_text_format, sizeof(output_delay_text_format));
+			GetDlgItemText(hWnd, IDC_OUTPUT_VOLUME_TEXT, output_volume_text_format, sizeof(output_volume_text_format));
 
 			char temp[256];
-			_snprintf(temp, sizeof(temp), buffer_size_text_format, config_get_output_delay());
-			SetDlgItemText(hWnd, IDC_OUTPUT_BUFFER_SIZE_TEXT, temp);
+			_snprintf(temp, sizeof(temp), output_delay_text_format, config_get_output_delay());
+			SetDlgItemText(hWnd, IDC_OUTPUT_DELAY_TEXT, temp);
+
+			_snprintf(temp, sizeof(temp), output_volume_text_format, config_get_output_volume());
+			SetDlgItemText(hWnd, IDC_OUTPUT_VOLUME_TEXT, temp);
 
 			// output delay slider
-			HWND output_buffer_size = GetDlgItem(hWnd, IDC_OUTPUT_BUFFER_SIZE);
+			HWND output_delay = GetDlgItem(hWnd, IDC_OUTPUT_DELAY);
 
-			SendMessage(output_buffer_size, TBM_SETRANGE, 
+			SendMessage(output_delay, TBM_SETRANGE, 
 				(WPARAM) TRUE,                   // redraw flag 
 				(LPARAM) MAKELONG(0, 80));		 // min. & max. positions 
 
-			SendMessage(output_buffer_size, TBM_SETPOS, 
+			SendMessage(output_delay, TBM_SETPOS, 
 				(WPARAM) TRUE,						 // redraw flag 
 				(LPARAM) config_get_output_delay()); // min. & max. positions 
+
+			
+			// output volume slider
+			HWND output_volume = GetDlgItem(hWnd, IDC_OUTPUT_VOLUME);
+
+			SendMessage(output_volume, TBM_SETRANGE, 
+				(WPARAM) TRUE,                   // redraw flag 
+				(LPARAM) MAKELONG(0, 100));		 // min. & max. positions 
+
+			SendMessage(output_volume, TBM_SETPOS, 
+				(WPARAM) TRUE,						 // redraw flag 
+				(LPARAM) config_get_output_volume()); // min. & max. positions 
 		}
 		break;
 
@@ -257,18 +280,30 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
 
 	case WM_HSCROLL:
 		{
-			HWND output_buffer_size = GetDlgItem(hWnd, IDC_OUTPUT_BUFFER_SIZE);
+			HWND output_delay = GetDlgItem(hWnd, IDC_OUTPUT_DELAY);
+			HWND output_volume = GetDlgItem(hWnd, IDC_OUTPUT_VOLUME);
 
-			if (output_buffer_size == (HWND)lParam)
+			if (output_delay == (HWND)lParam)
 			{
-				int pos = SendMessage(output_buffer_size, TBM_GETPOS, 0, 0);
+				int pos = SendMessage(output_delay, TBM_GETPOS, 0, 0);
 
 				// update output delay
 				config_set_output_delay(pos);
 
 				char temp[256];
-				_snprintf(temp, sizeof(temp), buffer_size_text_format, config_get_output_delay());
-				SetDlgItemText(hWnd, IDC_OUTPUT_BUFFER_SIZE_TEXT, temp);
+				_snprintf(temp, sizeof(temp), output_delay_text_format, config_get_output_delay());
+				SetDlgItemText(hWnd, IDC_OUTPUT_DELAY_TEXT, temp);
+			}
+			else if (output_volume == (HWND)lParam)
+			{
+				int pos = SendMessage(output_volume, TBM_GETPOS, 0, 0);
+
+				// update output delay
+				config_set_output_volume(pos);
+
+				char temp[256];
+				_snprintf(temp, sizeof(temp), output_volume_text_format, config_get_output_volume());
+				SetDlgItemText(hWnd, IDC_OUTPUT_VOLUME_TEXT, temp);
 			}
 		}
 	}
@@ -684,6 +719,52 @@ void settings_show(int page = IDD_SETTING_AUDIO)
 	}
 }
 
+
+static INT_PTR CALLBACK song_info_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg)
+	{
+	case WM_INITDIALOG:
+		{
+			song_info_t * info = song_get_info();
+			SetDlgItemText(hWnd, IDC_SONG_TITLE, info->title);
+			SetDlgItemText(hWnd, IDC_SONG_AUTHOR, info->author);
+			SetDlgItemText(hWnd, IDC_SONG_COMMENT, info->comment);
+		}
+		break;
+
+	case WM_COMMAND:
+		switch (LOWORD(wParam))
+		{
+		case IDOK:
+			{
+				song_info_t * info = song_get_info();
+				GetDlgItemText(hWnd, IDC_SONG_TITLE, info->title, sizeof(info->title));
+				GetDlgItemText(hWnd, IDC_SONG_AUTHOR, info->author, sizeof(info->author));
+				GetDlgItemText(hWnd, IDC_SONG_COMMENT, info->comment, sizeof(info->comment));
+				EndDialog(hWnd, 1);
+			}
+			break;
+
+		case IDCANCEL:
+			EndDialog(hWnd, 0);
+			break;
+		}
+		break;
+
+	case WM_CLOSE:
+		EndDialog(hWnd, 0);
+		break;
+	}
+	return 0;
+}
+
+// show song info
+int gui_show_song_info()
+{
+	return DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SONG_INFO), gui_get_window(), song_info_proc);
+}
+
 // -----------------------------------------------------------------------------------------
 // MAIN MENU
 // -----------------------------------------------------------------------------------------
@@ -754,13 +835,23 @@ midi_shift_items[] =
 static struct key_control_t
 {
 	const char * name;
+	const char * label;
 	const char * keydown;
 	const char * keyup;
 }
 key_controls[] = 
 {
-	{ "ÑÓÒôÌ¤°å",			"Controller 0 SustainPedal 127", "Controller 0 SustainPedal 0"},
-	{ "ÑÓÒôÌ¤°å£¨·­×ª£©",	"Controller 0 SustainPedal 0", "Controller 0 SustainPedal 127"},
+	{ "²¥·Å",				"Play",		"Play" },
+	{ "Â¼ÖÆ",				"Rec",		"Record" },
+	{ "Í£Ö¹",				"Stop",		"Stop" },
+	{ "Çúµ÷+",				"Key+",		"KeySignature Inc 1" },
+	{ "Çúµ÷-",				"Key-",		"KeySignature Dec 1" },
+	{ "×óÊÖ°Ë¶È+",			"Oct+",		"KeyboardOctshift 0 Inc 1" },
+	{ "×óÊÖ°Ë¶È-",			"Oct-",		"KeyboardOctshift 0 Dec 1" },
+	{ "ÓÒÊÖ°Ë¶È+",			"Oct+",		"KeyboardOctshift 1 Inc 1" },
+	{ "ÓÒÊÖ°Ë¶È-",			"Oct-",		"KeyboardOctshift 1 Dec 1" },
+	{ "ÑÓÒôÌ¤°å",			"RPDL",		"Controller 0 SustainPedal 127", "Controller 0 SustainPedal 0" },
+	{ "ÑÓÒôÌ¤°å£¨·­×ª£©",	"RPDL",		"Controller 0 SustainPedal 0", "Controller 0 SustainPedal 127" },
 };
 
 
@@ -946,6 +1037,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				}
 			}
 
+			keyboard_set_label(selected_key, NULL);
 			keyboard_set_map(selected_key, events + 0, events + 1);
 		}
 		break;
@@ -965,6 +1057,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				}
 			}
 
+			keyboard_set_label(selected_key, NULL);
 			keyboard_set_map(selected_key, events + 0, events + 1);
 		}
 		break;
@@ -983,6 +1076,10 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				_snprintf(temp, sizeof(temp), "keyup %d %s", selected_key, key_controls[pos].keyup);
 				config_keymap_config(temp);
 			}
+			if (key_controls[pos].label)
+			{
+				keyboard_set_label(selected_key, key_controls[pos].label);
+			}
 		}
 		break;
 
@@ -990,6 +1087,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 			KeyboardEvent events[2];
 			keyboard_set_map(selected_key, events + 0, events + 1);
+			keyboard_set_label(selected_key, NULL);
 		}
 		break;
 
@@ -1048,27 +1146,32 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	case MENU_ID_FILE_SAVE:
 		{
-			char temp[260];
-			OPENFILENAME ofn;
-			memset(&ofn, 0, sizeof(ofn));
-			ofn.lStructSize = sizeof(ofn);
-			ofn.hwndOwner = hwnd;
-			ofn.lpstrFile = temp;
-			ofn.lpstrFile[0] = 0;
-			ofn.nMaxFile = sizeof(temp);
-			ofn.lpstrFilter = "FreePianoÀÖÆ× (*.fpm)\0*.fpm\0";
-			ofn.nFilterIndex = 1;
-			ofn.Flags = OFN_PATHMUSTEXIST;
-			ofn.lpstrDefExt = ".fpm";
+			int result = gui_show_song_info();
 
-			if (GetSaveFileName(&ofn))
+			if (result)
 			{
-				PathRenameExtension(ofn.lpstrFile, ".fpm");
-				int result = song_save(ofn.lpstrFile);
+				char temp[260];
+				OPENFILENAME ofn;
+				memset(&ofn, 0, sizeof(ofn));
+				ofn.lStructSize = sizeof(ofn);
+				ofn.hwndOwner = hwnd;
+				ofn.lpstrFile = temp;
+				ofn.lpstrFile[0] = 0;
+				ofn.nMaxFile = sizeof(temp);
+				ofn.lpstrFilter = "FreePianoÀÖÆ× (*.fpm)\0*.fpm\0";
+				ofn.nFilterIndex = 1;
+				ofn.Flags = OFN_PATHMUSTEXIST;
+				ofn.lpstrDefExt = ".fpm";
 
-				if (result != 0)
+				if (GetSaveFileName(&ofn))
 				{
-					MessageBox(gui_get_window(), "±£´æÀÖÆ×Ê§°Ü£¡", APP_NAME, MB_OK);
+					PathRenameExtension(ofn.lpstrFile, ".fpm");
+					int result = song_save(ofn.lpstrFile);
+
+					if (result != 0)
+					{
+						MessageBox(gui_get_window(), "±£´æÀÖÆ×Ê§°Ü£¡", APP_NAME, MB_OK);
+					}
 				}
 			}
 		}
@@ -1348,12 +1451,12 @@ int gui_init()
 	wc.cbClsExtra = 0;
 	wc.cbWndExtra = 0;
 	wc.hInstance = GetModuleHandle(NULL);
-	wc.hIcon = NULL;
+	wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON_NORMAL));
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wc.hbrBackground = NULL;
 	wc.lpszMenuName = NULL;
 	wc.lpszClassName = "FreePianoMainWindow";
-	wc.hIconSm = NULL;
+	wc.hIconSm = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON_SMALL));
 
 	RegisterClassEx(&wc);
 

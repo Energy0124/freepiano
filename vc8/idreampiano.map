@@ -76,3 +76,20 @@ key	-	NoteOn	0	f7
 key	=	NoteOn	0	g7
 key	\	NoteOn	0	a7
 
+
+keydown	~	KeyboardOctshift	1	Inc	1
+label	~	Oct+
+keydown	Tab	KeyboardOctshift	0	Inc	1
+label	Tab	Oct+
+keydown	CapsLock	KeySignature	Inc	1
+label	CapsLock	Key+
+keydown	Shift	KeySignature	Dec	1
+label	Shift	Key-
+
+keydown	ScrollLock	Record
+label	ScrollLock	Rec
+keydown	PrintScreen	Play
+label	PrintScreen	Play
+keydown	Pause	Stop
+label	Pause	Stop
+

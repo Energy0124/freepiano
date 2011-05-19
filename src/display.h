@@ -15,6 +15,8 @@ namespace display_resource
 		midi_black_up,
 		midi_white_down,
 		midi_white_up,
+		check_button_down,
+		check_button_up,
 
 		resource_count
 	};

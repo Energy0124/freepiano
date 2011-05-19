@@ -2,7 +2,7 @@
 
 struct wasapi_enum_callback
 {
-	virtual void operator ()(const char * value) = 0;
+	virtual void operator ()(const char * name, void * device) = 0;
 };
 
 // open dsound.

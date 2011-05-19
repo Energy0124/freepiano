@@ -2,6 +2,9 @@
 // Microsoft Visual C++ generated include file.
 // Used by freepiano.rc
 //
+#define IDI_ICON1                       0
+#define IDI_ICON_NORMAL                 10
+#define IDI_ICON_SMALL                  11
 #define IDD_SETTINGS                    102
 #define IDD_SETTING_MIDI                103
 #define IDD_SETTING_AUDIO               104
@@ -9,6 +12,7 @@
 #define IDD_SETTING_EMPTY               106
 #define IDD_SETTING_KEYMAP              107
 #define IDD_ABOUT                       108
+#define IDD_SONG_INFO                   121
 #define IDR_SKIN_RES0                   200
 #define IDR_SKIN_RES1                   201
 #define IDR_SKIN_RES2                   202
@@ -20,13 +24,18 @@
 #define IDR_SKIN_RES8                   208
 #define IDR_SKIN_RES9                   209
 #define IDR_SKIN_RES10                  210
+#define IDR_SKIN_RES11                  211
+#define IDR_SKIN_RES12                  212
 #define IDC_SETTING_LIST                1000
 #define IDC_OUTPUT_LIST                 1001
 #define IDC_OUTPUT_CONTROLPANEL         1002
-#define IDC_OUTPUT_BUFFER_SIZE_TEXT     1003
-#define IDC_OUTPUT_BUFFER_SIZE          1004
+#define IDC_OUTPUT_DELAY_TEXT           1003
+#define IDC_OUTPUT_DELAY                1004
 #define IDC_MIDI_INPUT_LIST             1005
+#define IDC_OUTPUT_VOLUME_TEXT          1005
 #define IDC_MIDI_OUTPUT_LIST            1006
+#define IDC_OUTPUT_BUFFER_SIZE2         1006
+#define IDC_OUTPUT_VOLUME               1006
 #define IDC_LABEL1                      1010
 #define IDC_LABEL2                      1011
 #define IDC_LABEL3                      1012
@@ -45,14 +54,17 @@
 #define IDC_MAP_SAVE                    1026
 #define IDC_MAP_APPLY                   1027
 #define IDC_MAP_CONTENT                 1049
+#define IDC_SONG_TITLE                  1050
+#define IDC_SONG_AUTHOR                 1051
+#define IDC_SONG_COMMENT                1052
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        121
+#define _APS_NEXT_RESOURCE_VALUE        125
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1050
+#define _APS_NEXT_CONTROL_VALUE         1053
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

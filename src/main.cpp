@@ -11,6 +11,10 @@ int main()
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 #endif
 {
+	// initialize com
+	if (FAILED(CoInitialize(NULL)))
+		return 1;
+
 	// config init
 	if (config_init())
 	{
@@ -66,6 +70,9 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
 	// shutdown display
 	display_shutdown();
+
+	// shutdown COM
+	CoUninitialize();
 
 	return 0;
 }

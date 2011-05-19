@@ -151,8 +151,6 @@ AsioDriverList::AsioDriverList ()
 		numdrv++;
 		pdl = pdl->next;
 	}
-
-	if (numdrv) CoInitialize(0);	// initialize COM
 }
 
 AsioDriverList::~AsioDriverList ()

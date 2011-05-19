@@ -27,7 +27,7 @@
 #include "gui.h"
 #include "config.h"
 #include "song.h"
-#include "../res/resource"
+#include "../res/resource.h"
 
 
 using namespace display_resource;
@@ -267,6 +267,7 @@ struct font_character_t
 	int advance_x;
 	int bmp_left;
 	int bmp_top;
+	int height;
 	texture_node_t * texture;
 };
 
@@ -345,7 +346,7 @@ static void preload_characters(const wchar_t * text, int len, int size)
 
 								for (int x = 0; x < slot->bitmap.width; x++)
 								{
-									*dst = (*src << 24) | 0xffffff;
+									*dst = (*src << 24) | 0x00ffffff;
 									dst++;
 									src++;
 								}
@@ -359,6 +360,7 @@ static void preload_characters(const wchar_t * text, int len, int size)
 						cache.bmp_left = slot->bitmap_left;
 						cache.bmp_top = font_face1->size->metrics.ascender / 64 - slot->bitmap_top;
 						cache.texture = node;
+						cache.height = font_face1->size->metrics.height / 64;
 					}
 					else
 					{
@@ -433,7 +435,7 @@ static int build_string_vertex(const wchar_t * text, int len, int size, float x,
 				v[2].z = 0;
 				v[2].u = v[0].u;
 				v[2].v = v[0].v + cache.texture->height;
-				v[3].color = color;
+				v[2].color = color;
 
 				v[3] = v[1];
 				v[4] = v[2];
@@ -451,8 +453,8 @@ static int build_string_vertex(const wchar_t * text, int len, int size, float x,
 				if (width < pen_x)
 					width = pen_x;
 
-				if (height < pen_y + cache.bmp_top + cache.texture->height)
-					height = pen_y + cache.bmp_top + cache.texture->height;
+				if (height < pen_y + cache.height)
+					height = pen_y + cache.height;
 			}
 		}
 	}
@@ -462,8 +464,8 @@ static int build_string_vertex(const wchar_t * text, int len, int size, float x,
 		float x_offset = 0;
 		float y_offset = 0;
 
-		if (h_align == 1) x_offset = -floor(0.5f * (width - x));
-		if (v_align == 1) y_offset = -floor(0.5f * (height - y));
+		if (h_align == 1) x_offset = floor(-0.5f * (width - x));
+		if (v_align == 1) y_offset = floor(-0.5f * (height - y));
 
 		for (Vertex * v1 = vertex_buffer; v1 < v; v1++)
 		{
@@ -1492,33 +1494,31 @@ void display_set_image(uint type, const char * name)
 // set display default skin
 void display_default_skin()
 {
-	const char * default_skins[] = {
-		"background.png",
-		"notes.png",
-		"keyboard_unmapped_down.png",
-		"keyboard_unmapped_up.png",
-		"keyboard_note_down.png",
-		"keyboard_note_up.png",
-		"midi_black_down.png",
-		"midi_black_up.png",
-		"midi_white_down.png",
-		"midi_white_up.png",
-	};
 
 	for (int i = 0; i < resource_count; i++)
 	{
 		if (resources[i].texture)
 			resources[i].texture->Release();
 
-		char temp[256];
-
 #ifdef _DEBUG
+		const char * default_skins[] = {
+			"background.png",
+			"notes.png",
+			"keyboard_unmapped_down.png",
+			"keyboard_unmapped_up.png",
+			"keyboard_note_down.png",
+			"keyboard_note_up.png",
+			"midi_black_down.png",
+			"midi_black_up.png",
+			"midi_white_down.png",
+			"midi_white_up.png",
+			"check_button_down.png",
+			"check_button_up.png",
+		};
+
 		// try to load texture from develop path
+		char temp[256];
 		_snprintf(temp, sizeof(temp), "..\\res\\%s", default_skins[i]);
-		resources[i].texture = load_png_from_file(temp);
-#else
-		// try to load texture from skin path
-		_snprintf(temp, sizeof(temp), "skin\\%s", default_skins[i]);
 		resources[i].texture = load_png_from_file(temp);
 #endif
 
@@ -1704,7 +1704,7 @@ static void draw_keyboard()
 
 			// get keyboard map
 			keyboard_get_map(key - keyboard_states, &map, NULL);
-			
+
 			// modify keyboard map
 			midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, keyboard_get_octshift(map.action & 0xf) * 12, keyboard_get_velocity(map.action & 0xf));
 
@@ -1713,20 +1713,21 @@ static void draw_keyboard()
 			float x2 = key->x2;
 			float y2 = key->y2;
 
-			uint img;
+			uint img = map.action ? keyboard_note_down : keyboard_unmapped_down;
 
-			switch (map.action & 0xf0)
-			{
-			case 0x80:	img = keyboard_note_down; break;
-			case 0x90:	img = keyboard_note_down; break;
-			case 0xb0:	img = keyboard_note_down; break;
-			default:	img = keyboard_unmapped_down; break;
-			}
-
+			// draw key button
 			if (!key->status) img ++;
 			draw_image_border(img, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
 
-			if ((map.action & 0xF0) == 0x90)
+			// key label
+			const char * label = keyboard_get_label(key - keyboard_states);
+			if (label[0])
+			{
+				draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, label, 10, 1, 1);
+			}
+
+			// draw note
+			else if ((map.action & 0xF0) == 0x90)
 			{
 				byte note = map.arg1;
 
@@ -1807,8 +1808,8 @@ static void draw_keyboard_controls()
 		{ "B(-1)",	-1 },
 	};
 
-	// volume
-	_snprintf(buff, sizeof(buff), "%d", config_get_output_volume());
+	// sustain pedal
+	_snprintf(buff, sizeof(buff), "%d", midi_get_controller_value(0x40));
 	draw_string(92, 222, 0xff6e6e6e, buff, 11, 1, 0);
 
 	// midi key
@@ -1831,9 +1832,22 @@ static void draw_keyboard_controls()
 
 	draw_string(202, 222, 0xff6e6e6e, buff, 11, 1, 0);
 
+
+	// record
+	if (song_is_recording())
+		draw_image(check_button_down, 244, 220, 244 + 18, 220 + 18, 0xffd23b36);
+	else
+		draw_image(check_button_up, 244, 220, 244 + 18, 220 + 18, 0xff4d3b36);
+
 	// timer
 	_snprintf(buff, sizeof(buff), "%d:%02d", song_get_time() / 1000 / 60, song_get_time() / 1000 % 60);
 	draw_string(332, 222, 0xff6e6e6e, buff, 11, 1, 0);
+
+	// play
+	if (song_is_playing())
+		draw_image(check_button_down, 359, 220, 359 + 18, 220 + 18, 0xff53ce36);
+	else
+		draw_image(check_button_up, 359, 220, 359 + 18, 220 + 18, 0xff4d5c37);
 
 	// velocity
 	_snprintf(buff, sizeof(buff), "%d", keyboard_get_velocity(0));
@@ -1886,10 +1900,10 @@ static void draw_keyboard_controls()
 	}
 
 #ifdef _DEBUG
-	if (GetAsyncKeyState(VK_F1))
+	if (GetAsyncKeyState(VK_CONTROL) && GetAsyncKeyState(VK_F1))
 	{
 		// clear backbuffer
-		device->Clear(0, NULL, D3DCLEAR_TARGET, 0xff000000, 0, 0);
+		device->Clear(0, NULL, D3DCLEAR_TARGET, 0xff00ff00, 0, 0);
 
 		// set white texture
 		set_texture(resource_texture);
@@ -2025,16 +2039,109 @@ static int find_midi_note(int x, int y, int * velocity = NULL)
 	return -1;
 }
 
-// mouse control
-static int mouse_control(int x, int y, bool mousedown)
+// mouse commands
+enum MouseCommands
 {
-	static int previous_keycode = -1;
-	static int previous_midi_note = -1;
+	CMD_NONE,
+	CMD_SUSTAIN,
+	CMD_MIDI_KEY,
+	CMD_RECORD,
+	CMD_PLAY,
+	CMD_VELOCITY_LEFT,
+	CMD_VELOCITY_RIGHT,
+	CMD_OCTSHIFT_LEFT,
+	CMD_OCTSHIFT_RIGHT,
+};
 
-	int keycode = -1;
-	int midinote = -1;
-	int velocity = 127;
+// find buttons
+static int find_control_button(int x, int y)
+{
+	static struct control_button_t
+	{
+		float x;
+		float y;
+		float w;
+		float h;
+		int command;
+	}
+	buttons[] =
+	{
+		{ 73, 221, 36, 15, CMD_SUSTAIN },
+		{ 185, 221, 36, 15, CMD_MIDI_KEY },
+		{ 245, 221, 65, 15, CMD_RECORD },
+		{ 361, 221, 53, 15, CMD_PLAY },
+		{ 494, 221, 36, 15, CMD_VELOCITY_LEFT },
+		{ 538, 221, 36, 15, CMD_VELOCITY_RIGHT },
+		{ 655, 221, 36, 15, CMD_OCTSHIFT_LEFT },
+		{ 699, 221, 36, 15, CMD_OCTSHIFT_RIGHT },
+	};
 
+	for (int i = 0; i < ARRAY_COUNT(buttons); i++)
+	{
+		control_button_t & btn = buttons[i];
+
+		if (x >= btn.x && x <= btn.x + btn.w &&
+			y >= btn.y && y <= btn.y + btn.h)
+		{
+			return btn.command;
+		}
+	}
+
+	return CMD_NONE;
+}
+
+// dispatch command
+void dispatch_command(int command, int action)
+{
+	switch (command)
+	{
+	case CMD_SUSTAIN:
+		if (midi_get_controller_value(0x40))
+			song_send_event(0xb0, 0x40, 0, 0, true);
+		else
+			song_send_event(0xb0, 0x40, 127, 0, true);
+		break;
+
+	case CMD_MIDI_KEY:
+		if (song_allow_input())
+			song_send_event(1, action, 1, 0, true);
+		break;
+
+	case CMD_RECORD:
+		if (song_is_recording())
+			song_stop_record();
+		else
+			song_start_record();
+		break;
+
+	case CMD_PLAY:
+		if (song_is_playing())
+			song_stop_playback();
+		else
+			song_start_playback();
+		break;
+
+	case CMD_VELOCITY_LEFT:
+		song_send_event(3, 0, action, 10, true);
+		break;
+
+	case CMD_VELOCITY_RIGHT:
+		song_send_event(3, 1, action, 10, true);
+		break;
+
+	case CMD_OCTSHIFT_LEFT:
+		song_send_event(2, 0, action, 1, true);
+		break;
+
+	case CMD_OCTSHIFT_RIGHT:
+		song_send_event(2, 1, action, 1, true);
+		break;
+	}
+}
+
+// adjust mouse position
+static void adjust_mouse_position(int & x, int & y)
+{
 	RECT rect;
 	GetClientRect(display_hwnd, &rect);
 
@@ -2044,32 +2151,118 @@ static int mouse_control(int x, int y, bool mousedown)
 		x = x * display_width / (rect.right - rect.left);
 		y = y * display_height / (rect.bottom - rect.top);
 	}
+}
 
-	if (mousedown)
+// mouse control
+static int mouse_control(HWND window, uint msg, int x, int y, int z)
+{
+	static int previous_keycode = -1;
+	static int previous_midi_note = -1;
+
+	int keycode = -1;
+	int midinote = -1;
+	int velocity = 127;
+	int handled = false; 
+
+	// raw mouse position
+	POINT point = {x, y};
+
+	// adjust mouse position
+	adjust_mouse_position(x, y);
+
+
+	switch (msg)
+	{
+	case WM_LBUTTONDOWN:
+	case WM_LBUTTONDBLCLK:
+		{
+			int button = find_control_button(x, y);
+			if (button != CMD_NONE)
+			{
+				dispatch_command(button, 1);
+				return 0;
+			}
+			else
+			{
+				SetCapture(window);
+			}
+		}
+		break;
+		
+	case WM_LBUTTONUP:
+		handled = true;
+		ReleaseCapture();
+		break;
+
+	case WM_RBUTTONDOWN:
+	case WM_RBUTTONDBLCLK:
+		{
+			int button = find_control_button(x, y);
+			if (button != CMD_NONE)
+			{
+				dispatch_command(button, 2);
+				return 0;
+			}
+		}
+		handled = true;
+		break;
+
+	case WM_RBUTTONUP:
+		keycode = find_keyboard_key(x, y);
+
+		if (keycode != -1)
+		{
+			ClientToScreen(window, &point);
+			gui_popup_keymenu(keycode, point.x, point.y);
+			return 0;
+		}
+		break;
+
+	case WM_MOUSEMOVE:
+		if (GetCapture() != window)
+			handled = true;
+		break;
+
+
+	case WM_MOUSEWHEEL:
+		{
+			int button = find_control_button(x, y);
+			if (button != CMD_NONE && 
+				button != CMD_RECORD &&
+				button != CMD_PLAY)
+				dispatch_command(button, z > 0 ? 1 : 2);
+
+			handled = true;
+		}
+		break;
+	}
+
+	if (song_allow_input() && !handled)
 	{
 		keycode = find_keyboard_key(x, y);
 		midinote = find_midi_note(x, y, &velocity);
 	}
 
+	// update keyboard button
 	if (keycode != previous_keycode)
 	{
 		if (previous_keycode != -1)
-			keyboard_send_event(0, previous_keycode, 0, 0);
+			song_send_event(0, 0, previous_keycode, 0, true);
 
 		if (keycode != -1)
-			keyboard_send_event(0, keycode, 1, 0);
+			song_send_event(0, 0, keycode, 1, true);
 
 		previous_keycode = keycode;
 	}
 
+	// update midi button
 	if (midinote != previous_midi_note)
 	{
 		if (previous_midi_note != -1)
-			midi_send_event(0x80, previous_midi_note, 0, 0);
+			song_send_event(0x80, previous_midi_note, velocity, 0, true);
 
 		if (midinote != -1)
-			midi_send_event(0x90, midinote, velocity, 0);
-
+			song_send_event(0x90, midinote, velocity, 0, true);
 
 		previous_midi_note = midinote;
 	}
@@ -2082,15 +2275,7 @@ static void mouse_menu(int x, int y)
 {
 	POINT point = {x, y};
 
-	RECT rect;
-	GetClientRect(display_hwnd, &rect);
-
-	if (rect.right > rect.left &&
-		rect.bottom > rect.top)
-	{
-		x = x * display_width / (rect.right - rect.left);
-		y = y * display_height / (rect.bottom - rect.top);
-	}
+	adjust_mouse_position(x, y);
 
 	int keycode = find_keyboard_key(x, y);
 
@@ -2108,10 +2293,7 @@ int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 	case WM_ACTIVATE:
 		if (WA_INACTIVE == LOWORD(wParam))
-		{
-			ReleaseCapture();
-			mouse_control(-1, -1, false);
-		}
+			mouse_control(hWnd, WM_LBUTTONUP, -1, -1, 0);
 		break;
 
 	case WM_SIZE:
@@ -2121,23 +2303,21 @@ int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	case WM_LBUTTONDOWN:
 	case WM_LBUTTONDBLCLK:
-		SetCapture(hWnd);
-		mouse_control(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), true);
-		break;
-
 	case WM_LBUTTONUP:
-		mouse_control(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), false);
-		ReleaseCapture();
-		break;
-
 	case WM_MOUSEMOVE:
-		if (GetCapture() == hWnd)
-			mouse_control(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), true);
+	case WM_RBUTTONDOWN:
+	case WM_RBUTTONDBLCLK:
+	case WM_RBUTTONUP:
+		mouse_control(hWnd, uMsg, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), 0);
 		break;
 
-
-	case WM_RBUTTONUP:
-		mouse_menu(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+	case WM_MOUSEWHEEL:
+		{
+			POINT cursor_pos;
+			GetCursorPos(&cursor_pos);
+			ScreenToClient(hWnd, &cursor_pos);
+			mouse_control(hWnd, uMsg, cursor_pos.x, cursor_pos.y, (short)HIWORD(wParam) / 120);
+		}
 		break;
 
 	}

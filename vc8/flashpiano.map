@@ -62,3 +62,26 @@ key	f3	NoteOn	0	d#7
 key	f4	NoteOn	0	f#7
 key	f6	NoteOn	0	g#7
 key	f8	NoteOn	0	a#7
+
+keydown	Ctrl	Controller	0	SustainPedal	127
+label	Ctrl	+PDL
+keydown	Alt		Controller	0	SustainPedal	0
+label	Alt		-PDL
+
+keydown	up		KeySignature	Inc	1
+label	up		Key+
+keydown	down	KeySignature	Dec	1
+label	down	Key-
+keydown	right	KeyboardVeolcity	0	Inc	10
+label	right	Vel+
+keydown	left	KeyboardVeolcity	0	Dec	10
+label	left	Vel-
+
+keydown	ScrollLock	Record
+label	ScrollLock	Rec
+keydown	PrintScreen	Play
+label	PrintScreen	Play
+keydown	Pause	Stop
+label	Pause	Stop
+
+

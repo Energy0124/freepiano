@@ -227,6 +227,78 @@
 				>
 			</File>
 		</Filter>
+		<Filter
+			Name="res"
+			>
+			<File
+				RelativePath="..\res\background.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\check_button_down.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\check_button_up.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\freepiano.rc"
+				>
+			</File>
+			<File
+				RelativePath="..\res\icon.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\res\icon_normal.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\res\icon_small.ico"
+				>
+			</File>
+			<File
+				RelativePath="..\res\keyboard_note_down.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\keyboard_note_up.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\keyboard_unmapped_down.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\keyboard_unmapped_up.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\midi_black_down.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\midi_black_up.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\midi_white_down.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\midi_white_up.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\notes.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\resource.h"
+				>
+			</File>
+		</Filter>
 		<File
 			RelativePath="..\src\config.cpp"
 			>
@@ -241,10 +313,6 @@
 		</File>
 		<File
 			RelativePath="..\src\display.h"
-			>
-		</File>
-		<File
-			RelativePath="..\res\freepiano.rc"
 			>
 		</File>
 		<File
@@ -305,10 +373,6 @@
 		</File>
 		<File
 			RelativePath="..\src\pch.h"
-			>
-		</File>
-		<File
-			RelativePath="..\res\resource"
 			>
 		</File>
 		<File

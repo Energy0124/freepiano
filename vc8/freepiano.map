@@ -1,7 +1,7 @@
 #	keyname	action	channel	note
 key	left	NoteOn	1	c4
 key	down	NoteOn	1	d4
-key	right	NoteOn	1	g#5
+key	right	NoteOn	1	e4
 key	up	NoteOn	1	f4
 key	num0	NoteOn	1	g4
 key	num.	NoteOn	1	a4
@@ -86,3 +86,36 @@ key	back	NoteOn	0	e7
 
 keydown	space	Controller	0	SustainPedal	0
 keyup	space	Controller	0	SustainPedal	127
+label	space	Sustain Pedal
+
+
+keydown	F1	KeyboardOctshift	0	Inc	1
+label	F1	Oct+
+keydown	F2	KeyboardOctshift	0	Dec	1
+label	F2	Oct-
+keydown	F3	KeyboardVeolcity	0	Inc	10
+label	F3	Vel+
+keydown	F4	KeyboardVeolcity	0	Dec	10
+label	F4	Vel-
+
+keydown	F5	KeyboardOctshift	1	Inc	1
+label	F5	Oct+
+keydown	F6	KeyboardOctshift	1	Dec	1
+label	F6	Oct-
+keydown	F7	KeyboardVeolcity	1	Inc	10
+label	F7	Vel+
+keydown	F8	KeyboardVeolcity	1	Dec	10
+label	F8	Vel-
+
+keydown	F9	KeySignature	Inc	1
+label	F9	Key+
+keydown	F10	KeySignature	Dec	1
+label	F10	Key-
+
+keydown	ScrollLock	Record
+label	ScrollLock	Rec
+keydown	PrintScreen	Play
+label	PrintScreen	Play
+keydown	Pause	Stop
+label	Pause	Stop
+

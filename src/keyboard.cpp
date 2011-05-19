@@ -7,9 +7,14 @@
 #include "config.h"
 #include "song.h"
 
-extern AEffect * effect;
+
+struct KeyboardLabel
+{
+	char text[16];
+};
 
 // buffer size
+
 #define DINPUT_BUFFER_SIZE	32
 
 // directinput8 device
@@ -23,7 +28,8 @@ static HANDLE input_event = NULL;
 static HANDLE input_thread = NULL;
 
 // key map
-static KeyboardEvent key_map[256][2];
+static KeyboardEvent key_map[256][3];
+static KeyboardLabel key_label[256];
 
 // keyboard enable
 static bool enable_keyboard = true;
@@ -33,10 +39,6 @@ static char key_channel[16] = {0};
 
 // keyboard status
 static byte keyboard_status[256] = {0};
-
-// dynamic mapping
-static byte keyboard_map_key_code = 0;
-static byte keyboard_map_key_type = 0;
 
 
 // -----------------------------------------------------------------------------------------
@@ -187,7 +189,8 @@ static DWORD __stdcall input_update_thread(void * param)
 					uint keydown = key_events[i].dwData;
 
 					// send keyboard event
-					keyboard_send_event(0, 0, code, keydown);
+					if (song_allow_input())
+						song_send_event(0, 0, code, keydown ? 1 : 0, true);
 				}
 			}
 		}
@@ -197,8 +200,6 @@ static DWORD __stdcall input_update_thread(void * param)
 		{
 			keyboard_reset();
 		}
-
-
 
 		// wait event
 		WaitForSingleObject(input_event, -1);
@@ -313,128 +314,22 @@ void keyboard_enable(bool enable)
 // reset keyboard
 void keyboard_reset()
 {
-	// exit key map mode
-	keyboard_map_key_code = 0;
-
 	for (int i = 0; i < ARRAY_COUNT(keyboard_status); i++)
 	{
 		if (keyboard_status[i])
 		{
-			keyboard_send_event(0, 0, i, 0);
+			// send keyup event
+			song_send_event(0, 0, i, 0);
 			keyboard_status[i] = 0;
 		}
 	}
 }
 
-// keyboard event
-static void keyboard_event_keydown(int code, int keydown)
+// clear keyboard
+void keyboard_clear()
 {
-	// send keyboard event to display
-	display_keyboard_event(code, keydown);
-
-	// translate keyboard event to midi event
-	KeyboardEvent map = key_map[code][keydown == 0];
-
-	// send midi event
-	if (map.action)
-	{
-		// midi event is recored by keydown and keyup
-		if (map.action >= 0x80)
-		{
-			song_record_event(0, 0, code, keydown);
-
-			// modify event
-			midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, oct_shift[map.action & 0xf] * 12 + midi_get_key_signature(), key_velocity[map.action & 0xf]);
-
-			// remap channel
-			map.action = (map.action & 0xf0) | key_channel[map.action & 0xf];
-
-			// sent event
-			midi_send_event(map.action, map.arg1, map.arg2, map.arg3);
-		}
-	}
-
-	// keep state
-	if (code < ARRAY_COUNT(keyboard_status))
-		keyboard_status[code] = keydown;
-}
-
-// keyboard event map
-static void keyboard_event_map(int code, int type)
-{
-	keyboard_map_key_code = code;
-	keyboard_map_key_type = type;
-}
-
-// event message
-void keyboard_send_event(byte a, byte b, byte c, byte d)
-{
-	// song event
-	if (a == 0)
-	{
-		switch (b)
-		{
-		case 0:	keyboard_event_keydown(c, d); break;
-		case 1:	keyboard_event_map(c, d); break;
-		}
-
-		return;
-	}
-
-	// check if is mapping a key.
-	if (keyboard_map_key_code)
-	{
-		KeyboardEvent keydown, keyup;
-
-		// get previous keymap
-		keyboard_get_map(keyboard_map_key_code, &keydown, &keyup);
-
-		switch (keyboard_map_key_type)
-		{
-		case 0:
-			keydown.action = a;
-			keydown.arg1 = b;
-			keydown.arg2 = c;
-			keydown.arg3 = d;
-			keyboard_default_keyup(&keydown, &keyup);
-			break;
-
-		case 1:
-			keydown.action = a;
-			keydown.arg1 = b;
-			keydown.arg2 = c;
-			keydown.arg3 = d;
-			break;
-
-		case 2:
-			keyup.action = a;
-			keyup.arg1 = b;
-			keyup.arg2 = c;
-			keyup.arg3 = d;
-			break;
-		}
-
-		// set keymap
-		keyboard_set_map(keyboard_map_key_code, &keydown, &keyup);
-		keyboard_map_key_code = 0;
-		return;
-	}
-
-	// midi events
-	if (a >= 0x80)
-	{
-		midi_send_event(a, b, c, d);
-		return;
-	}
-
-	// keyboard control events
-	switch (a)
-	{
-	case 1:	midi_set_key_signature(b); break;
-	case 2:	keyboard_set_octshift(b, c); break;
-	case 3:	keyboard_set_velocity(b, c); break;
-	case 4:	keyboard_set_channel(b, c); break;
-	}
+	memset(key_map, 0, sizeof(key_map));
+	memset(key_label, 0, sizeof(key_label));
 }
 
 // get keyboard map
@@ -451,30 +346,16 @@ void keyboard_set_map(byte code, KeyboardEvent * keydown, KeyboardEvent * keyup)
 	if (keyup) key_map[code][1] = *keyup;
 }
 
-// get default keyup
-bool keyboard_default_keyup(KeyboardEvent * keydown, KeyboardEvent * keyup)
+// set keyboard label
+void keyboard_set_label(byte code, const char * label)
 {
-	keyup->action = 0;
-	keyup->arg1 = 0;
-	keyup->arg2 = 0;
-	keyup->arg3 = 0;
+	strncpy(key_label[code].text, label ? label : "", sizeof(KeyboardLabel));
+}
 
-	switch (keydown->action & 0xf0)
-	{
-	case 0x90:
-		keyup->action = 0x80 | (keydown->action & 0x0f);
-		keyup->arg1 = keydown->arg1;
-		keyup->arg2 = keydown->arg2;
-		return true;
-
-	case 0xe0:
-		keyup->action = keydown->action;
-		keyup->arg1 = 0;
-		keyup->arg2 = 0;
-		return true;
-	};
-
-	return false;
+// set keyboard label 
+const char* keyboard_get_label(byte code)
+{
+	return key_label[code].text;
 }
 
 // set oct shift
@@ -482,7 +363,6 @@ void keyboard_set_octshift(byte channel, char shift)
 {
 	if (channel < ARRAY_COUNT(oct_shift))
 	{
-		song_record_event(2, channel, shift, 0);
 		oct_shift[channel] = shift;
 	}
 }
@@ -501,7 +381,6 @@ void keyboard_set_velocity(byte channel, byte velocity)
 {
 	if (channel < ARRAY_COUNT(key_velocity))
 	{
-		song_record_event(3, channel, velocity, 0);
 		key_velocity[channel] = velocity;
 	}
 }
@@ -529,7 +408,6 @@ void keyboard_set_channel(byte channel, byte value)
 {
 	if (channel < ARRAY_COUNT(key_channel))
 	{
-		song_record_event(4, channel, value, 0);
 		key_channel[channel] = value;
 	}
 }
@@ -559,4 +437,54 @@ void keyboard_enum_keymap(keymap_enum_callback & callback)
 	FindClose(finddata);
 }
 
+// keyboard event
+void keyboard_key_event(int code, int keydown)
+{
+	// keep state
+	if (code < ARRAY_COUNT(keyboard_status))
+		keyboard_status[code] = keydown;
 
+	// send keyboard event to display
+	display_keyboard_event(code, keydown);
+
+	// translate keyboard event to midi event
+	KeyboardEvent map;
+	
+	// keydown event
+	if (keydown)
+	{
+		map = key_map[code][0];
+		key_map[code][2].action = 0;
+
+		if (map.action >= 0x80)
+		{
+			// modify event
+			midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, oct_shift[map.action & 0xf] * 12 + midi_get_key_signature(), key_velocity[map.action & 0xf]);
+
+			// remap channel
+			map.action = (map.action & 0xf0) | key_channel[map.action & 0xf];
+
+			// auto generate keyup event
+			if ((map.action & 0xf0) == 0x90)
+			{
+				key_map[code][2].action = 0x80 | key_channel[map.action & 0xf];
+				key_map[code][2].arg1 = map.arg1;
+				key_map[code][2].arg2 = map.arg2;
+				key_map[code][2].arg3 = map.arg3;
+			}
+		}
+	}
+
+	// keyup event
+	else
+	{
+		map = key_map[code][2].action ? key_map[code][2] : key_map[code][1];
+	}
+
+	// send midi event
+	if (map.action)
+	{
+		// send event to song
+		song_send_event(map.action, map.arg1, map.arg2, map.arg3);
+	}
+}

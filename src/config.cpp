@@ -149,13 +149,23 @@ static name_t key_names[] =
 
 static name_t action_names[] = 
 {
-	{ "NoteOn",				0x9 },
-	{ "NoteOff",			0x8 },
-	{ "NoteAftertouch",		0xa },
-	{ "Controller",			0xb },
-	{ "ProgramChange",		0xc },
-	{ "ChannelAftertouch",	0xd },
-	{ "PitchBend",			0xe },
+	{ "KeySignature",		1 },
+	{ "KeyboardOctshift",	2 },
+	{ "KeyboardVeolcity",	3 },
+	{ "KeyboardChannel",	4 },
+	{ "Volume",				5 },
+	{ "Play",				6 },
+	{ "Record",				7 },
+	{ "Stop",				8 },
+
+
+	{ "NoteOff",			0x80 },
+	{ "NoteOn",				0x90 },
+	{ "NoteAftertouch",		0xa0 },
+	{ "Controller",			0xb0 },
+	{ "ProgramChange",		0xc0 },
+	{ "ChannelAftertouch",	0xd0 },
+	{ "PitchBend",			0xe0 },
 };
 
 static name_t note_names[] = 
@@ -336,6 +346,13 @@ static name_t controller_names[] =
 	{ "PokyModeOn",			0x7f },
 };
 
+static name_t value_action_names[] = 
+{
+	{ "Set",		0 },
+	{ "Inc",		1 },
+	{ "Dec",		2 },
+};
+
 static bool match_space(char ** str)
 {
 	char * s = *str;
@@ -473,69 +490,123 @@ static bool match_value(char ** str, name_t * names, uint count, uint * value)
 }
 
 // match action
-static bool match_midi_event(char ** str, KeyboardEvent * e)
+static bool match_event(char ** str, KeyboardEvent * e)
 {
 	uint action = 0;
 	uint channel = 0;
 	uint arg1 = 0;
 	uint arg2 = 0;
+	uint arg3 = 0;
 
 	// match action
 	if (!match_value(str, action_names, ARRAY_COUNT(action_names), &action))
 		return false;
 
-	// match action
-	if (!match_number(str, &channel))
+	if (action == 0)
 		return false;
 
 	// make action
-	e->action = (action << 4) | (channel & 0xF);
+	e->action = action;
 	e->arg1 = 0;
 	e->arg2 = 0;
 	e->arg3 = 0;
 
-	// parse args based on action
-	switch (action)
+	if (action < 0x80)
 	{
-	case 0x0:
-		break;
+		switch (action)
+		{
+		case 1:
+		case 5:
+			if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg1))
+				return false;
 
-	case 0x8: case 0x9: case 0xa:
-		if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg1))
-			return false;
+			if (!match_value(str, 0, NULL, &arg2))
+				return false;
 
-		e->arg1 = arg1 & 0x7f;
-		e->arg2 = match_number(str, &arg2) ? arg2 : 127;
-		break;
+			break;
 
-	case 0xb:
-		if (!match_value(str, controller_names, ARRAY_COUNT(controller_names), &arg1))
-			return false;
+		case 2:
+		case 3:
+		case 4:
+			if (!match_value(str, 0, NULL, &arg1))
+				return false;
 
-		if (!match_number(str, &arg2))
-			return false;
+			if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
+				return false;
 
-		e->arg1 = arg1 & 0x7f;
-		e->arg2 = arg2 & 0x7f;
-		break;
+			if (!match_value(str, 0, NULL, &arg3))
+				return false;
 
-	case 0xc: case 0xd:
-		if (!match_number(str, &arg1))
-			return false;
+			break;
 
-		e->arg1 = arg1 & 0x7f;
-		break;
-
-	case 0xe:
-		if (!match_number(str, &arg1))
-			return false;
+		default:
+			match_value(str, NULL, 0, &arg1);
+			match_value(str, NULL, 0, &arg2);
+			match_value(str, NULL, 0, &arg3);
+			break;
+		}
 
 		e->arg1 = arg1;
-		e->arg2 = arg1 >> 8;
-		break;
+		e->arg2 = arg2;
+		e->arg3 = arg3;
+	}
+	
+	// match midi events
+	else
+	{
+		// match channel
+		if (!match_number(str, &channel))
+			return false;
 
-	default:
-		return false;
+		// make action
+		e->action |= (channel & 0xf);
+		e->arg1 = 0;
+		e->arg2 = 0;
+		e->arg3 = 0;
+
+		// parse args based on action
+		switch (action >> 4)
+		{
+		case 0x0:
+			break;
+
+		case 0x8: case 0x9: case 0xa:
+			if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg1))
+				return false;
+
+			e->arg1 = arg1 & 0x7f;
+			e->arg2 = match_number(str, &arg2) ? arg2 : 127;
+			break;
+
+		case 0xb:
+			if (!match_value(str, controller_names, ARRAY_COUNT(controller_names), &arg1))
+				return false;
+
+			if (!match_number(str, &arg2))
+				return false;
+
+			e->arg1 = arg1 & 0x7f;
+			e->arg2 = arg2 & 0x7f;
+			break;
+
+		case 0xc: case 0xd:
+			if (!match_number(str, &arg1))
+				return false;
+
+			e->arg1 = arg1 & 0x7f;
+			break;
+
+		case 0xe:
+			if (!match_number(str, &arg1))
+				return false;
+
+			e->arg1 = arg1;
+			e->arg2 = arg1 >> 8;
+			break;
+
+		default:
+			return false;
+		}
 	}
 
 	return true;
@@ -573,7 +644,7 @@ int config_keymap_config(char * command)
 	char * s = command;
 
 	// key 
-	if (match_word(&s, "key"))
+	if (match_word(&s, "key") || match_word(&s, "keydown"))
 	{
 		uint key = 0;
 		KeyboardEvent keydown;
@@ -584,33 +655,10 @@ int config_keymap_config(char * command)
 			return -1;
 
 		// match midi event
-		if (match_midi_event(&s, &keydown))
+		if (match_event(&s, &keydown))
 		{
-			// generate default midi keyup event
-			keyboard_default_keyup(&keydown, &keyup);
-
 			// set that action
 			keyboard_set_map(key, &keydown, &keyup);
-
-			return 0;
-		}
-	}
-
-	// keydown
-	else if (match_word(&s, "keydown"))
-	{
-		uint key = 0;
-		KeyboardEvent keydown;
-
-		// match key name
-		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
-			return -1;
-
-		// match midi event
-		if (match_midi_event(&s, &keydown))
-		{
-			// set that action
-			keyboard_set_map(key, &keydown, NULL);
 
 			return 0;
 		}
@@ -627,13 +675,30 @@ int config_keymap_config(char * command)
 			return -1;
 
 		// match midi event
-		if (match_midi_event(&s, &keyup))
+		if (match_event(&s, &keyup))
 		{
 			// set that action
 			keyboard_set_map(key, NULL, &keyup);
 
 			return 0;
 		}
+	}
+
+	// keylabel
+	else if (match_word(&s, "label"))
+	{
+		uint key = 0;
+		char buff[256];
+
+		// match key name
+		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
+			return -1;
+
+		// text
+		match_line(&s, buff, sizeof(buff));
+
+		// set key label
+		keyboard_set_label(key, buff);
 	}
 
 	return -1;
@@ -650,11 +715,7 @@ int config_load_keymap(const char * filename)
 		return -1;
 
 	// reset keyboard map
-	for (int code = 0; code < 256; code++)
-	{
-		KeyboardEvent empty;
-		keyboard_set_map(code, &empty, &empty);
-	}
+	keyboard_clear();
 
 	// read lines
 	while (fgets(line, sizeof(line), fp))
@@ -683,39 +744,75 @@ static int print_value(char * buff, int buff_size, int value, name_t * names, in
 	return _snprintf(buff, buff_size, "%s%d", sep, value);
 }
 
-static int print_midi_event(char * buff, int buffer_size, int key, KeyboardEvent & e)
+static int print_keyboard_event(char * buff, int buffer_size, int key, KeyboardEvent & e)
 {
 	char * s = buff;
 	char * end = buff + buffer_size;
 
 	s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
-	s += print_value(s, end - s, e.action >> 4, action_names, ARRAY_COUNT(action_names));
-	s += print_value(s, end - s, e.action & 0xf, NULL, 0);
 
-	switch (e.action >> 4)
+	if (e.action < 0x80)
 	{
-	case 0x8:
-	case 0x9:
-		s += print_value(s, end - s, e.arg1, note_names, ARRAY_COUNT(note_names));
-		if (e.arg2 != 127)
+		s += print_value(s, end - s, e.action, action_names, ARRAY_COUNT(action_names));
+
+		switch (e.action)
+		{
+		case 1:	// key
+		case 5:	// volume
+			s += print_value(s, end - s, e.arg1, value_action_names, ARRAY_COUNT(value_action_names));
 			s += print_value(s, end - s, e.arg2, NULL, 0);
-		break;
+			break;
 
-	case 0xa:
-		s += print_value(s, end - s, e.arg1, note_names, ARRAY_COUNT(note_names));
-		s += print_value(s, end - s, e.arg2, NULL, 0);
-		break;
+		case 2:	// oct
+		case 3:	// vel
+		case 4:	// channel
+			s += print_value(s, end - s, e.arg1, NULL, 0);
+			s += print_value(s, end - s, e.arg2, value_action_names, ARRAY_COUNT(value_action_names));
+			s += print_value(s, end - s, e.arg3, NULL, 0);
+			break;
 
-	case 0xb:
-		s += print_value(s, end - s, e.arg1, controller_names, ARRAY_COUNT(controller_names));
-		s += print_value(s, end - s, e.arg2, NULL, 0);
-		break;
+		case 6:	// play
+		case 7:	// rec
+		case 8:	// stop
+			break;
 
-	default:
-		s += print_value(s, end - s, e.arg1, NULL, 0);
-		s += print_value(s, end - s, e.arg2, NULL, 0);
-		s += print_value(s, end - s, e.arg3, NULL, 0);
-		break;
+		default:
+			s += print_value(s, end - s, e.arg1, NULL, 0);
+			s += print_value(s, end - s, e.arg2, NULL, 0);
+			s += print_value(s, end - s, e.arg3, NULL, 0);
+			break;
+		}
+	}
+	else
+	{
+		s += print_value(s, end - s, e.action & 0xf0, action_names, ARRAY_COUNT(action_names));
+		s += print_value(s, end - s, e.action & 0x0f, NULL, 0);
+
+		switch (e.action >> 4)
+		{
+		case 0x8:
+		case 0x9:
+			s += print_value(s, end - s, e.arg1, note_names, ARRAY_COUNT(note_names));
+			if (e.arg2 != 127)
+				s += print_value(s, end - s, e.arg2, NULL, 0);
+			break;
+
+		case 0xa:
+			s += print_value(s, end - s, e.arg1, note_names, ARRAY_COUNT(note_names));
+			s += print_value(s, end - s, e.arg2, NULL, 0);
+			break;
+
+		case 0xb:
+			s += print_value(s, end - s, e.arg1, controller_names, ARRAY_COUNT(controller_names));
+			s += print_value(s, end - s, e.arg2, NULL, 0);
+			break;
+
+		default:
+			s += print_value(s, end - s, e.arg1, NULL, 0);
+			s += print_value(s, end - s, e.arg2, NULL, 0);
+			s += print_value(s, end - s, e.arg3, NULL, 0);
+			break;
+		}
 	}
 
 
@@ -728,34 +825,28 @@ int config_save_keymap(int key, char * buff, int buffer_size)
 	char * end = buff + buffer_size;
 	char * s = buff;
 
-	KeyboardEvent keydown, keyup, defkeyup;
+	KeyboardEvent keydown, keyup;
 	keyboard_get_map(key, &keydown, &keyup);
-	keyboard_default_keyup(&keydown, &defkeyup);
 
-	if (memcmp(&keyup, &defkeyup, sizeof(keyup)) == 0)
+	if (keydown.action)
 	{
-		if (keydown.action & 0xf0)
-		{
-			s += _snprintf(s, end - s, "key");
-			s += print_midi_event(s, end - s, key, keydown);
-			s += _snprintf(s, end - s, "\r\n");
-		}
+		s += _snprintf(s, end - s, "keydown");
+		s += print_keyboard_event(s, end - s, key, keydown);
+		s += _snprintf(s, end - s, "\r\n");
 	}
-	else
-	{
-		if (keydown.action & 0xf0)
-		{
-			s += _snprintf(s, end - s, "keydown");
-			s += print_midi_event(s, end - s, key, keydown);
-			s += _snprintf(s, end - s, "\r\n");
-		}
 
-		if (keyup.action & 0xf0)
-		{
-			s += _snprintf(s, end - s, "keyup");
-			s += print_midi_event(s, end - s, key, keyup);
-			s += _snprintf(s, end - s, "\r\n");
-		}
+	if (keyup.action)
+	{
+		s += _snprintf(s, end - s, "keyup");
+		s += print_keyboard_event(s, end - s, key, keyup);
+		s += _snprintf(s, end - s, "\r\n");
+	}
+
+	if (*keyboard_get_label(key))
+	{
+		s += _snprintf(s, end - s, "label");
+		s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
+		s += _snprintf(s, end - s, "\t%s\r\n", keyboard_get_label(key));
 	}
 
 	return s - buff;
@@ -811,7 +902,7 @@ int config_load(const char * filename)
 	char line[256];
 	config_get_media_path(line, sizeof(line), filename);
 
-	FILE * fp = fopen(filename, "r");
+	FILE * fp = fopen(line, "r");
 	if (!fp)
 		return -1;
 
@@ -1099,6 +1190,8 @@ int config_select_instrument(int type, const char * name)
 		}
 	}
 
+	midi_reset();
+
 	return result;
 }
 
@@ -1114,7 +1207,6 @@ int config_select_output(int type, const char * device)
 	asio_close();
 	dsound_close();
 	wasapi_close();
-	midi_close_output();
 
 	// open output
 	switch (type)

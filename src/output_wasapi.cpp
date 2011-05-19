@@ -137,18 +137,48 @@ int wasapi_open(const char * name)
 	// close wasapi device
 	wasapi_close();
 
-	// initialize com
-	if (FAILED(hr = CoInitialize(NULL)))
-		goto error;
-
 	// create enumerator
 	if (FAILED(hr = CoCreateInstance(CLSID_MMDeviceEnumerator, NULL, CLSCTX_ALL,
 		IID_IMMDeviceEnumerator, (void**)&enumerator)))
 		goto error;
 
-	// get default device
-	if (FAILED(hr = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device)))
+	if (name && name[0])
+	{
+		struct enum_callback : public wasapi_enum_callback
+		{
+			void operator ()(const char * name, void * device)
+			{
+				if (_stricmp(name, devname) == 0)
+				{
+					result = (IMMDevice*)device;
+					result->AddRef();
+				}
+			}
+
+			const char * devname;
+			IMMDevice * result;
+		}
+		callback;
+
+		callback.devname = name;
+		callback.result = 0;
+
+		wasapi_enum_device(callback);
+		device = callback.result;
+	}
+	else
+	{
+		// get default device
+		if (FAILED(hr = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device)))
+			goto error;
+	}
+
+	// no device
+	if (device == NULL)
+	{
+		hr = E_FAIL;
 		goto error;
+	}
 
 	// activate
 	if (FAILED(hr = device->Activate(IID_IAudioClient, CLSCTX_ALL,NULL, (void**)&client)))
@@ -213,7 +243,6 @@ void wasapi_close()
 	CoTaskMemFree(pwfx);
 	SAFE_RELEASE(render_client);
 	SAFE_RELEASE(client);
-	//CoUninitialize();
 	pwfx = NULL;
 }
 
@@ -236,10 +265,6 @@ void wasapi_enum_device(wasapi_enum_callback & callback)
 	IMMDeviceEnumerator * enumerator = NULL;
 	IMMDeviceCollection * devices = NULL;
 	IPropertyStore * props = NULL;
-
-	// initialize com
-	if (FAILED(hr = CoInitialize(NULL)))
-		goto error;
 
 	// create enumerator
 	if (FAILED(hr = CoCreateInstance(CLSID_MMDeviceEnumerator, NULL, CLSCTX_ALL,
@@ -270,7 +295,7 @@ void wasapi_enum_device(wasapi_enum_callback & callback)
 					{
 						char buff[256];
 						WideCharToMultiByte(_getmbcp(), 0, varName.pwszVal, -1, buff, sizeof(buff), NULL, NULL);
-						callback(buff);
+						callback(buff, (void*)device);
 					}
 
 					PropVariantClear(&varName);
@@ -285,6 +310,4 @@ error:
 	SAFE_RELEASE(props);
 	SAFE_RELEASE(devices);
 	SAFE_RELEASE(enumerator);
-	CoUninitialize();
-
 }

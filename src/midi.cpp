@@ -75,7 +75,9 @@ static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR d
 		byte data3 = data >> 16;
 		byte data4 = data >> 24;
 		midi_modify_event(data1, data2, data3, data4, midi_get_key_signature(), 127);
-		midi_send_event(data1, data2, data3, data4);
+
+		if (song_allow_input())
+			song_send_event(data1, data2, data3, data4);
 	}
 }
 
@@ -137,8 +139,8 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 	// check note down and note up
 	switch (data1 & 0xf0)
 	{
-	case 0x80:	note_states[data1 & 0xf][data2 & 0x7f] = 1; break;
-	case 0x90:	note_states[data1 & 0xf][data2 & 0x7f] = 0; break;
+	case 0x80:	note_states[data1 & 0xf][data2 & 0x7f] = 0; break;
+	case 0x90:	note_states[data1 & 0xf][data2 & 0x7f] = 1; break;
 	case 0xb0:	controllers[data2 & 0x7f] = data3; break;
 	}
 
@@ -158,7 +160,6 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 // set key signature
 void midi_set_key_signature(char shift)
 {
-	song_record_event(1, shift, 0, 0);
 	key_signature = shift;
 }
 
@@ -222,16 +223,18 @@ void midi_enum_output(midi_enum_callback & callback)
 // midi reset
 void midi_reset()
 {
+	// all notes off
 	for (int ch = 0; ch < 16; ch++)
 	{
 		for (int note = 0; note < 128; note++)
 		{
 			if (note_states[ch][note])
-				midi_send_event(0x90 | ch, note, 0, 0);
+				midi_send_event(0x80 | ch, note, 0, 0);
 		}
+
+		midi_send_event(0xb0 | ch, 0x40, controllers[0x40], 0); 
 	}
 }
-
 
 // get controller value
 char midi_get_controller_value(byte controller)
