@@ -41,7 +41,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../3rd/lpng;../3rd/zlib;../3rd/freetype2/include"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0501"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_WIN32_WINNT=0x0501"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="dinput8.lib dsound.lib dxguid.lib winmm.lib d3d9.lib imm32.lib Comctl32.lib"
+				AdditionalDependencies="dsound.lib winmm.lib d3d9.lib imm32.lib Comctl32.lib"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories=""
 				GenerateDebugInformation="true"
@@ -119,7 +119,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				AdditionalIncludeDirectories="../3rd/lpng;../3rd/zlib;../3rd/freetype2/include"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0501"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0501"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -137,7 +137,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="dinput8.lib dsound.lib dxguid.lib winmm.lib d3d9.lib imm32.lib Comctl32.lib"
+				AdditionalDependencies="dsound.lib winmm.lib d3d9.lib imm32.lib Comctl32.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories=""
 				GenerateDebugInformation="true"
@@ -240,6 +240,10 @@
 			</File>
 			<File
 				RelativePath="..\res\check_button_up.png"
+				>
+			</File>
+			<File
+				RelativePath="..\res\default_setting.txt"
 				>
 			</File>
 			<File

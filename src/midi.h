@@ -20,12 +20,6 @@ void midi_close_input();
 // send event
 void midi_send_event(byte data1, byte data2, byte data3, byte data4);
 
-// set key signature
-void midi_set_key_signature(char key);
-
-// get key signature
-char midi_get_key_signature();
-
 // modify event
 void midi_modify_event(byte & data1, byte & data2, byte & data3, byte & data4, char shift, byte velocity);
 

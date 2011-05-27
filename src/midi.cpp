@@ -7,10 +7,6 @@
 static HMIDIOUT midi_out_device = NULL;
 static HMIDIIN midi_in_device = NULL;
 
-
-// c key of midi
-static char key_signature = 0;
-
 // midi thread lock
 static thread_lock_t midi_input_lock;
 static thread_lock_t midi_output_lock;
@@ -74,10 +70,8 @@ static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR d
 		byte data2 = data >> 8;
 		byte data3 = data >> 16;
 		byte data4 = data >> 24;
-		midi_modify_event(data1, data2, data3, data4, midi_get_key_signature(), 127);
 
-		if (song_allow_input())
-			song_send_event(data1, data2, data3, data4);
+		song_send_event(data1, data2, data3, data4);
 	}
 }
 
@@ -131,10 +125,10 @@ void midi_close_input()
 // send event
 void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 {
-	thread_lock lock(midi_output_lock);
-
 	// display midi event
 	display_midi_event(data1, data2, data3, data4);
+
+	thread_lock lock(midi_output_lock);
 
 	// check note down and note up
 	switch (data1 & 0xf0)
@@ -155,18 +149,6 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 	{
 		midiOutShortMsg(midi_out_device, data1 | (data2 << 8) | (data3 << 16) | (data4 << 24));
 	}
-}
-
-// set key signature
-void midi_set_key_signature(char shift)
-{
-	key_signature = shift;
-}
-
-// get oct shift
-char midi_get_key_signature()
-{
-	return key_signature;
 }
 
 static inline byte clamp(int data, byte min = 0, byte max = 127)

@@ -1,0 +1,130 @@
+#	keyname	action	channel	note
+key	left	NoteOn	1	c4
+key	down	NoteOn	1	d4
+key	right	NoteOn	1	e4
+key	up	NoteOn	1	f4
+key	num0	NoteOn	1	g4
+key	num.	NoteOn	1	a4
+key	numenter	NoteOn	1	b4
+key	num1	NoteOn	1	c5
+key	num2	NoteOn	1	d5
+key	num3	NoteOn	1	e5
+key	num4	NoteOn	1	f5
+key	num5	NoteOn	1	g5
+key	num6	NoteOn	1	a5
+key	num7	NoteOn	1	b5
+key	num8	NoteOn	1	c6
+key	num9	NoteOn	1	d6
+key	num+	NoteOn	1	e6
+key	numlock	NoteOn	1	f6
+key	num/	NoteOn	1	g6
+key	num*	NoteOn	1	a6
+key	num-	NoteOn	1	b6
+key	delete	NoteOn	1	c7
+key	end	NoteOn	1	d7
+key	pgdn	NoteOn	1	e7
+key	insert	NoteOn	1	f7
+key	home	NoteOn	1	g7
+key	pgup	NoteOn	1	a7
+
+key	shift	NoteOn	0	b2
+key	z	NoteOn	0	c3
+key	x	NoteOn	0	d3
+key	c	NoteOn	0	e3
+key	v	NoteOn	0	f3
+key	b	NoteOn	0	g3
+key	n	NoteOn	0	a3
+key	m	NoteOn	0	b3
+key	,	NoteOn	0	c4
+key	.	NoteOn	0	d4
+key	/	NoteOn	0	e4
+key	rshift	NoteOn	0	f4
+
+key	caps	NoteOn	0	b3
+key	a	NoteOn	0	c4
+key	s	NoteOn	0	d4
+key	d	NoteOn	0	e4
+key	f	NoteOn	0	f4
+key	g	NoteOn	0	g4
+key	h	NoteOn	0	a4
+key	j	NoteOn	0	b4
+key	k	NoteOn	0	c5
+key	l	NoteOn	0	d5
+key	;	NoteOn	0	e5
+key	'	NoteOn	0	f5
+key	enter	NoteOn	0	g5
+
+key	tab	NoteOn	0	b4
+key	q	NoteOn	0	c5
+key	w	NoteOn	0	d5
+key	e	NoteOn	0	e5
+key	r	NoteOn	0	f5
+key	t	NoteOn	0	g5
+key	y	NoteOn	0	a5
+key	u	NoteOn	0	b5
+key	i	NoteOn	0	c6
+key	o	NoteOn	0	d6
+key	p	NoteOn	0	e6
+key	[	NoteOn	0	f6
+key	]	NoteOn	0	g6
+key	\	NoteOn	0	a6
+
+key	`	NoteOn	0	b5
+key	1	NoteOn	0	c6
+key	2	NoteOn	0	d6
+key	3	NoteOn	0	e6
+key	4	NoteOn	0	f6
+key	5	NoteOn	0	g6
+key	6	NoteOn	0	a6
+key	7	NoteOn	0	b6
+key	8	NoteOn	0	c7
+key	9	NoteOn	0	d7
+key	0	NoteOn	0	e7
+key	-	NoteOn	0	f7
+key	=	NoteOn	0	g7
+key	back	NoteOn	0	a7
+
+keydown	space	Controller	0	SustainPedal	127
+keyup	space	Controller	0	SustainPedal	0
+
+keydown	F1	Group		Inc	1
+keydown	F2	Group		Dec	1
+keydown	F3	KeySignature	Inc	1
+keydown	F4	KeySignature	Dec	1
+
+keydown	F5	Octshift	0	Inc	1
+keydown	F6	Octshift	0	Dec	1
+keydown	F7	Octshift	1	Inc	1
+keydown	F8	Octshift	1	Dec	1
+
+label	F5	LV+
+label	F6	LV-
+label	F7	RV+
+label	F8	RV-
+
+keydown	F9	Velocity	0	Inc	1
+keydown	F10	Velocity	0	Dec	1
+keydown	F11	Velocity	1	Inc	1
+keydown	F12	Velocity	1	Dec	1
+
+keydown	ScrollLock	Record
+keydown	PrintScreen	Play
+keydown	Pause	Stop
+
+label	F1	GP+
+label	F2	GP-
+label	F3	Key+
+label	F4	Key-
+label	F5	LO+
+label	F6	LO-
+label	F7	RO+
+label	F8	RO-
+label	F9	LV+
+label	F10	LV-
+label	F11	RV+
+label	F12	RV-
+
+label	ScrollLock	Rec
+label	PrintScreen	Play
+label	Pause	Stop
+label	space	Sustain Pedal

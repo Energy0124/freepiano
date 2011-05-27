@@ -333,70 +333,64 @@ void vsti_stop_process()
 
 void vsti_update_config(float samplerate, uint blocksize)
 {
-	if (vsti_thread_lock.tryenter())
-	{
-		if (effect)
-		{
-			if (effect_processing == 0 ||
-				effect_samplerate != samplerate || 
-				effect_blocksize != blocksize)
-			{
-				effect_processing = 1;
-				effect_samplerate = samplerate;
-				effect_blocksize = blocksize;
+	thread_lock lock(vsti_thread_lock);
 
-				effect->dispatcher (effect, effMainsChanged, 0, 0, 0, 0);
-				effect->dispatcher (effect, effSetSampleRate, 0, 0, 0, samplerate);
-				effect->dispatcher (effect, effSetBlockSize, 0, blocksize, 0, 0);
-				effect->dispatcher (effect, effMainsChanged, 0, 1, 0, 0);
-			}
+	if (effect)
+	{
+		if (effect_processing == 0 ||
+			effect_samplerate != samplerate || 
+			effect_blocksize != blocksize)
+		{
+			effect_processing = 1;
+			effect_samplerate = samplerate;
+			effect_blocksize = blocksize;
+
+			effect->dispatcher (effect, effMainsChanged, 0, 0, 0, 0);
+			effect->dispatcher (effect, effSetSampleRate, 0, 0, 0, samplerate);
+			effect->dispatcher (effect, effSetBlockSize, 0, blocksize, 0, 0);
+			effect->dispatcher (effect, effMainsChanged, 0, 1, 0, 0);
 		}
-		vsti_thread_lock.leave();
 	}
 }
 
 // process 
 void vsti_process(float * left, float * right, uint buffer_size)
 {
-	if (vsti_thread_lock.tryenter())
+	thread_lock lock(vsti_thread_lock);
+
+	if (effect && effect_processing)
 	{
-		if (effect && effect_processing)
+		// process events
+		struct MoreEvents : VstEvents
 		{
-			// process events
-			struct MoreEvents : VstEvents
-			{
-				VstEvent * data[256];
-			}
-			buffer;
-
-			buffer.numEvents = midi_event_count;
-			buffer.reserved = 0;
-
-			for (uint i = 0; i < midi_event_count; i++)
-				buffer.events[i] = (VstEvent*)&midi_event_buffer[i];
-
-			// process events
-			effect->dispatcher(effect, effProcessEvents, 0, 0, &buffer, 0);
-
-			// clear processed events
-			midi_event_count = 0;
-
-			// clear data
-			memset(left, 0, buffer_size * sizeof(float));
-			memset(right, 0, buffer_size * sizeof(float));
-
-			// TODO: vsti has it's own buffer count
-			float * outputs[] = { left, right };
-
-			effect->dispatcher(effect, effStartProcess, 0, 0, 0, 0);
-			effect->processReplacing (effect, outputs, outputs, buffer_size);
-			effect->dispatcher(effect, effStopProcess, 0, 0, 0, 0);
-
-			vsti_thread_lock.leave();
-			return;
+			VstEvent * data[256];
 		}
+		buffer;
 
-		vsti_thread_lock.leave();
+		buffer.numEvents = midi_event_count;
+		buffer.reserved = 0;
+
+		for (uint i = 0; i < midi_event_count; i++)
+			buffer.events[i] = (VstEvent*)&midi_event_buffer[i];
+
+		// process events
+		effect->dispatcher(effect, effProcessEvents, 0, 0, &buffer, 0);
+
+		// clear processed events
+		midi_event_count = 0;
+
+		// clear data
+		memset(left, 0, buffer_size * sizeof(float));
+		memset(right, 0, buffer_size * sizeof(float));
+
+		// TODO: vsti has it's own buffer count
+		float * outputs[64] = { left, right };
+
+		effect->dispatcher(effect, effStartProcess, 0, 0, 0, 0);
+		effect->processReplacing (effect, outputs, outputs, buffer_size);
+		effect->dispatcher(effect, effStopProcess, 0, 0, 0, 0);
+
+		return;
 	}
 
 	memset(left, 0, buffer_size * sizeof(float));
@@ -409,19 +403,34 @@ void vsti_process(float * left, float * right, uint buffer_size)
 // vst window proc
 static LRESULT CALLBACK vst_editor_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	AEffect * effect = (AEffect*)GetWindowLong(hWnd, GWL_USERDATA);
-
 	switch (uMsg)
 	{
+	case WM_CREATE:
+		SetTimer (hWnd, 1, 20, 0);
+		break;
+
+	case WM_TIMER:
+		{
+			AEffect * effect = (AEffect*)GetWindowLong(hWnd, GWL_USERDATA);
+
+			if (effect)
+				effect->dispatcher (effect, effEditIdle, 0, 0, 0, 0);
+		}
+		break;
+
 	case WM_CLOSE:
 		effect_show_editor = false;
 		DestroyWindow(hWnd);
 		break;
 
 	case WM_DESTROY:
-		if (effect)
-			effect->dispatcher(effect, effEditClose, 0, 0, 0, 0);
-		editor_window = NULL;
+		{
+			AEffect * effect = (AEffect*)GetWindowLong(hWnd, GWL_USERDATA);
+
+			if (effect)
+				effect->dispatcher(effect, effEditClose, 0, 0, 0, 0);
+			editor_window = NULL;
+		}
 		break;
 
 	default:
@@ -450,7 +459,7 @@ static HWND create_effect_window(AEffect * effect)
 		wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 		wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
 		wc.lpszMenuName = NULL;
-		wc.lpszClassName = "EPianoVstEffect";
+		wc.lpszClassName = "FreePianoVstEffect";
 		wc.hIconSm = NULL;
 
 		RegisterClassEx(&wc);
@@ -462,7 +471,7 @@ static HWND create_effect_window(AEffect * effect)
 	effect->dispatcher(effect, effGetEffectName, 0, 0, effectName, 0);
 
 	// create window
-	HWND hwnd = CreateWindow("EPianoVstEffect", effectName, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, NULL, NULL, GetModuleHandle(NULL), NULL);
+	HWND hwnd = CreateWindow("FreePianoVstEffect", effectName, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, NULL, NULL, GetModuleHandle(NULL), NULL);
 
 	if (hwnd)
 	{

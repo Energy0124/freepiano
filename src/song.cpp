@@ -29,215 +29,25 @@ static song_event_t song_temp_buffer[1024 * 1024];
 static song_event_t * play_position = NULL;
 static song_event_t * record_position = NULL;
 static song_event_t * song_end = NULL;
-static double song_timer;
+static double song_timer = 0;
+static double song_play_speed = 1;
+static double song_auto_pedal_timer = 0;
+static double song_clock = 0;
 
 static song_info_t song_info;
 
-// -----------------------------------------------------------------------------------------
-// record and playback
-// -----------------------------------------------------------------------------------------
+// song thread lock
+static thread_lock_t song_lock;
 
-// add event
-static void song_add_event(double time, byte a, byte b, byte c, byte d)
-{
-	if (record_position)
-	{
-		record_position->time = time;
-		record_position->a = a;
-		record_position->b = b;
-		record_position->c = c;
-		record_position->d = d;
-
-		if (++record_position >= ARRAY_END(song_event_buffer))
-			record_position = NULL;
-
-		// just simple set song end to record posision
-		song_end = record_position;
-	}
-}
-
-// init record
-static void song_init_record()
-{
-	song_timer = 0;
-	record_position = song_event_buffer;
-	play_position = NULL;
-	song_end = song_event_buffer;
-	song_info.version = 0x01000000;
-	song_info.author[0] = 0;
-	song_info.title[0] = 0;
-	song_info.comment[0] = 0;
-	song_info.write_protected = false;
-}
-
-// start record
-void song_start_record()
-{
-	song_stop_playback();
-	song_stop_record();
-	song_init_record();
-
-	// record current configs
-	song_add_event(0, 1, 0, midi_get_key_signature(), 0);
-	for (int i = 0; i < 16; i++)
-	{
-		song_add_event(0, 2, i, 0, keyboard_get_octshift(i));
-		song_add_event(0, 3, i, 0, keyboard_get_velocity(i));
-		song_add_event(0, 4, i, 0, keyboard_get_channel(i));
-	}
-
-	// record keymaps
-	for (int i = 0; i < 256; i ++)
-	{
-		KeyboardEvent keydown, keyup;
-		keyboard_get_map(i, &keydown, &keyup);
-		
-		if (keydown.action)
-		{
-			song_add_event(0, 0, 1, i, 0);
-			song_add_event(0, keydown.action, keydown.arg1, keydown.arg2, keydown.arg3);
-		}
-
-		if (keyup.action)
-		{
-			song_add_event(0, 0, 1, i, 1);
-			song_add_event(0, keyup.action, keyup.arg1, keyup.arg2, keyup.arg3);
-		}
-
-		if (*keyboard_get_label(i))
-		{
-			const char * label = keyboard_get_label(i);
-			int size = strlen(label);
-
-			song_add_event(0, 0, 2, i, size);
-
-			for (int i = 0; i < (size + 3) / 4; i++)
-			{
-				song_add_event(0, label[0], label[1], label[2], label[3]);
-				label += 4;
-			}
-		}
-	}
-
-	// pedal
-	song_add_event(0, 0xb0, 0x40, midi_get_controller_value(0x40), 0);
-}
-
-// stop record
-void song_stop_record()
-{
-	if (record_position)
-	{
-		song_add_event(song_timer, 8, 0, 0, 0);
-		song_reset_event();
-		record_position = NULL;
-	}
-}
-
-// is recoding
-bool song_is_recording()
-{
-	return record_position != NULL;
-}
-
-// start playback
-void song_start_playback()
-{
-	if (song_end)
-	{
-		song_stop_record();
-		song_stop_playback();
-
-		song_timer = 0;
-		play_position = song_event_buffer;
-		keyboard_clear();
-		song_update(0);
-	}
-}
-
-// stop playback
-void song_stop_playback()
-{
-	song_reset_event();
-	play_position = NULL;
-}
-
-// is recoding
-bool song_is_playing()
-{
-	return play_position != NULL;
-}
-
-
-// get record length
-int song_get_length()
-{
-	return 0;
-}
-
-// allow save
-bool song_allow_save()
-{
-	return song_end != NULL && !song_info.write_protected && !song_is_recording();
-}
-
-// allow input
-bool song_allow_input()
-{
-	return play_position == NULL;
-}
-
-// song has data
-bool song_is_empty()
-{
-	return song_end == NULL;
-}
-
-
-// get time
-int song_get_time()
-{
-	return (int)song_timer;
-}
-
-// update
-void song_update(double time_elapsed)
-{
-	if (GetAsyncKeyState(VK_ESCAPE))
-		return;
-
-	if (song_is_playing() || song_is_recording())
-		song_timer += time_elapsed;
-
-	// playback
-	while (play_position && song_end)
-	{
-		if (play_position->time <= song_timer)
-		{
-			// send event to keyboard
-			song_send_event(play_position->a, play_position->b, play_position->c, play_position->d);
-
-			if (play_position)
-			{
-				if (++play_position >= song_end)
-				{
-					song_stop_playback();
-				}
-			}
-		}
-		else break;
-
-	}
-}
-
-song_info_t * song_get_info()
-{
-	return &song_info;
-}
+// current version
+static uint current_version = 0x01010000;
 
 // -----------------------------------------------------------------------------------------
 // event parser
 // -----------------------------------------------------------------------------------------
+
+// add event
+static void song_add_event(double time, byte a, byte b, byte c, byte d);
 
 // dynamic mapping
 static byte keyboard_map_key_code = 0;
@@ -281,25 +91,16 @@ static void keyboard_event_label(int code, int length)
 // event message
 void song_send_event(byte a, byte b, byte c, byte d, bool record)
 {
+	thread_lock lock(song_lock);
+
 	// record event
 	if (record)
 	{
 		// HACK: don't record playback control commands
-		if (a != 6 && a != 7 && a != 8)
+		if (a != SM_PLAY && 
+			a != SM_RECORD &&
+			a != SM_STOP)
 			song_add_event(song_timer, a, b, c, d);
-	}
-
-	// special events
-	if (a == 0)
-	{
-		switch (b)
-		{
-		case 0:	keyboard_key_event(c, d); break;
-		case 1:	keyboard_event_map(c, d); break;
-		case 2: keyboard_event_label(c, d); break;
-		}
-
-		return;
 	}
 
 	// setting a key label
@@ -315,7 +116,7 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 
 			if (--keyboard_label_key_size == 0)
 			{
-				keyboard_set_label(keyboard_label_key_code, keyboard_label_text);
+				config_set_key_label(keyboard_label_key_code, keyboard_label_text);
 				break;
 			}
 		}
@@ -325,31 +126,44 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 	// mapping a key.
 	if (keyboard_map_key_code)
 	{
-		KeyboardEvent keydown, keyup;
+		key_bind_t keydown, keyup;
 
 		// get previous keymap
-		keyboard_get_map(keyboard_map_key_code, &keydown, &keyup);
+		config_get_key_bind(keyboard_map_key_code, &keydown, &keyup);
 
 		switch (keyboard_map_key_type)
 		{
 		case 0:
-			keydown.action = a;
-			keydown.arg1 = b;
-			keydown.arg2 = c;
-			keydown.arg3 = d;
+			keydown.a = a;
+			keydown.b = b;
+			keydown.c = c;
+			keydown.d = d;
 			break;
 
 		case 1:
-			keyup.action = a;
-			keyup.arg1 = b;
-			keyup.arg2 = c;
-			keyup.arg3 = d;
+			keyup.a = a;
+			keyup.b = b;
+			keyup.c = c;
+			keyup.d = d;
 			break;
 		}
 
 		// set keymap
-		keyboard_set_map(keyboard_map_key_code, &keydown, &keyup);
+		config_set_key_bind(keyboard_map_key_code, &keydown, &keyup);
 		keyboard_map_key_code = 0;
+		return;
+	}
+
+	// special events
+	if (a == SM_SYSTEM)
+	{
+		switch (b)
+		{
+		case SMS_KEY_EVENT:	keyboard_key_event(c, d); break;
+		case SMS_KEY_MAP:	keyboard_event_map(c, d); break;
+		case SMS_KEY_LABEL: keyboard_event_label(c, d); break;
+		}
+
 		return;
 	}
 
@@ -363,9 +177,9 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 	// keyboard control events
 	switch (a)
 	{
-	case 1:	// key signature
+	case SM_KEY_SIGNATURE:
 		{
-			int value = midi_get_key_signature();
+			int value = config_get_key_signature();
 
 			switch (b)
 			{
@@ -374,14 +188,14 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 			case 2: value = wrap_value(value - (char)c, -4, 7); break;
 			}
 
-			midi_set_key_signature(value);
+			config_set_key_signature(value);
 		}
 		break;
 
-	case 2:	// oct shift
+	case SM_OCTSHIFT:
 		{
 			int ch = b;
-			int value = keyboard_get_octshift(ch);
+			int value = config_get_key_octshift(ch);
 
 			switch (c)
 			{
@@ -390,14 +204,14 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 			case 2: value = wrap_value(value - (char)d, -1, 1); break;
 			}
 
-			keyboard_set_octshift(ch, value);
+			config_set_key_octshift(ch, value);
 		}
 		break;
 
-	case 3:	// velocity
+	case SM_VELOCITY:
 		{
 			int ch = b;
-			int value = keyboard_get_velocity(ch);
+			int value = config_get_key_velocity(ch);
 
 			switch (c)
 			{
@@ -406,14 +220,14 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 			case 2: value = clamp_value(value - (char)d, 0, 127); break;
 			}
 
-			keyboard_set_velocity(ch, value);
+			config_set_key_velocity(ch, value);
 		}
 		break;
 
-	case 4: // channel
+	case SM_CHANNEL:
 		{
 			int ch = b;
-			int value = keyboard_get_channel(ch);
+			int value = config_get_key_channel(ch);
 
 			switch (c)
 			{
@@ -422,11 +236,11 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 			case 2: value = clamp_value(value - (char)d, 0, 15); break;
 			}
 
-			keyboard_set_channel(ch, value);
+			config_set_key_channel(ch, value);
 		}
 		break;
 
-	case 5: // volume
+	case SM_VOLUME:
 		{
 			int value = config_get_output_volume();
 
@@ -441,12 +255,12 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 		}
 		break;
 
-	case 6:	// play
+	case SM_PLAY:
 		if (song_allow_input())
 			song_start_playback();
 		break;
 
-	case 7:	// record
+	case SM_RECORD:
 		if (song_allow_input())
 		{
 			if (song_is_recording())
@@ -456,21 +270,112 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 		}
 		break;
 
-	case 8:	// stop
-		if (song_allow_input())
-		{
-			if (song_is_recording())
-				song_stop_record();
+	case SM_STOP:
+		if (song_is_recording())
+			song_stop_record();
 
-			if (song_is_playing())
-				song_stop_playback();
+		if (song_is_playing())
+			song_stop_playback();
+		break;
+
+	case SM_SETTING_GROUP: 
+		{
+			int value = config_get_setting_group();
+
+			switch (b)
+			{
+			case 0: value = c; break;
+			case 1: value = wrap_value(value + (char)c, 0, config_get_setting_group_count() - 1); break;
+			case 2: value = wrap_value(value - (char)c, 0, config_get_setting_group_count() - 1); break;
+			}
+
+			config_set_setting_group(value);
 		}
 		break;
+
+	case SM_SETTING_GROUP_COUNT:
+		{
+			config_set_setting_group_count(b);
+		}
+		break;
+
+	case SM_AUTO_PEDAL:
+		{
+			int value = config_get_auto_pedal();
+
+			switch (b)
+			{
+			case 0: value = c; break;
+			case 1: value = clamp_value(value + (char)c, 0, 127); break;
+			case 2: value = clamp_value(value - (char)c, 0, 127); break;
+			}
+
+			config_set_auto_pedal(value);
+		}
+		break;
+
+	case SM_DELAY_KEYUP:
+		{
+			byte ch = b;
+			int value = config_get_delay_keyup(ch);
+
+			switch (c)
+			{
+			case 0: value = d; break;
+			case 1: value = clamp_value(value + (char)d, 0, 127); break;
+			case 2: value = clamp_value(value - (char)d, 0, 127); break;
+			}
+
+			config_set_delay_keyup(ch, value);
+		}
+		break;
+
 	}
 }
 
+// -----------------------------------------------------------------------------------------
+// record and playback
+// -----------------------------------------------------------------------------------------
+
+// add event
+static void song_add_event(double time, byte a, byte b, byte c, byte d)
+{
+	if (record_position)
+	{
+		record_position->time = time;
+		record_position->a = a;
+		record_position->b = b;
+		record_position->c = c;
+		record_position->d = d;
+
+		if (++record_position >= ARRAY_END(song_event_buffer))
+			record_position = NULL;
+
+		// just simple set song end to record posision
+		song_end = record_position;
+	}
+}
+
+// init record
+static void song_init_record()
+{
+	song_timer = 0;
+	song_clock = 0;
+	song_auto_pedal_timer = 0;
+	record_position = song_event_buffer;
+	play_position = NULL;
+	song_end = song_event_buffer;
+	song_info.version = current_version;
+	song_info.author[0] = 0;
+	song_info.title[0] = 0;
+	song_info.comment[0] = 0;
+	song_info.write_protected = false;
+
+	song_play_speed = 1;
+}
+
 // reset
-void song_reset_event()
+static void song_reset_event()
 {
 	// exit key map mode
 	keyboard_map_key_code = 0;
@@ -485,6 +390,300 @@ void song_reset_event()
 	midi_reset();
 }
 
+// start record
+void song_start_record()
+{
+	thread_lock lock(song_lock);
+
+	song_stop_playback();
+	song_stop_record();
+	song_init_record();
+
+	int current_group = config_get_setting_group();
+	int total_groups = config_get_setting_group_count();
+
+	// record config groups
+	song_add_event(0, SM_SETTING_GROUP_COUNT, total_groups, 0, 0);
+
+	// record group settings
+	for (int i = 0; i < total_groups; i++)
+	{
+		// change current setting group
+		config_set_setting_group(i);
+		song_add_event(0, SM_SETTING_GROUP, 0, i, 0);
+
+		// record current configs
+		song_add_event(0, SM_KEY_SIGNATURE, 0, config_get_key_signature(), 0);
+
+		// record auto pedal
+		song_add_event(0, SM_AUTO_PEDAL, config_get_auto_pedal(), 0, 0);
+
+		// record key settings
+		for (int i = 0; i < 16; i++)
+		{
+			if (config_get_key_octshift(i))
+				song_add_event(0, SM_OCTSHIFT, i, 0, config_get_key_octshift(i));
+
+			if (config_get_key_velocity(i) != 127)
+				song_add_event(0, SM_VELOCITY, i, 0, config_get_key_velocity(i));
+
+			if (config_get_key_channel(i))
+				song_add_event(0, SM_CHANNEL, i, 0, config_get_key_channel(i));
+
+			if (config_get_delay_keyup(i))
+				song_add_event(0, SM_DELAY_KEYUP, i, 0, config_get_delay_keyup(i));
+		}
+		
+		// record keymaps
+		for (int i = 0; i < 256; i ++)
+		{
+			key_bind_t keydown, keyup;
+			config_get_key_bind(i, &keydown, &keyup);
+
+			if (keydown.a)
+			{
+				song_add_event(0, SM_SYSTEM, SMS_KEY_MAP, i, 0);
+				song_add_event(0, keydown.a, keydown.b, keydown.c, keydown.d);
+			}
+
+			if (keyup.a)
+			{
+				song_add_event(0, SM_SYSTEM, SMS_KEY_MAP, i, 1);
+				song_add_event(0, keyup.a, keyup.b, keyup.c, keyup.d);
+			}
+
+			if (*config_get_key_label(i))
+			{
+				const char * label = config_get_key_label(i);
+				int size = strlen(label);
+
+				song_add_event(0, SM_SYSTEM, SMS_KEY_LABEL, i, size);
+
+				for (int i = 0; i < (size + 3) / 4; i++)
+				{
+					song_add_event(0, label[0], label[1], label[2], label[3]);
+					label += 4;
+				}
+			}
+		}
+	}
+
+	// restore current group
+	config_set_setting_group(current_group);
+	song_add_event(0, SM_SETTING_GROUP, current_group, 0, 0);
+
+	// pedal
+	song_add_event(0, 0xb0, 0x40, midi_get_controller_value(0x40), 0);
+}
+
+// stop record
+void song_stop_record()
+{
+	thread_lock lock(song_lock);
+
+	if (record_position)
+	{
+		song_add_event(song_timer, SM_STOP, 0, 0, 0);
+		song_reset_event();
+		record_position = NULL;
+	}
+}
+
+// is recoding
+bool song_is_recording()
+{
+	thread_lock lock(song_lock);
+
+	return record_position != NULL;
+}
+
+// start playback
+void song_start_playback()
+{
+	thread_lock lock(song_lock);
+
+	if (song_end)
+	{
+		song_stop_record();
+		song_stop_playback();
+
+		song_timer = 0;
+		song_clock = 0;
+		song_auto_pedal_timer = 0;
+		play_position = song_event_buffer;
+
+		// clear current setting
+		config_set_setting_group_count(1);
+		config_clear_key_setting();
+
+		song_update(0);
+	}
+}
+
+// stop playback
+void song_stop_playback()
+{
+	thread_lock lock(song_lock);
+
+	song_reset_event();
+	play_position = NULL;
+}
+
+// is recoding
+bool song_is_playing()
+{
+	thread_lock lock(song_lock);
+
+	return play_position != NULL;
+}
+
+
+// get record length
+int song_get_length()
+{
+	thread_lock lock(song_lock);
+
+	if (song_end && song_end > song_event_buffer)
+		return (int)song_end[-1].time;
+
+	return 0;
+}
+
+// allow save
+bool song_allow_save()
+{
+	thread_lock lock(song_lock);
+	return song_end != NULL && !song_info.write_protected && !song_is_recording();
+}
+
+// allow input
+bool song_allow_input()
+{
+	thread_lock lock(song_lock);
+	return play_position == NULL;
+}
+
+// song has data
+bool song_is_empty()
+{
+	thread_lock lock(song_lock);
+	return song_end == NULL;
+}
+
+
+// get time
+int song_get_time()
+{
+	thread_lock lock(song_lock);
+	return (int)song_timer;
+}
+
+
+// get clock
+double song_get_clock()
+{
+	thread_lock lock(song_lock);
+	return song_clock;
+}
+
+// song get play speed
+double song_get_play_speed()
+{
+	return song_play_speed;
+}
+
+// song get play speed
+void song_set_play_speed(double speed)
+{
+	song_play_speed = speed;
+}
+
+// update
+void song_update(double time_elapsed)
+{
+	thread_lock lock(song_lock);
+
+#ifdef _DEBUG
+	if (GetAsyncKeyState(VK_ESCAPE))
+		return;
+#endif
+
+	// adjust playing speed
+	if (song_is_playing())
+		time_elapsed *= song_play_speed;
+
+	if (song_is_playing() || song_is_recording())
+		song_timer += time_elapsed;
+
+	// playback
+	while (play_position && song_end)
+	{
+		if (play_position->time <= song_timer)
+		{
+			// send event to keyboard
+			song_send_event(play_position->a, play_position->b, play_position->c, play_position->d);
+
+			if (play_position)
+			{
+				if (++play_position >= song_end)
+				{
+					song_stop_playback();
+				}
+			}
+		}
+		else break;
+
+	}
+
+	// auto pedal
+	if (config_get_auto_pedal())
+	{
+		static int pedal_value = 0;
+		int pedal_time = config_get_auto_pedal() * 100;
+
+		song_auto_pedal_timer -= time_elapsed;
+
+		if (song_auto_pedal_timer < 0)
+		{
+			pedal_value = midi_get_controller_value(0x40);
+
+			if (pedal_value)
+			{
+				song_send_event(0xb0, 0x40, 0, 0);
+			}
+
+			// reset pedal
+			while (song_auto_pedal_timer < 0)
+				song_auto_pedal_timer += pedal_time;
+		}
+
+		// pedal down
+		if (song_auto_pedal_timer < pedal_time - 100)
+		{
+			if (pedal_value)
+			{
+				int value = midi_get_controller_value(0x40);
+
+				if (value != pedal_value)
+				{
+					song_send_event(0xb0, 0x40, pedal_value, 0);
+				}
+			}
+		}
+	}
+
+	// adjust clock
+	song_clock += time_elapsed;
+
+	// update keyboard
+	keyboard_update(time_elapsed);
+
+}
+
+song_info_t * song_get_info()
+{
+	return &song_info;
+}
 
 
 // -----------------------------------------------------------------------------------------
@@ -549,15 +748,17 @@ static void read_idp_string(char * buff, size_t buff_size, FILE * fp)
 // open lyt
 int song_open_lyt(const char * filename)
 {
+	thread_lock lock(song_lock);
+
 	song_close();
 
 	FILE * fp = fopen(filename, "rb");
-	if (!fp)
-		return -1;
-
 	try
 	{
 		char header[16];
+
+		if (!fp)
+			return -1;
 
 		// read magic
 		read(header, 16, fp);
@@ -594,11 +795,11 @@ int song_open_lyt(const char * filename)
 		read(&map, sizeof(map), fp);
 
 		// record set params command
-		song_add_event(0, 1, 0, map.midi_shift, 0);
-		song_add_event(0, 2, 0, 0, map.shift_left);
-		song_add_event(0, 2, 1, 0, map.shift_right);
-		song_add_event(0, 3, 0, 0, map.velocity_left);
-		song_add_event(0, 3, 1, 0, map.velocity_right);
+		song_add_event(0, SM_KEY_SIGNATURE, 0, map.midi_shift, 0);
+		song_add_event(0, SM_OCTSHIFT, 0, 0, map.shift_left);
+		song_add_event(0, SM_OCTSHIFT, 1, 0, map.shift_right);
+		song_add_event(0, SM_VELOCITY, 0, 0, map.velocity_left);
+		song_add_event(0, SM_VELOCITY, 1, 0, map.velocity_right);
 
 		// push down padel
 		if (map.voice1 > 0 || map.voice2 > 0)
@@ -720,13 +921,6 @@ int song_open_lyt(const char * filename)
 			static const int notes[] = { 0, 0, 2, 4, 5, 7, 9, 11 };
 			static const int shifts[] = { 0, 1, -1};
 
-			// clear keymap
-			for (int i = 0; i < 255; i++)
-			{
-				KeyboardEvent empty;
-				keyboard_set_map(i, &empty, &empty);
-			}
-
 			// set keymap
 			for (int i = 0; i < 107; i++)
 			{
@@ -746,14 +940,14 @@ int song_open_lyt(const char * filename)
 
 				if (key.enabled && key.note)
 				{
-					KeyboardEvent keydown, keyup;
-					keydown.action = 0x90 | (key.channel & 0xf);
-					keydown.arg1 = 12 + key.octive * 12 + notes[key.note % 8] + shifts[key.shift % 3];
-					keydown.arg2 = 127;
+					key_bind_t keydown, keyup;
+					keydown.a = 0x90 | (key.channel & 0xf);
+					keydown.b = 12 + key.octive * 12 + notes[key.note % 8] + shifts[key.shift % 3];
+					keydown.c = 127;
 
 					// add keymap event
-					song_add_event(0, 0, 1, keycode[i], 0);
-					song_add_event(0, keydown.action, keydown.arg1, keydown.arg2, keydown.arg3);
+					song_add_event(0, SM_SYSTEM, SMS_KEY_MAP, keycode[i], 0);
+					song_add_event(0, keydown.a, keydown.b, keydown.c, keydown.d);
 				}
 			}
 
@@ -785,11 +979,11 @@ int song_open_lyt(const char * filename)
 
 			switch (type)
 			{	
-			case 1: song_add_event(time, 0, 0, key, 1); break; // keydown
-			case 2: song_add_event(time, 0, 0, key, 0); break; // keyup
-			case 3: song_add_event(time, 2, 1, 0, key); break; // set oct shift
-			case 4: song_add_event(time, 2, 0, 0, key); break; // set oct shift
-			case 5: song_add_event(time, 1, 0, key, 0); break; // set midi oct shift
+			case 1: song_add_event(time, SM_SYSTEM, SMS_KEY_EVENT, key, 1); break; // keydown
+			case 2: song_add_event(time, SM_SYSTEM, SMS_KEY_EVENT, key, 0); break; // keyup
+			case 3: song_add_event(time, SM_OCTSHIFT, 1, 0, key); break; // set oct shift
+			case 4: song_add_event(time, SM_OCTSHIFT, 0, 0, key); break; // set oct shift
+			case 5: song_add_event(time, SM_KEY_SIGNATURE, 0, key, 0); break; // set midi oct shift
 			case 18:	break; // drum
 			case 19:	break; // maybe song end.
 			default:
@@ -799,7 +993,6 @@ int song_open_lyt(const char * filename)
 
 		record_position = NULL;
 		fclose(fp);
-
 
 		// mark song protected
 		song_info.write_protected = true;
@@ -811,6 +1004,7 @@ int song_open_lyt(const char * filename)
 	{
 		song_end = NULL;
 		fclose(fp);
+		MessageBox(gui_get_window(), "打开乐谱失败！", APP_NAME, MB_OK);
 		return err;
 	}
 
@@ -821,6 +1015,8 @@ int song_open_lyt(const char * filename)
 // close
 void song_close()
 {
+	thread_lock lock(song_lock);
+
 	song_stop_record();
 	song_stop_playback();
 	song_end = NULL;
@@ -829,14 +1025,17 @@ void song_close()
 // open song
 int song_open(const char * filename)
 {
+	thread_lock lock(song_lock);
+
 	song_close();
 
 	FILE * fp = fopen(filename, "rb");
-	if (!fp)
-		return -1;
 
 	try
 	{
+		if (!fp)
+			throw -1;
+
 		char magic[sizeof("FreePianoSong")];
 		char instrument[256];
 
@@ -847,7 +1046,7 @@ int song_open(const char * filename)
 
 		// version
 		read(&song_info.version, sizeof(song_info.version), fp);
-		if (song_info.version != 0x01000000)
+		if (song_info.version > current_version)
 			throw -2;
 
 		// start record
@@ -891,6 +1090,17 @@ int song_open(const char * filename)
 	{
 		song_end = NULL;
 		fclose(fp);
+
+		switch (err)
+		{
+		case -2:
+			MessageBox(gui_get_window(), "无法打开使用新版本创作的FreePiano音乐, 请升级至最新版本！", APP_NAME, MB_OK);
+			break;
+
+		default:
+			MessageBox(gui_get_window(), "不支持的文件格式！", APP_NAME, MB_OK);
+			break;
+		}
 		return err;
 	}
 }
@@ -899,6 +1109,8 @@ int song_open(const char * filename)
 // save song
 int song_save(const char * filename)
 {
+	thread_lock lock(song_lock);
+
 	song_stop_record();
 
 	if (song_end)
@@ -912,7 +1124,7 @@ int song_save(const char * filename)
 			write("FreePianoSong", sizeof("FreePianoSong"), fp);
 
 			// version
-			song_info.version = 0x01000000;
+			song_info.version = current_version;
 			write(&song_info.version, sizeof(song_info.version), fp);
 
 			// song info

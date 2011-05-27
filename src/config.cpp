@@ -10,10 +10,15 @@
 #include "output_wasapi.h"
 #include "synthesizer_vst.h"
 #include "display.h"
+#include "song.h"
+#include "gui.h"
+
+#include "../res/resource.h"
+
 
 
 // -----------------------------------------------------------------------------------------
-// config parse functions
+// config constants
 // -----------------------------------------------------------------------------------------
 struct name_t
 {
@@ -149,14 +154,21 @@ static name_t key_names[] =
 
 static name_t action_names[] = 
 {
-	{ "KeySignature",		1 },
-	{ "KeyboardOctshift",	2 },
-	{ "KeyboardVeolcity",	3 },
-	{ "KeyboardChannel",	4 },
-	{ "Volume",				5 },
-	{ "Play",				6 },
-	{ "Record",				7 },
-	{ "Stop",				8 },
+	{ "KeySignature",		SM_KEY_SIGNATURE },
+	{ "Octshift",			SM_OCTSHIFT },
+	{ "KeyboardOctshift",	SM_OCTSHIFT },
+	{ "Velocity",			SM_VELOCITY },
+	{ "KeyboardVeolcity",	SM_VELOCITY },
+	{ "Channel",			SM_CHANNEL },
+	{ "KeyboardChannel",	SM_CHANNEL },
+	{ "Volume",				SM_VOLUME },
+	{ "Play",				SM_PLAY },
+	{ "Record",				SM_RECORD },
+	{ "Stop",				SM_STOP },
+	{ "Group",				SM_SETTING_GROUP },
+	{ "GroupCount",			SM_SETTING_GROUP_COUNT },
+	{ "AutoPedal",			SM_AUTO_PEDAL },
+	{ "DelayKeyup",			SM_DELAY_KEYUP },
 
 
 	{ "NoteOff",			0x80 },
@@ -353,6 +365,329 @@ static name_t value_action_names[] =
 	{ "Dec",		2 },
 };
 
+static name_t instrument_type_names[] = 
+{
+	{ "None",			INSTRUMENT_TYPE_NONE },
+	{ "VSTI",			INSTRUMENT_TYPE_VSTI },
+};
+
+static name_t output_type_names[] = 
+{
+	{ "Auto",			OUTPUT_TYPE_AUTO },
+	{ "DirectSound",	OUTPUT_TYPE_DSOUND },
+	{ "Wasapi",			OUTPUT_TYPE_WASAPI },
+	{ "ASIO",			OUTPUT_TYPE_ASIO },
+};
+
+static name_t boolean_names[] = 
+{
+	{ "disable",		0 },
+	{ "no",				0 },
+	{ "false",			0 },
+	{ "enable",			1 },
+	{ "yes",			1 },
+	{ "true",			1 },
+};
+
+// -----------------------------------------------------------------------------------------
+// configurations
+// -----------------------------------------------------------------------------------------
+struct key_label_t
+{
+	char text[16];
+};
+
+struct global_setting_t
+{
+	uint instrument_type;
+	char instrument_path[256];
+	uint output_type;
+	char output_device[256];
+	uint output_delay;
+	char keymap[256];
+	char midi_input[256];
+	char midi_output[256];
+	uint output_volume;
+
+	uint enable_hotkey;
+	uint enable_resize;
+};
+
+struct setting_t
+{
+	// key map
+	key_bind_t key_map[256][2];
+	key_label_t key_label[256];
+
+	// key properties
+	char key_octshift[16];
+	char key_velocity[16];
+	char key_channel[16];
+	char key_signature;
+	char auto_pedal;
+	char delay_keyup[16];
+
+	void clear()
+	{
+		memset(this, 0, sizeof(setting_t));
+
+		for (int i = 0; i < 16; i++)
+			key_velocity[i] = 127;
+	}
+};
+
+// settings
+static global_setting_t global;
+static setting_t settings[10];
+static uint current_setting = 0;
+static uint setting_count = 1;
+
+// save current key settings
+static int config_save_key_settings(char * buff, int buffer_size);
+
+// clear keyboard setting
+void config_clear_key_setting()
+{
+	settings[current_setting].clear();
+}
+
+// copy key setting
+void config_copy_key_setting()
+{
+	if (OpenClipboard(NULL))
+	{
+		// temp buffer
+		uint buff_size = 1024 * 1024;
+		char * buff = new char[buff_size];
+
+		// save key settings
+		int size = config_save_key_settings(buff, buff_size);
+
+		if (size > 0)
+		{
+			EmptyClipboard();
+
+			// Allocate a global memory object for the text. 
+			HGLOBAL hglbCopy = GlobalAlloc(GMEM_MOVEABLE, (size + 1) * sizeof(char));
+			if (hglbCopy) 
+			{ 
+				char * lptstrCopy = (char *)GlobalLock(hglbCopy); 
+				memcpy(lptstrCopy, buff, size);
+				lptstrCopy[size] = 0;
+				GlobalUnlock(hglbCopy);
+				SetClipboardData(CF_TEXT, hglbCopy);
+			}
+		}
+
+		delete[] buff;
+		CloseClipboard();
+	}
+}
+
+// paste key setting
+void config_paste_key_setting()
+{
+	if (OpenClipboard(NULL))
+	{
+		if (IsClipboardFormatAvailable(CF_TEXT))
+		{
+			HGLOBAL hglb = GetClipboardData(CF_TEXT); 
+			if (hglb != NULL) 
+			{ 
+				char * lptstr = (char *)GlobalLock(hglb); 
+
+				if (lptstr != NULL) 
+				{
+					config_parse_keymap(lptstr);
+					GlobalUnlock(hglb); 
+				}
+			}
+		}
+		CloseClipboard();
+	}
+}
+
+
+// get keyboard bind
+void config_get_key_bind(byte code, key_bind_t * keydown, key_bind_t * keyup)
+{
+	if (keydown) *keydown = settings[current_setting].key_map[code][0];
+	if (keyup) *keyup = settings[current_setting].key_map[code][1];
+}
+
+// set keyboard action
+void config_set_key_bind(byte code, key_bind_t * keydown, key_bind_t * keyup)
+{
+	if (keydown) settings[current_setting].key_map[code][0] = *keydown;
+	if (keyup) settings[current_setting].key_map[code][1] = *keyup;
+}
+
+// set keyboard label
+void config_set_key_label(byte code, const char * label)
+{
+	strncpy(settings[current_setting].key_label[code].text, label ? label : "", sizeof(key_label_t));
+}
+
+// set keyboard label 
+const char* config_get_key_label(byte code)
+{
+	return settings[current_setting].key_label[code].text;
+}
+
+// set key signature
+void config_set_key_signature(char key)
+{
+	settings[current_setting].key_signature = key;
+}
+
+// get key signature
+char config_get_key_signature()
+{
+	return settings[current_setting].key_signature;
+}
+
+// set oct shift
+void config_set_key_octshift(byte channel, char shift)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].key_octshift))
+	{
+		settings[current_setting].key_octshift[channel] = shift;
+	}
+}
+
+// get oct shift
+char config_get_key_octshift(byte channel)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].key_octshift))
+		return settings[current_setting].key_octshift[channel];
+	else
+		return 0;
+}
+
+// set velocity
+void config_set_key_velocity(byte channel, byte velocity)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].key_velocity))
+	{
+		settings[current_setting].key_velocity[channel] = velocity;
+	}
+}
+
+// get velocity
+byte config_get_key_velocity(byte channel)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].key_velocity))
+		return settings[current_setting].key_velocity[channel];
+	else
+		return 0;
+}
+
+// get channel
+int config_get_key_channel(byte channel)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].key_channel))
+		return settings[current_setting].key_channel[channel];
+	else
+		return 0;
+}
+
+// get channel
+void config_set_key_channel(byte channel, byte value)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].key_channel))
+	{
+		settings[current_setting].key_channel[channel] = value;
+	}
+}
+
+// get auto pedal time
+char config_get_auto_pedal()
+{
+	return settings[current_setting].auto_pedal;
+}
+
+// set auto pedal time
+void config_set_auto_pedal(char value)
+{
+	if (value < 0)
+		value = 0;
+
+	settings[current_setting].auto_pedal = value;
+}
+
+// reset config
+static void config_reset()
+{
+	// reset global settings
+	memset(&global, 0, sizeof(global));
+	global.output_delay = 10;
+	global.output_volume = 100;
+
+	// keep only one setting group
+	config_set_setting_group_count(1);
+
+	// clear current setting group
+	config_clear_key_setting();
+}
+
+// get setting group
+uint config_get_setting_group()
+{
+	return current_setting;
+}
+
+// set setting group
+void config_set_setting_group(uint id)
+{
+	if (id < setting_count)
+		current_setting = id;
+}
+
+// get setting group count
+uint config_get_setting_group_count()
+{
+	return setting_count;
+}
+
+// set setting group count
+void config_set_setting_group_count(uint count)
+{
+	if (count < 1)
+		count = 1;
+
+	if (count > ARRAY_COUNT(settings))
+		count = ARRAY_COUNT(settings);
+
+	// new setting id
+	uint setting_id = current_setting < count ? current_setting : count - 1;
+
+	// clear newly added settings.
+	for (current_setting = setting_count; current_setting < count; current_setting ++)
+		config_clear_key_setting();
+
+	current_setting = setting_id;
+	setting_count = count;
+}
+
+// set keyup mode
+void config_set_delay_keyup(byte channel, char value)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].delay_keyup))
+		settings[current_setting].delay_keyup[channel] = value;
+}
+
+// get keyup mode 
+char config_get_delay_keyup(byte channel)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].delay_keyup))
+		return settings[current_setting].delay_keyup[channel];
+	else
+		return 0;
+}
+
+// -----------------------------------------------------------------------------------------
+// configuration save and load
+// -----------------------------------------------------------------------------------------
 static bool match_space(char ** str)
 {
 	char * s = *str;
@@ -490,7 +825,7 @@ static bool match_value(char ** str, name_t * names, uint count, uint * value)
 }
 
 // match action
-static bool match_event(char ** str, KeyboardEvent * e)
+static bool match_event(char ** str, key_bind_t * e)
 {
 	uint action = 0;
 	uint channel = 0;
@@ -506,17 +841,24 @@ static bool match_event(char ** str, KeyboardEvent * e)
 		return false;
 
 	// make action
-	e->action = action;
-	e->arg1 = 0;
-	e->arg2 = 0;
-	e->arg3 = 0;
+	e->a = action;
+	e->b = 0;
+	e->c = 0;
+	e->d = 0;
 
 	if (action < 0x80)
 	{
 		switch (action)
 		{
-		case 1:
-		case 5:
+		case SM_SETTING_GROUP_COUNT:
+			if (!match_value(str, 0, NULL, &arg1))
+				return false;
+			break;
+
+		case SM_KEY_SIGNATURE:
+		case SM_VOLUME:
+		case SM_SETTING_GROUP:
+		case SM_AUTO_PEDAL:
 			if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg1))
 				return false;
 
@@ -525,9 +867,10 @@ static bool match_event(char ** str, KeyboardEvent * e)
 
 			break;
 
-		case 2:
-		case 3:
-		case 4:
+		case SM_OCTSHIFT:
+		case SM_VELOCITY:
+		case SM_CHANNEL:
+		case SM_DELAY_KEYUP:
 			if (!match_value(str, 0, NULL, &arg1))
 				return false;
 
@@ -546,9 +889,9 @@ static bool match_event(char ** str, KeyboardEvent * e)
 			break;
 		}
 
-		e->arg1 = arg1;
-		e->arg2 = arg2;
-		e->arg3 = arg3;
+		e->b = arg1;
+		e->c = arg2;
+		e->d = arg3;
 	}
 	
 	// match midi events
@@ -559,10 +902,10 @@ static bool match_event(char ** str, KeyboardEvent * e)
 			return false;
 
 		// make action
-		e->action |= (channel & 0xf);
-		e->arg1 = 0;
-		e->arg2 = 0;
-		e->arg3 = 0;
+		e->a |= (channel & 0xf);
+		e->b = 0;
+		e->c = 0;
+		e->d = 0;
 
 		// parse args based on action
 		switch (action >> 4)
@@ -574,8 +917,8 @@ static bool match_event(char ** str, KeyboardEvent * e)
 			if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg1))
 				return false;
 
-			e->arg1 = arg1 & 0x7f;
-			e->arg2 = match_number(str, &arg2) ? arg2 : 127;
+			e->b = arg1 & 0x7f;
+			e->c = match_number(str, &arg2) ? arg2 : 127;
 			break;
 
 		case 0xb:
@@ -585,23 +928,23 @@ static bool match_event(char ** str, KeyboardEvent * e)
 			if (!match_number(str, &arg2))
 				return false;
 
-			e->arg1 = arg1 & 0x7f;
-			e->arg2 = arg2 & 0x7f;
+			e->b = arg1 & 0x7f;
+			e->c = arg2 & 0x7f;
 			break;
 
 		case 0xc: case 0xd:
 			if (!match_number(str, &arg1))
 				return false;
 
-			e->arg1 = arg1 & 0x7f;
+			e->b = arg1 & 0x7f;
 			break;
 
 		case 0xe:
 			if (!match_number(str, &arg1))
 				return false;
 
-			e->arg1 = arg1;
-			e->arg2 = arg1 >> 8;
+			e->b = arg1;
+			e->c = arg1 >> 8;
 			break;
 
 		default:
@@ -612,43 +955,18 @@ static bool match_event(char ** str, KeyboardEvent * e)
 	return true;
 }
 
-// -----------------------------------------------------------------------------------------
-// configuration
-// -----------------------------------------------------------------------------------------
-static name_t instrument_type_names[] = 
+static int config_parse_keymap_line(char * s)
 {
-	{ "None",			INSTRUMENT_TYPE_NONE },
-	{ "VSTI",			INSTRUMENT_TYPE_VSTI },
-};
-
-static name_t output_type_names[] = 
-{
-	{ "None",			OUTPUT_TYPE_NONE },
-	{ "DirectSound",	OUTPUT_TYPE_DSOUND },
-	{ "Wasapi",			OUTPUT_TYPE_WASAPI },
-	{ "ASIO",			OUTPUT_TYPE_ASIO },
-};
-
-static uint	cfg_instrument_type = 0;
-static char cfg_instrument_path[256] = {0};
-static uint	cfg_output_type = 0;
-static char cfg_output_device[256] = {0};
-static uint cfg_output_delay = 10;
-static char cfg_keymap[256] = {0};
-static char cfg_midi_input[256] = {0};
-static char cfg_midi_output[256] = {0};
-static int cfg_output_volume = 100;
-
-int config_keymap_config(char * command)
-{
-	char * s = command;
+	// skip comment
+	if (*s == '#')
+		return 0;
 
 	// key 
-	if (match_word(&s, "key") || match_word(&s, "keydown"))
+	if (match_word(&s, "Key") || match_word(&s, "Keydown"))
 	{
 		uint key = 0;
-		KeyboardEvent keydown;
-		KeyboardEvent keyup;
+		key_bind_t keydown;
+		key_bind_t keyup;
 
 		// match key name
 		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
@@ -658,17 +976,16 @@ int config_keymap_config(char * command)
 		if (match_event(&s, &keydown))
 		{
 			// set that action
-			keyboard_set_map(key, &keydown, &keyup);
-
+			config_set_key_bind(key, &keydown, &keyup);
 			return 0;
 		}
 	}
 
 	// keyup
-	else if (match_word(&s, "keyup"))
+	else if (match_word(&s, "Keyup"))
 	{
 		uint key = 0;
-		KeyboardEvent keyup;
+		key_bind_t keyup;
 
 		// match key name
 		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
@@ -678,14 +995,14 @@ int config_keymap_config(char * command)
 		if (match_event(&s, &keyup))
 		{
 			// set that action
-			keyboard_set_map(key, NULL, &keyup);
+			config_set_key_bind(key, NULL, &keyup);
 
 			return 0;
 		}
 	}
 
 	// keylabel
-	else if (match_word(&s, "label"))
+	else if (match_word(&s, "Label"))
 	{
 		uint key = 0;
 		char buff[256];
@@ -698,11 +1015,142 @@ int config_keymap_config(char * command)
 		match_line(&s, buff, sizeof(buff));
 
 		// set key label
-		keyboard_set_label(key, buff);
+		config_set_key_label(key, buff);
+	}
+
+	// octshift
+	else if (match_word(&s, "Octshift"))
+	{
+		uint channel;
+		int value;
+
+		if (match_number(&s, &channel) &&
+			match_number(&s, &value))
+		{
+			config_set_key_octshift(channel, value);
+		}
+	}
+
+	// velocity
+	else if (match_word(&s, "Velocity"))
+	{
+		uint channel;
+		uint value;
+
+		if (match_number(&s, &channel) &&
+			match_number(&s, &value))
+		{
+			config_set_key_velocity(channel, value);
+		}
+	}
+
+	// output channel
+	else if (match_word(&s, "Channel"))
+	{
+		uint channel;
+		uint value;
+
+		if (match_number(&s, &channel) &&
+			match_number(&s, &value))
+		{
+			config_set_key_channel(channel, value);
+		}
+	}
+
+	else if (match_word(&s, "KeySignature"))
+	{
+		int value;
+
+		if (match_number(&s, &value))
+		{
+			config_set_key_signature(value);
+		}
+	}
+
+	else if (match_word(&s, "GroupCount"))
+	{
+		int value;
+
+		if (match_number(&s, &value))
+		{
+			config_set_setting_group_count(value);
+
+			for (int i = value; i > 0; i--)
+			{
+				config_set_setting_group(i - 1);
+				config_clear_key_setting();
+			}
+		}
+	}
+
+	else if (match_word(&s, "Group"))
+	{
+		int value;
+
+		if (match_number(&s, &value))
+		{
+			config_set_setting_group(value);
+		}
+	}
+
+	else if (match_word(&s, "AutoPedal"))
+	{
+		int value;
+
+		if (match_number(&s, &value))
+		{
+			config_set_auto_pedal(value);
+		}
+	}
+
+	else if (match_word(&s, "DelayKeyup"))
+	{
+		uint channel;
+		uint value;
+
+		if (match_number(&s, &channel) &&
+			match_number(&s, &value))
+		{
+			config_set_delay_keyup(channel, value);
+		}
 	}
 
 	return -1;
 }
+
+int config_parse_keymap(const char * command)
+{
+	char line[1024];
+	char * line_end = line;
+	int result = 0;
+
+	for (;;)
+	{
+		switch (*command)
+		{
+		case 0:
+		case '\n':
+			if (line_end > line)
+			{
+				*line_end = 0;
+				result = config_parse_keymap_line(line);
+				line_end = line;
+			}
+
+			if (*command == 0)
+				return result;
+			break;
+
+		default:
+			if (line_end < line + sizeof(line) - 1)
+				*line_end++ = *command;
+			break;
+		}
+
+		command++;
+	}
+}
+
 
 // load keymap
 int config_load_keymap(const char * filename)
@@ -714,20 +1162,22 @@ int config_load_keymap(const char * filename)
 	if (!fp)
 		return -1;
 
-	// reset keyboard map
-	keyboard_clear();
+	// current group
+	int group_id = config_get_setting_group();
+
+	// clear keyboard binds
+	config_clear_key_setting();
 
 	// read lines
 	while (fgets(line, sizeof(line), fp))
 	{
-		// comment
-		if (*line == '#')
-			continue;
-
-		config_keymap_config(line);
+		config_parse_keymap_line(line);
 	}
 
 	fclose(fp);
+
+	// restore current group
+	config_set_setting_group(group_id);
 	return 0;
 }
 
@@ -744,31 +1194,31 @@ static int print_value(char * buff, int buff_size, int value, name_t * names, in
 	return _snprintf(buff, buff_size, "%s%d", sep, value);
 }
 
-static int print_keyboard_event(char * buff, int buffer_size, int key, KeyboardEvent & e)
+static int print_keyboard_event(char * buff, int buffer_size, int key, key_bind_t & e)
 {
 	char * s = buff;
 	char * end = buff + buffer_size;
 
 	s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
 
-	if (e.action < 0x80)
+	if (e.a < 0x80)
 	{
-		s += print_value(s, end - s, e.action, action_names, ARRAY_COUNT(action_names));
+		s += print_value(s, end - s, e.a, action_names, ARRAY_COUNT(action_names));
 
-		switch (e.action)
+		switch (e.a)
 		{
 		case 1:	// key
 		case 5:	// volume
-			s += print_value(s, end - s, e.arg1, value_action_names, ARRAY_COUNT(value_action_names));
-			s += print_value(s, end - s, e.arg2, NULL, 0);
+			s += print_value(s, end - s, e.b, value_action_names, ARRAY_COUNT(value_action_names));
+			s += print_value(s, end - s, e.c, NULL, 0);
 			break;
 
 		case 2:	// oct
 		case 3:	// vel
 		case 4:	// channel
-			s += print_value(s, end - s, e.arg1, NULL, 0);
-			s += print_value(s, end - s, e.arg2, value_action_names, ARRAY_COUNT(value_action_names));
-			s += print_value(s, end - s, e.arg3, NULL, 0);
+			s += print_value(s, end - s, e.b, NULL, 0);
+			s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
+			s += print_value(s, end - s, e.d, NULL, 0);
 			break;
 
 		case 6:	// play
@@ -777,40 +1227,40 @@ static int print_keyboard_event(char * buff, int buffer_size, int key, KeyboardE
 			break;
 
 		default:
-			s += print_value(s, end - s, e.arg1, NULL, 0);
-			s += print_value(s, end - s, e.arg2, NULL, 0);
-			s += print_value(s, end - s, e.arg3, NULL, 0);
+			s += print_value(s, end - s, e.b, NULL, 0);
+			s += print_value(s, end - s, e.c, NULL, 0);
+			s += print_value(s, end - s, e.d, NULL, 0);
 			break;
 		}
 	}
 	else
 	{
-		s += print_value(s, end - s, e.action & 0xf0, action_names, ARRAY_COUNT(action_names));
-		s += print_value(s, end - s, e.action & 0x0f, NULL, 0);
+		s += print_value(s, end - s, e.a & 0xf0, action_names, ARRAY_COUNT(action_names));
+		s += print_value(s, end - s, e.a & 0x0f, NULL, 0);
 
-		switch (e.action >> 4)
+		switch (e.a >> 4)
 		{
 		case 0x8:
 		case 0x9:
-			s += print_value(s, end - s, e.arg1, note_names, ARRAY_COUNT(note_names));
-			if (e.arg2 != 127)
-				s += print_value(s, end - s, e.arg2, NULL, 0);
+			s += print_value(s, end - s, e.b, note_names, ARRAY_COUNT(note_names));
+			if (e.c != 127)
+				s += print_value(s, end - s, e.c, NULL, 0);
 			break;
 
 		case 0xa:
-			s += print_value(s, end - s, e.arg1, note_names, ARRAY_COUNT(note_names));
-			s += print_value(s, end - s, e.arg2, NULL, 0);
+			s += print_value(s, end - s, e.b, note_names, ARRAY_COUNT(note_names));
+			s += print_value(s, end - s, e.c, NULL, 0);
 			break;
 
 		case 0xb:
-			s += print_value(s, end - s, e.arg1, controller_names, ARRAY_COUNT(controller_names));
-			s += print_value(s, end - s, e.arg2, NULL, 0);
+			s += print_value(s, end - s, e.b, controller_names, ARRAY_COUNT(controller_names));
+			s += print_value(s, end - s, e.c, NULL, 0);
 			break;
 
 		default:
-			s += print_value(s, end - s, e.arg1, NULL, 0);
-			s += print_value(s, end - s, e.arg2, NULL, 0);
-			s += print_value(s, end - s, e.arg3, NULL, 0);
+			s += print_value(s, end - s, e.b, NULL, 0);
+			s += print_value(s, end - s, e.c, NULL, 0);
+			s += print_value(s, end - s, e.d, NULL, 0);
 			break;
 		}
 	}
@@ -819,82 +1269,125 @@ static int print_keyboard_event(char * buff, int buffer_size, int key, KeyboardE
 	return s - buff;
 }
 
-// save keymap
-int config_save_keymap(int key, char * buff, int buffer_size)
+// save current key settings
+static int config_save_key_settings(char * buff, int buffer_size)
 {
 	char * end = buff + buffer_size;
 	char * s = buff;
 
-	KeyboardEvent keydown, keyup;
-	keyboard_get_map(key, &keydown, &keyup);
+	// save key signature
+	s += _snprintf(s, end - s, "KeySignature\t%d\r\n", config_get_key_signature());
 
-	if (keydown.action)
+	// save keyboard status
+	for (int i = 0; i < 16; i ++)
 	{
-		s += _snprintf(s, end - s, "keydown");
-		s += print_keyboard_event(s, end - s, key, keydown);
-		s += _snprintf(s, end - s, "\r\n");
+		if (i < 2 || config_get_key_octshift(i) != 0)
+			s += _snprintf(s, end - s, "Octshift\t%d\t%d\r\n", i, config_get_key_octshift(i));
+
+		if (i < 2 || config_get_key_velocity(i) != 127)
+			s += _snprintf(s, end - s, "Velocity\t%d\t%d\r\n", i, config_get_key_velocity(i));
+
+		if (i < 2 || config_get_key_channel(i) != 0)
+			s += _snprintf(s, end - s, "Channel\t%d\t%d\r\n", i, config_get_key_channel(i));
+
+		// delay keyup
+		if (config_get_delay_keyup(i))
+			s += _snprintf(s, end - s, "DelayKeyup\t%d\t%d\r\n", i, config_get_delay_keyup(i));
 	}
 
-	if (keyup.action)
+	// auto pedal
+	if (config_get_auto_pedal())
+		s += _snprintf(s, end - s, "AutoPedal\t%d\r\n", config_get_auto_pedal());
+
+	// save key bindings
+	for (int key = 0; key < 256; key++)
 	{
-		s += _snprintf(s, end - s, "keyup");
-		s += print_keyboard_event(s, end - s, key, keyup);
-		s += _snprintf(s, end - s, "\r\n");
+		key_bind_t keydown, keyup;
+		config_get_key_bind(key, &keydown, &keyup);
+
+		if (keydown.a)
+		{
+			s += _snprintf(s, end - s, "Keydown");
+			s += print_keyboard_event(s, end - s, key, keydown);
+			s += _snprintf(s, end - s, "\r\n");
+		}
+
+		if (keyup.a)
+		{
+			s += _snprintf(s, end - s, "Keyup");
+			s += print_keyboard_event(s, end - s, key, keyup);
+			s += _snprintf(s, end - s, "\r\n");
+		}
 	}
 
-	if (*keyboard_get_label(key))
+	for (int key = 0; key < 256; key++)
 	{
-		s += _snprintf(s, end - s, "label");
-		s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
-		s += _snprintf(s, end - s, "\t%s\r\n", keyboard_get_label(key));
+		if (*config_get_key_label(key))
+		{
+			s += _snprintf(s, end - s, "Label");
+			s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
+			s += _snprintf(s, end - s, "\t%s\r\n", config_get_key_label(key));
+		}
 	}
 
 	return s - buff;
 }
 
-// reset config
-void config_reset()
+// save keymap
+int config_save_keymap(char * buff, int buffer_size)
 {
-	cfg_instrument_type = 0;
-	cfg_instrument_path[0] = 0;
-	cfg_output_type = 0;
-	cfg_output_device[0] = 0;
-	cfg_output_delay = 10;
-	cfg_output_volume = 100;
+	char * end = buff + buffer_size;
+	char * s = buff;
 
-	for (byte ch = 0; ch < 16; ch++)
+	// save group count
+	s += _snprintf(s, end - s, "GroupCount\t%d\r\n", config_get_setting_group_count());
+
+	// current setting group
+	int current_setting = config_get_setting_group();
+
+	// for each group
+	for (uint i = 0; i < config_get_setting_group_count(); i++)
 	{
-		keyboard_set_octshift(ch, 0);
-		keyboard_set_velocity(ch, 127);
-		keyboard_set_channel(ch, 0);
+		// change group
+		s += _snprintf(s, end - s, "\r\nGroup\t%d\r\n", i);
+
+		// change to group i
+		config_set_setting_group(i);
+
+		// save current key settings
+		s += config_save_key_settings(s, end - s);
 	}
 
-	midi_set_key_signature(0);
+	// restore current setting group
+	config_set_setting_group(current_setting);
+
+	return s - buff;
 }
 
-// apply config
 static int config_apply()
 {
 	// set keymap
-	if (cfg_keymap[0])
-		config_load_keymap(cfg_keymap);
+	config_set_keymap(global.keymap);
 
 	// load instrument
-	config_select_instrument(cfg_instrument_type, cfg_instrument_path);
+	config_select_instrument(global.instrument_type, global.instrument_path);
 
 	// open output
-	if (config_select_output(cfg_output_type, cfg_output_device))
-		cfg_output_device[0] = 0;
+	if (config_select_output(global.output_type, global.output_device))
+		global.output_device[0] = 0;
 
-	config_set_output_volume(cfg_output_volume);
-	config_set_output_delay(cfg_output_delay);
+	config_set_output_volume(global.output_volume);
+	config_set_output_delay(global.output_delay);
 
 	// open midi output and input
-	config_select_midi_output(cfg_midi_output);
-	config_select_midi_input(cfg_midi_input);
+	config_select_midi_output(global.midi_output);
+	config_select_midi_input(global.midi_input);
+
+	// reset default key setting
+	if (global.keymap[0] == 0)
+		config_default_key_setting();
 	return 0;
 }
-
 
 // load
 int config_load(const char * filename)
@@ -902,136 +1395,106 @@ int config_load(const char * filename)
 	char line[256];
 	config_get_media_path(line, sizeof(line), filename);
 
-	FILE * fp = fopen(line, "r");
-	if (!fp)
-		return -1;
-
 	// reset config
 	config_reset();
 
-	// read lines
-	while (fgets(line, sizeof(line), fp))
+	FILE * fp = fopen(line, "r");
+	if (fp)
 	{
-		char * s = line;
-
-		// comment
-		if (*s == '#')
-			continue;
-
-		// instrument
-		if (match_word(&s, "instrument"))
+		// read lines
+		while (fgets(line, sizeof(line), fp))
 		{
-			// instrument type
-			if (match_word(&s, "type"))
-			{
-				match_value(&s, instrument_type_names, ARRAY_COUNT(instrument_type_names), &cfg_instrument_type);
-			}
-			else if (match_word(&s, "path"))
-			{
-				match_line(&s, cfg_instrument_path, sizeof(cfg_instrument_path));
-			}
+			char * s = line;
 
-			else if (match_word(&s, "showui"))
-			{
-				uint showui = 1;
-				match_value(&s, NULL, 0, &showui);
-				vsti_show_editor(showui != 0);
-			}
-		}
+			// comment
+			if (*s == '#')
+				continue;
 
-		// output
-		else if (match_word(&s, "output"))
-		{
-			// instrument type
-			if (match_word(&s, "type"))
+			// instrument
+			if (match_word(&s, "instrument"))
 			{
-				match_value(&s, output_type_names, ARRAY_COUNT(output_type_names), &cfg_output_type);
-			}
-			else if (match_word(&s, "device"))
-			{
-				match_line(&s, cfg_output_device, sizeof(cfg_output_device));
-			}
-			else if (match_word(&s, "delay"))
-			{
-				match_number(&s, &cfg_output_delay);
-			}
-			else if (match_word(&s, "volume"))
-			{
-				match_number(&s, &cfg_output_volume);
-			}
-		}
-
-		// keyboard
-		else if (match_word(&s, "keyboard"))
-		{
-			if (match_word(&s, "shift"))
-			{
-				uint channel;
-				int value;
-
-				if (match_number(&s, &channel) &&
-					match_number(&s, &value))
+				// instrument type
+				if (match_word(&s, "type"))
 				{
-					keyboard_set_octshift(channel, value);
+					match_value(&s, instrument_type_names, ARRAY_COUNT(instrument_type_names), &global.instrument_type);
+				}
+				else if (match_word(&s, "path"))
+				{
+					match_line(&s, global.instrument_path, sizeof(global.instrument_path));
+				}
+
+				else if (match_word(&s, "showui"))
+				{
+					uint showui = 1;
+					match_value(&s, NULL, 0, &showui);
+					vsti_show_editor(showui != 0);
 				}
 			}
 
-			else if (match_word(&s, "velocity"))
-			{
-				uint channel;
-				uint value;
-
-				if (match_number(&s, &channel) &&
-					match_number(&s, &value))
-				{
-					keyboard_set_velocity(channel, value);
-				}
-			}
-
-			else if (match_word(&s, "channel"))
-			{
-				uint channel;
-				uint value;
-
-				if (match_number(&s, &channel) &&
-					match_number(&s, &value))
-				{
-					keyboard_set_channel(channel, value);
-				}
-			}
-
-			else if (match_word(&s, "map"))
-			{
-				match_line(&s, cfg_keymap, sizeof(cfg_keymap));
-			}
-		}
-
-		// midi
-		else if (match_word(&s, "midi"))
-		{
-			if (match_word(&s, "key"))
-			{
-				int value;
-
-				if (match_number(&s, &value))
-				{
-					midi_set_key_signature(value);
-				}
-			}
-
+			// output
 			else if (match_word(&s, "output"))
 			{
-				match_line(&s, cfg_midi_output, sizeof(cfg_midi_output));
+				// instrument type
+				if (match_word(&s, "type"))
+				{
+					match_value(&s, output_type_names, ARRAY_COUNT(output_type_names), &global.output_type);
+				}
+				else if (match_word(&s, "device"))
+				{
+					match_line(&s, global.output_device, sizeof(global.output_device));
+				}
+				else if (match_word(&s, "delay"))
+				{
+					match_number(&s, &global.output_delay);
+				}
+				else if (match_word(&s, "volume"))
+				{
+					match_number(&s, &global.output_volume);
+				}
 			}
 
-			else if (match_word(&s, "input"))
+			// keyboard
+			else if (match_word(&s, "keyboard"))
 			{
-				match_line(&s, cfg_midi_input, sizeof(cfg_midi_input));
+				if (match_word(&s, "map"))
+				{
+					match_line(&s, global.keymap, sizeof(global.keymap));
+				}
+			}
+
+			// midi
+			else if (match_word(&s, "midi"))
+			{
+				if (match_word(&s, "output"))
+				{
+					match_line(&s, global.midi_output, sizeof(global.midi_output));
+				}
+
+				else if (match_word(&s, "input"))
+				{
+					match_line(&s, global.midi_input, sizeof(global.midi_input));
+				}
+			}
+
+			// resize window
+			else if (match_word(&s, "sizeable"))
+			{
+				uint enable = 0;
+				match_value(&s, boolean_names, ARRAY_COUNT(boolean_names), &enable);
+				config_set_enable_resize_window(enable != 0);
+			}
+
+			// hotkey
+			else if (match_word(&s, "hotkey"))
+			{
+				uint enable = 0;
+				match_value(&s, boolean_names, ARRAY_COUNT(boolean_names), &enable);
+				config_set_enable_hotkey(enable != 0);
 			}
 		}
-	}
 
-	fclose(fp);
+		fclose(fp);
+	}
 
 	return config_apply();
 }
@@ -1042,55 +1505,45 @@ int config_save(const char * filename)
 	char file_path[256];
 	config_get_media_path(file_path, sizeof(file_path), filename);
 
-	FILE * fp = fopen(file_path, "w");
+	FILE * fp = fopen(file_path, "wb");
 	if (!fp)
 		return -1;
 
-	if (cfg_instrument_type)
+	if (global.instrument_type)
 	{
-		fprintf(fp, "instrument type %s\n", instrument_type_names[cfg_instrument_type]);
-		if (cfg_instrument_path[0])
-			fprintf(fp, "instrument path %s\n", cfg_instrument_path);
+		fprintf(fp, "instrument type %s\r\n", instrument_type_names[global.instrument_type]);
+		if (global.instrument_path[0])
+			fprintf(fp, "instrument path %s\r\n", global.instrument_path);
 
-		fprintf(fp, "instrument showui %d\n", vsti_is_show_editor());
+		fprintf(fp, "instrument showui %d\r\n", vsti_is_show_editor());
 	}
 
 
-	if (cfg_output_type)
+	if (global.output_type)
 	{
-		fprintf(fp, "output type %s\n", output_type_names[cfg_output_type]);
+		fprintf(fp, "output type %s\r\n", output_type_names[global.output_type]);
 
-		if (cfg_output_device[0])
-			fprintf(fp, "output device %s\n", cfg_output_device);
+		if (global.output_device[0])
+			fprintf(fp, "output device %s\r\n", global.output_device);
 
-		fprintf(fp, "output delay %d\n", cfg_output_delay);
-		fprintf(fp, "output volume %d\n", cfg_output_volume);
+		fprintf(fp, "output delay %d\r\n", global.output_delay);
+		fprintf(fp, "output volume %d\r\n", global.output_volume);
 	}
 
-	if (cfg_keymap[0])
-		fprintf(fp, "keyboard map %s\n", cfg_keymap);
+	if (global.keymap[0])
+		fprintf(fp, "keyboard map %s\r\n", global.keymap);
 
-	for (int i = 0; i < 16; i ++)
-	{
-		if (keyboard_get_octshift(i))
-			fprintf(fp, "keyboard shift %d %d\n", i, keyboard_get_octshift(i));
+	if (global.midi_output[0])
+		fprintf(fp, "midi output %s\r\n", global.midi_output);
 
-		if (keyboard_get_velocity(i) != 127)
-			fprintf(fp, "keyboard velocity %d %d\n", i, keyboard_get_velocity(i));
+	if (global.midi_input[0])
+		fprintf(fp, "midi input %s\n", global.midi_input);
 
-		if (keyboard_get_channel(i))
-			fprintf(fp, "keyboard channel %d %d\n", i, keyboard_get_channel(i));
-	}
+	if (config_get_enable_hotkey())
+		fprintf(fp, "hotkey enable\n");
 
-
-	if (cfg_midi_output[0])
-		fprintf(fp, "midi output %s\n", cfg_midi_output);
-
-	if (cfg_midi_input[0])
-		fprintf(fp, "midi input %s\n", cfg_midi_input);
-
-	if (midi_get_key_signature())
-		fprintf(fp, "midi key %d\n", midi_get_key_signature());
+	if (config_get_enable_resize_window())
+		fprintf(fp, "resize enable\n");
 
 	fclose(fp);
 	return 0;
@@ -1123,8 +1576,8 @@ int config_select_instrument(int type, const char * name)
 	if (type == INSTRUMENT_TYPE_NONE)
 	{
 		vsti_unload_plugin();
-		cfg_instrument_type = type;
-		strncpy(cfg_instrument_path, name, sizeof(cfg_instrument_path));
+		global.instrument_type = type;
+		strncpy(global.instrument_path, name, sizeof(global.instrument_path));
 		result = 0;
 	}
 
@@ -1133,7 +1586,7 @@ int config_select_instrument(int type, const char * name)
 		if (name == NULL || name[0] == '\0')
 		{
 			vsti_unload_plugin();
-			cfg_instrument_path[0] = 0;
+			global.instrument_path[0] = 0;
 			result = 0;
 		}
 
@@ -1171,8 +1624,8 @@ int config_select_instrument(int type, const char * name)
 				result = vsti_load_plugin(callback.name);
 				if (result == 0)
 				{
-					cfg_instrument_type = type;
-					strncpy(cfg_instrument_path, callback.name, sizeof(cfg_instrument_path));
+					global.instrument_type = type;
+					strncpy(global.instrument_path, name, sizeof(global.instrument_path));
 				}
 			}
 		}
@@ -1184,8 +1637,8 @@ int config_select_instrument(int type, const char * name)
 			result = vsti_load_plugin(name);
 			if (result == 0)
 			{
-				cfg_instrument_type = type;
-				strncpy(cfg_instrument_path, name, sizeof(cfg_instrument_path));
+				global.instrument_type = type;
+				strncpy(global.instrument_path, name, sizeof(global.instrument_path));
 			}
 		}
 	}
@@ -1197,8 +1650,33 @@ int config_select_instrument(int type, const char * name)
 
 const char * config_get_instrument_path()
 {
-	return cfg_instrument_path;
+	return global.instrument_path;
 }
+
+// set enable resize window
+void config_set_enable_resize_window(bool enable)
+{
+	global.enable_resize = enable;
+}
+
+// get enable resize windwo
+bool config_get_enable_resize_window()
+{
+	return global.enable_resize != 0;
+}
+
+// set enable resize window
+void config_set_enable_hotkey(bool enable)
+{
+	global.enable_hotkey = enable;
+}
+
+// get enable resize windwo
+bool config_get_enable_hotkey()
+{
+	return global.enable_hotkey != 0;
+}
+
 
 // select output
 int config_select_output(int type, const char * device)
@@ -1211,8 +1689,16 @@ int config_select_output(int type, const char * device)
 	// open output
 	switch (type)
 	{
-	case OUTPUT_TYPE_NONE:
-		result = 0;
+	case OUTPUT_TYPE_AUTO:
+		// try wasapi first
+		result = wasapi_open(NULL);
+
+		if (result)
+			result = dsound_open(device);
+
+		if (result == 0)
+			device = "";
+
 		break;
 
 	case OUTPUT_TYPE_DSOUND:
@@ -1231,8 +1717,8 @@ int config_select_output(int type, const char * device)
 	// success
 	if (result == 0)
 	{
-		cfg_output_type = type;
-		strncpy(cfg_output_device, device, sizeof(cfg_output_device));
+		global.output_type = type;
+		strncpy(global.output_device, device, sizeof(global.output_device));
 	}
 
 	return result;
@@ -1245,18 +1731,18 @@ int config_select_midi_input(const char * device)
 	int result = -1;
 	if (result = midi_open_input(device))
 	{
-		cfg_midi_input[0] = 0;
+		global.midi_input[0] = 0;
 		return result;
 	}
 
-	strncpy(cfg_midi_input, device, sizeof(cfg_midi_input));
+	strncpy(global.midi_input, device, sizeof(global.midi_input));
 	return result;
 }
 
 // get midi input
 const char * config_get_midi_input()
 {
-	return cfg_midi_input;
+	return global.midi_input;
 }
 
 // select midi output
@@ -1268,20 +1754,20 @@ int config_select_midi_output(const char * device)
 		return result;
 	}
 
-	strncpy(cfg_midi_output, device, sizeof(cfg_midi_output));
+	strncpy(global.midi_output, device, sizeof(global.midi_output));
 	return result;
 }
 
 // get midi output
 const char * config_get_midi_output()
 {
-	return cfg_midi_output;
+	return global.midi_output;
 }
 
 // get output delay
 int config_get_output_delay()
 {
-	return cfg_output_delay;
+	return global.output_delay;
 }
 
 // get output delay
@@ -1292,20 +1778,22 @@ void config_set_output_delay(int delay)
 	else if (delay > 500)
 		delay = 500;
 
-	cfg_output_delay = delay;
+	global.output_delay = delay;
 
 	// open output
-	switch (cfg_output_type)
+	switch (global.output_type)
 	{
-	case OUTPUT_TYPE_NONE:
+	case OUTPUT_TYPE_AUTO:
+		dsound_set_buffer_time(global.output_delay);
+		wasapi_set_buffer_time(global.output_delay);
 		break;
 
 	case OUTPUT_TYPE_DSOUND:
-		dsound_set_buffer_time(cfg_output_delay);
+		dsound_set_buffer_time(global.output_delay);
 		break;
 
 	case OUTPUT_TYPE_WASAPI:
-		wasapi_set_buffer_time(cfg_output_delay);
+		wasapi_set_buffer_time(global.output_delay);
 		break;
 
 	case OUTPUT_TYPE_ASIO:
@@ -1316,32 +1804,35 @@ void config_set_output_delay(int delay)
 // get output type
 int config_get_output_type()
 {
-	return cfg_output_type;
+	return global.output_type;
 }
 
 // get output device
 const char * config_get_output_device()
 {
-	return cfg_output_device;
+	return global.output_device;
 }
 
 // get keymap
 const char * config_get_keymap()
 {
-	return cfg_keymap;
+	return global.keymap;
 }
 
 // set keymap
 int config_set_keymap(const char * mapname)
 {
+	char path[MAX_PATH];
+	config_get_media_path(path, sizeof(path), mapname);
+
 	int result;
 	if (result = config_load_keymap(mapname))
 	{
-		cfg_keymap[0] = 0;
+		global.keymap[0] = 0;
 	}
 	else
 	{
-		strncpy(cfg_keymap, mapname, sizeof(cfg_keymap));
+		config_get_relative_path(global.keymap, sizeof(global.keymap), path);
 	}
 	return result;
 }
@@ -1350,26 +1841,61 @@ int config_set_keymap(const char * mapname)
 // get exe path
 void config_get_media_path(char * buff, int buff_size, const char * path)
 {
-	GetModuleFileNameA(NULL, buff, buff_size);
-	char * pathend = strrchr(buff, '\\');
-	if (pathend)
+	if (PathIsRelative(path))
 	{
+		char base[MAX_PATH];
+		char temp[MAX_PATH];
+
+		GetModuleFileNameA(NULL, base, sizeof(base));
+
+		// remove file spec
+		PathRemoveFileSpec(base);
+
+		// to media path
 #ifdef _DEBUG
-		_snprintf(pathend, buff + buff_size - pathend, "\\..\\%s", path);
+		PathAppend(base, "\\..\\");
 #else
-		_snprintf(pathend, buff + buff_size - pathend, "\\%s", path);
+		PathAppend(base, "\\.\\");
 #endif
+
+		PathCombine(temp, base, path);
+		strncpy(buff, temp, buff_size);
 	}
 	else
 	{
 		strncpy(buff, path, buff_size);
 	}
+
 }
+
+// get relative path
+void config_get_relative_path(char * buff, int buff_size, const char * path)
+{
+	if (PathIsRelative(path))
+	{
+		strncpy(buff, path, buff_size);
+	}
+	else
+	{
+		char base[MAX_PATH];
+		config_get_media_path(base, sizeof(base), "");
+
+		if (_strnicmp(path, base, strlen(base)) == 0)
+		{
+			strncpy(buff, path + strlen(base), buff_size);
+		}
+		else
+		{
+			strncpy(buff, path, buff_size);
+		}
+	}
+}
+
 
 // get volume
 int config_get_output_volume()
 {
-	return cfg_output_volume;
+	return global.output_volume;
 }
 
 // set volume
@@ -1377,5 +1903,59 @@ void config_set_output_volume(int volume)
 {
 	if (volume < 0) volume = 0;
 	if (volume > 100) volume = 100;
-	cfg_output_volume = volume;
+	global.output_volume = volume;
+}
+
+// reset settings
+void config_default_key_setting()
+{
+	config_clear_key_setting();
+
+	// find resource
+	HRSRC hrsrc = FindResource(0, MAKEINTRESOURCE(IDR_TEXT_DEFAULT_SETTING), "TEXT");
+
+	if (hrsrc)
+	{
+		// load resource
+		HGLOBAL hrc = LoadResource(0, hrsrc);
+
+		if (hrc)
+		{
+			char line[1024];
+			char * line_end = line;
+
+			char* data = (char*)LockResource(hrc);
+			char* end = data + SizeofResource(NULL, hrsrc);
+
+			while (data < end)
+			{
+				if (*data == '\n')
+				{
+					if (line_end > line)
+					{
+						*line_end = 0;
+						config_parse_keymap_line(line);
+						line_end = line;
+					}
+				}
+				else
+				{
+					if (line_end < line + sizeof(line) - 1)
+						*line_end++ = *data;
+				}
+
+				data++;
+			}
+			
+			// last line
+			if (line_end > line)
+			{
+				*line_end = 0;
+				config_parse_keymap_line(line);
+				line_end = line;
+			}
+
+			FreeResource(hrc);
+		}
+	}
 }

@@ -7,12 +7,6 @@
 #include "config.h"
 #include "song.h"
 
-
-struct KeyboardLabel
-{
-	char text[16];
-};
-
 // buffer size
 
 #define DINPUT_BUFFER_SIZE	32
@@ -27,15 +21,23 @@ static LPDIRECTINPUTDEVICE8  keyboard = NULL;
 static HANDLE input_event = NULL;
 static HANDLE input_thread = NULL;
 
-// key map
-static KeyboardEvent key_map[256][3];
-static KeyboardLabel key_label[256];
+// auto generated keyup events
+static key_bind_t key_up_event[256];
+
+// original generated keyup event channel
+static byte key_up_event_ch[256];
+
+// delay keyup events
+static struct delay_keyup_t
+{
+	byte ch;
+	double timer;
+	key_bind_t bind;
+}
+delay_keyup_events[256];
 
 // keyboard enable
 static bool enable_keyboard = true;
-static char oct_shift[16] = {0};
-static char key_velocity[16] = {127};
-static char key_channel[16] = {0};
 
 // keyboard status
 static byte keyboard_status[256] = {0};
@@ -108,189 +110,66 @@ static void AllowAccessibilityShortcutKeys(bool bAllowKeys, bool bInitialize)
 // -----------------------------------------------------------------------------------------
 // disable windows key (works only in dll)
 // -----------------------------------------------------------------------------------------
-static HHOOK g_hKeyboardHook = NULL;
-static bool g_bWindowActive = false;
+static HHOOK keyboard_hook = NULL;
+static byte keydown_status[256] = {0};
 
 static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-    if (nCode < 0 || nCode != HC_ACTION)  // do not process message 
-        return CallNextHookEx( g_hKeyboardHook, nCode, wParam, lParam); 
- 
-    bool bEatKeystroke = false;
-    KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
-    switch (wParam) 
-    {
-        case WM_KEYDOWN:  
-        case WM_KEYUP:    
-        {
-            bEatKeystroke = (g_bWindowActive && ((p->vkCode == VK_LWIN) || (p->vkCode == VK_RWIN)));
-            break;
-        }
-    }
- 
-    if( bEatKeystroke )
-        return 1;
-    else
-        return CallNextHookEx(g_hKeyboardHook, nCode, wParam, lParam);
-}
-
-static void DisableWindowsKey(bool disable)
-{
-	if (disable)
+	if (enable_keyboard && nCode == HC_ACTION)
 	{
-		if (g_hKeyboardHook == NULL)
+		KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
+
+		uint extent = p->flags & 1;
+		uint code = (p->scanCode & 0xFF);
+		uint keydown = !(p->flags & LLKHF_UP);
+
+		// special case for scan code
+		switch (code)
 		{
-			g_hKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL,  LowLevelKeyboardProc, GetModuleHandle(NULL), 0);
-		}
-	}
-	else
-	{
-		if (g_hKeyboardHook)
-		{
-			UnhookWindowsHookEx( g_hKeyboardHook );
-			g_hKeyboardHook = NULL;
-		}
-	}
-}
-
-// -----------------------------------------------------------------------------------------
-// dinput functions
-// -----------------------------------------------------------------------------------------
-static DWORD __stdcall input_update_thread(void * param)
-{
-	while (input_thread)
-	{
-		DIDEVICEOBJECTDATA key_events[DINPUT_BUFFER_SIZE];
-		DWORD key_event_count = 0;
-		HRESULT hr = E_FAIL;
-
-		// get keyboard state
-		if (keyboard && enable_keyboard)
-		{
-			// get input events
-			key_event_count = DINPUT_BUFFER_SIZE;
-			hr = keyboard->GetDeviceData(sizeof(DIDEVICEOBJECTDATA), key_events, &key_event_count, 0);
-
-			// retry again
-			if (FAILED(hr))
-			{
-				key_event_count = DINPUT_BUFFER_SIZE;
-				hr = keyboard->Acquire();
-				if (SUCCEEDED(hr))
-					hr = keyboard->GetDeviceData(sizeof(DIDEVICEOBJECTDATA), key_events, &key_event_count, 0);
-			}
-
-
-			if (SUCCEEDED(hr))
-			{
-				for (uint i = 0; i < key_event_count; i++)
-				{
-					uint code = key_events[i].dwOfs;
-					uint keydown = key_events[i].dwData;
-
-					// send keyboard event
-					if (song_allow_input())
-						song_send_event(0, 0, code, keydown ? 1 : 0, true);
-				}
-			}
+		case 0x45:	extent = !extent;	break;
+		case 0x36:	extent = 0;
 		}
 
-		// simulate keyup event when keyboard is disabled
-		else
+		// translate extented key.
+		if (extent) code |= 0x80;
+
+		// trigger event only when key changed
+		if (keydown_status[code] != keydown)
 		{
-			keyboard_reset();
+			song_send_event(SM_SYSTEM, SMS_KEY_EVENT, code, keydown, true);
+			keydown_status[code] = keydown;
 		}
 
-		// wait event
-		WaitForSingleObject(input_event, -1);
+		if (!config_get_enable_hotkey() || p->vkCode == VK_LWIN || p->vkCode == VK_RWIN)
+			return 1;
 	}
 
-	return 0;
+	return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
-
 
 // initialize keyboard
 int keyboard_init()
 {
-	// create DInput8
-	if (FAILED(DirectInput8Create(GetModuleHandle(NULL), DIRECTINPUT_VERSION, IID_IDirectInput8, (void **)&directinput, NULL)))
-		goto error;
+	// install keyboard hook
+	keyboard_hook = SetWindowsHookEx(WH_KEYBOARD_LL,  LowLevelKeyboardProc, GetModuleHandle(NULL), 0);
 
-	// create the keyboard device
-	if (FAILED(directinput->CreateDevice(GUID_SysKeyboard, &keyboard, NULL)))
-		goto error;
-
-	// set data format
-	if (FAILED(keyboard->SetDataFormat(&c_dfDIKeyboard)))
-		goto error;
-
-	// set cooperative level
-	keyboard->SetCooperativeLevel(NULL, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-
-	// set property
-    DIPROPDWORD prop;
-    prop.diph.dwSize = sizeof(DIPROPDWORD);
-    prop.diph.dwHeaderSize = sizeof(DIPROPHEADER);
-    prop.diph.dwObj = 0;
-    prop.diph.dwHow = DIPH_DEVICE;
-    prop.dwData = DINPUT_BUFFER_SIZE;
-    keyboard->SetProperty(DIPROP_BUFFERSIZE, &prop.diph);
-
-	// create input event and thread
-	input_event = CreateEvent(NULL, false, FALSE, NULL);
-	input_thread = CreateThread(NULL, 0, &input_update_thread, NULL, NULL, NULL);
-
-	// set notification event
-	HRESULT hr = keyboard->SetEventNotification(input_event);
-	if (FAILED(hr))
-		goto error;
-
-	// disable accessibility shortcuts 
+	// disable accessibility key
 	AllowAccessibilityShortcutKeys(false, true);
-	return 0;
 
-error:
-	keyboard_shutdown();
-	return -1;
+	// clear keyup status
+	memset(delay_keyup_events, 0, sizeof(delay_keyup_events));
+
+	return 0;
 }
 
 // shutdown keyboard system
 void keyboard_shutdown()
 {
-	// enable accessibility shortcuts 
+	// enable accessibility key
 	AllowAccessibilityShortcutKeys(true, false);
 
-	// wait input thread exit
-	if (input_thread)
-	{
-		HANDLE thread = input_thread;
-		input_thread = NULL;
-		SetEvent(input_event);
-		WaitForSingleObject(thread, -1);
-		CloseHandle(thread);
-	}
-
-	// release keyboard device
-	if (keyboard)
-	{
-		keyboard->Unacquire();
-		keyboard->Release();
-		keyboard = NULL;
-	}
-
-	// release directinput8
-	if (directinput)
-	{
-		directinput->Release();
-		directinput = NULL;
-	}
-
-	// delete input event
-	if (input_event)
-	{
-		CloseHandle(input_event);
-		input_event = NULL;
-	}
+	UnhookWindowsHookEx(keyboard_hook);
+	keyboard_hook = NULL;
 }
 
 
@@ -299,16 +178,8 @@ void keyboard_enable(bool enable)
 {
 	enable_keyboard = enable;
 
-	// unacquire keyboard
-	if (keyboard)
-	{
-		if (enable_keyboard)
-			keyboard->Acquire();
-		else
-			keyboard->Unacquire();
-	}
-
-	SetEvent(input_event);
+	if (!enable)
+		keyboard_reset();
 }
 
 // reset keyboard
@@ -316,99 +187,25 @@ void keyboard_reset()
 {
 	for (int i = 0; i < ARRAY_COUNT(keyboard_status); i++)
 	{
-		if (keyboard_status[i])
+		if (keyboard_status[i] || keydown_status[i])
 		{
 			// send keyup event
-			song_send_event(0, 0, i, 0);
+			song_send_event(SM_SYSTEM, SMS_KEY_EVENT, i, 0);
 			keyboard_status[i] = 0;
+			keydown_status[i] = 0;
 		}
 	}
-}
 
-// clear keyboard
-void keyboard_clear()
-{
-	memset(key_map, 0, sizeof(key_map));
-	memset(key_label, 0, sizeof(key_label));
-}
-
-// get keyboard map
-void keyboard_get_map(byte code, KeyboardEvent * keydown, KeyboardEvent * keyup)
-{
-	if (keydown) *keydown = key_map[code][0];
-	if (keyup) *keyup = key_map[code][1];
-}
-
-// set keyboard action
-void keyboard_set_map(byte code, KeyboardEvent * keydown, KeyboardEvent * keyup)
-{
-	if (keydown) key_map[code][0] = *keydown;
-	if (keyup) key_map[code][1] = *keyup;
-}
-
-// set keyboard label
-void keyboard_set_label(byte code, const char * label)
-{
-	strncpy(key_label[code].text, label ? label : "", sizeof(KeyboardLabel));
-}
-
-// set keyboard label 
-const char* keyboard_get_label(byte code)
-{
-	return key_label[code].text;
-}
-
-// set oct shift
-void keyboard_set_octshift(byte channel, char shift)
-{
-	if (channel < ARRAY_COUNT(oct_shift))
+	// reset all delay keyup events
+	for (int i = 0; i < ARRAY_COUNT(delay_keyup_events); i++)
 	{
-		oct_shift[channel] = shift;
-	}
-}
-
-// get oct shift
-char keyboard_get_octshift(byte channel)
-{
-	if (channel < ARRAY_COUNT(oct_shift))
-		return oct_shift[channel];
-	else
-		return 0;
-}
-
-// set velocity
-void keyboard_set_velocity(byte channel, byte velocity)
-{
-	if (channel < ARRAY_COUNT(key_velocity))
-	{
-		key_velocity[channel] = velocity;
-	}
-}
-
-// get velocity
-byte keyboard_get_velocity(byte channel)
-{
-	if (channel < ARRAY_COUNT(key_velocity))
-		return key_velocity[channel];
-	else
-		return 0;
-}
-
-// get channel
-int keyboard_get_channel(byte channel)
-{
-	if (channel < ARRAY_COUNT(key_channel))
-		return key_channel[channel];
-	else
-		return 0;
-}
-
-// get channel
-void keyboard_set_channel(byte channel, byte value)
-{
-	if (channel < ARRAY_COUNT(key_channel))
-	{
-		key_channel[channel] = value;
+		if (delay_keyup_events[i].timer > 0)
+		{
+			key_bind_t bind = delay_keyup_events[i].bind;
+			song_send_event(bind.a, bind.b, bind.c, bind.d);
+			delay_keyup_events[i].timer = 0;
+			delay_keyup_events[i].ch = -1;
+		}
 	}
 }
 
@@ -448,29 +245,47 @@ void keyboard_key_event(int code, int keydown)
 	display_keyboard_event(code, keydown);
 
 	// translate keyboard event to midi event
-	KeyboardEvent map;
+	key_bind_t map;
 	
 	// keydown event
 	if (keydown)
 	{
-		map = key_map[code][0];
-		key_map[code][2].action = 0;
+		config_get_key_bind(code, &map, NULL);
 
-		if (map.action >= 0x80)
+		// clear keyup event
+		key_up_event[code].a = 0;
+			
+		if (map.a >= 0x80)
 		{
+			int ch = map.a & 0xf;
+
 			// modify event
-			midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, oct_shift[map.action & 0xf] * 12 + midi_get_key_signature(), key_velocity[map.action & 0xf]);
+			midi_modify_event(map.a, map.b, map.c, map.d, config_get_key_octshift(ch) * 12 + config_get_key_signature(), config_get_key_velocity(ch));
 
 			// remap channel
-			map.action = (map.action & 0xf0) | key_channel[map.action & 0xf];
+			map.a = (map.a & 0xf0) | config_get_key_channel(ch);
 
 			// auto generate keyup event
-			if ((map.action & 0xf0) == 0x90)
+			if ((map.a & 0xf0) == 0x90)
 			{
-				key_map[code][2].action = 0x80 | key_channel[map.action & 0xf];
-				key_map[code][2].arg1 = map.arg1;
-				key_map[code][2].arg2 = map.arg2;
-				key_map[code][2].arg3 = map.arg3;
+				// reset delay keyup events
+				for (int i = 0; i < ARRAY_COUNT(delay_keyup_events); i++)
+				{
+					if (delay_keyup_events[i].timer > 0 &&
+						delay_keyup_events[i].ch == ch &&
+						delay_keyup_events[i].bind.b == map.b)
+					{
+						key_bind_t bind = delay_keyup_events[i].bind;
+						song_send_event(bind.a, bind.b, bind.c, bind.d);
+						delay_keyup_events[i].timer = 0;
+					}
+				}
+
+				key_up_event_ch[code] = ch;
+				key_up_event[code].a = 0x80 | (map.a & 0x0f);
+				key_up_event[code].b = map.b;
+				key_up_event[code].c = map.c;
+				key_up_event[code].d = map.d;
 			}
 		}
 	}
@@ -478,13 +293,59 @@ void keyboard_key_event(int code, int keydown)
 	// keyup event
 	else
 	{
-		map = key_map[code][2].action ? key_map[code][2] : key_map[code][1];
+		if (key_up_event[code].a)
+		{
+			int delay_up = config_get_delay_keyup(key_up_event_ch[code]);
+
+			if (delay_up)
+			{
+				for (int i = 0; i < ARRAY_COUNT(delay_keyup_events); i++)
+				{
+					if (delay_keyup_events[i].timer <= 0)
+					{
+						delay_keyup_events[i].timer = 100 * delay_up;
+						delay_keyup_events[i].ch = key_up_event_ch[code];
+						delay_keyup_events[i].bind = key_up_event[code];
+						break;
+					}
+				}
+
+				// send event to display to correct midi keyup
+				display_midi_event(key_up_event[code].a, key_up_event[code].b, key_up_event[code].c, key_up_event[code].d);
+			}
+			else
+			{
+				map = key_up_event[code];
+			}
+		}
+		else
+			config_get_key_bind(code, NULL, &map);
 	}
 
 	// send midi event
-	if (map.action)
+	if (map.a)
 	{
 		// send event to song
-		song_send_event(map.action, map.arg1, map.arg2, map.arg3);
+		song_send_event(map.a, map.b, map.c, map.d);
+	}
+}
+
+// keyboard event
+void keyboard_update(double time_elapsed)
+{
+	for (int code = 0; code < ARRAY_COUNT(delay_keyup_events); code++)
+	{
+		if (delay_keyup_events[code].timer > 0)
+		{
+			delay_keyup_events[code].timer -= time_elapsed;
+
+			if (delay_keyup_events[code].timer <= 0)
+			{
+				key_bind_t bind = delay_keyup_events[code].bind;
+
+				// send keyup event
+				song_send_event(bind.a, bind.b, bind.c, bind.d);
+			}
+		}
 	}
 }

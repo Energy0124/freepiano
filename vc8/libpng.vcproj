@@ -40,7 +40,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="../3rd/zlib"
-				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS"
+				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -102,7 +102,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				AdditionalIncludeDirectories="../3rd/zlib"
-				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS"
+				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE"
 				RuntimeLibrary="0"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"

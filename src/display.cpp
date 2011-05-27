@@ -1700,36 +1700,36 @@ static void draw_keyboard()
 	{
 		if (key->x2 > key->x1)
 		{
-			KeyboardEvent map;
+			key_bind_t map;
 
 			// get keyboard map
-			keyboard_get_map(key - keyboard_states, &map, NULL);
+			config_get_key_bind(key - keyboard_states, &map, NULL);
 
 			// modify keyboard map
-			midi_modify_event(map.action, map.arg1, map.arg2, map.arg3, keyboard_get_octshift(map.action & 0xf) * 12, keyboard_get_velocity(map.action & 0xf));
+			midi_modify_event(map.a, map.b, map.c, map.d, config_get_key_octshift(map.a & 0xf) * 12, config_get_key_velocity(map.a & 0xf));
 
 			float x1 = key->x1;
 			float y1 = key->y1;
 			float x2 = key->x2;
 			float y2 = key->y2;
 
-			uint img = map.action ? keyboard_note_down : keyboard_unmapped_down;
+			uint img = map.a ? keyboard_note_down : keyboard_unmapped_down;
 
 			// draw key button
 			if (!key->status) img ++;
 			draw_image_border(img, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
 
 			// key label
-			const char * label = keyboard_get_label(key - keyboard_states);
+			const char * label = config_get_key_label(key - keyboard_states);
 			if (label[0])
 			{
 				draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, label, 10, 1, 1);
 			}
 
 			// draw note
-			else if ((map.action & 0xF0) == 0x90)
+			else if ((map.a & 0xF0) == 0x90)
 			{
-				byte note = map.arg1;
+				byte note = map.b;
 
 				if (note > 12)
 				{
@@ -1813,7 +1813,7 @@ static void draw_keyboard_controls()
 	draw_string(92, 222, 0xff6e6e6e, buff, 11, 1, 0);
 
 	// midi key
-	switch (midi_get_key_signature())
+	switch (config_get_key_signature())
 	{
 	case 0:		strcpy(buff, "C(0)"); break;
 	case 1:		strcpy(buff, "bD(+1)"); break;
@@ -1827,7 +1827,7 @@ static void draw_keyboard_controls()
 	case -3:	strcpy(buff, "A(-3)"); break;
 	case -2:	strcpy(buff, "bB(-2)"); break;
 	case -1:	strcpy(buff, "B(-1)"); break;
-	default:	_snprintf(buff, sizeof(buff), "%d", midi_get_key_signature()); break;
+	default:	_snprintf(buff, sizeof(buff), "%d", config_get_key_signature()); break;
 	}
 
 	draw_string(202, 222, 0xff6e6e6e, buff, 11, 1, 0);
@@ -1850,15 +1850,15 @@ static void draw_keyboard_controls()
 		draw_image(check_button_up, 359, 220, 359 + 18, 220 + 18, 0xff4d5c37);
 
 	// velocity
-	_snprintf(buff, sizeof(buff), "%d", keyboard_get_velocity(0));
+	_snprintf(buff, sizeof(buff), "%d", config_get_key_velocity(0));
 	draw_string(512, 222, 0xff6e6e6e, buff, 11, 1, 0);
-	_snprintf(buff, sizeof(buff), "%d", keyboard_get_velocity(1));
+	_snprintf(buff, sizeof(buff), "%d", config_get_key_velocity(1));
 	draw_string(554, 222, 0xff6e6e6e, buff, 11, 1, 0);
 
 	// octshift
 	{
-		int s1 = keyboard_get_octshift(0);
-		int s2 = keyboard_get_octshift(1);
+		int s1 = config_get_key_octshift(0);
+		int s2 = config_get_key_octshift(1);
 
 		_snprintf(buff, sizeof(buff), "%s%d", s1 > 0 ? "+" : s1 < 0 ? "-" : "", abs(s1));
 		draw_string(672, 222, 0xff6e6e6e, buff, 11, 1, 0);
@@ -1872,14 +1872,7 @@ static void draw_keyboard_controls()
  void display_render()
 {
 	// begin scene
-	if (FAILED(device->BeginScene()))
-	{
-		d3d_device_lost();
-		d3d_device_reset();
-		device->Present(NULL, NULL, NULL, NULL);
-		return;
-	}
-
+	if (SUCCEEDED(device->BeginScene()))
 	{
 		float sx = 2.0f / (float)display_width;
 		float sy = -2.0f / (float)display_height;
@@ -1897,32 +1890,43 @@ static void draw_keyboard_controls()
 
 		device->SetTransform(D3DTS_PROJECTION, &projection);
 		device->SetTransform(D3DTS_VIEW, &matrix_identity);
-	}
 
 #ifdef _DEBUG
-	if (GetAsyncKeyState(VK_CONTROL) && GetAsyncKeyState(VK_F1))
-	{
-		// clear backbuffer
-		device->Clear(0, NULL, D3DCLEAR_TARGET, 0xff00ff00, 0, 0);
+		if (GetAsyncKeyState(VK_CONTROL) && GetAsyncKeyState(VK_F1))
+		{
+			// clear backbuffer
+			device->Clear(0, NULL, D3DCLEAR_TARGET, 0xff00ff00, 0, 0);
 
-		// set white texture
-		set_texture(resource_texture);
+			// set white texture
+			set_texture(resource_texture);
 
-		// draw resource texture
-		draw_sprite(0, 0, 512, 512, 0, 0, 512, 512, 0xffffffff);
-	}
-	else
+			// draw resource texture
+			draw_sprite(0, 0, 512, 512, 0, 0, 512, 512, 0xffffffff);
+		}
+		else
 #endif
-	{
-		draw_image(background, 0, 0, (float)display_width, (float)display_height, 0xffffffff);
-		draw_keyboard();
-		draw_midi_keyboard();
-		draw_keyboard_controls();
+		{
+			draw_image(background, 0, 0, (float)display_width, (float)display_height, 0xffffffff);
+			draw_keyboard();
+			draw_midi_keyboard();
+			draw_keyboard_controls();
+		}
+
+		device->EndScene();
 	}
 
-	device->EndScene();
-	device->Present(NULL, NULL, NULL, NULL);
-}
+	HRESULT hr = device->Present(NULL, NULL, NULL, NULL);
+	if (hr == D3DERR_DEVICELOST)
+	{
+		hr = device->TestCooperativeLevel();
+
+		if (D3DERR_DEVICENOTRESET == hr)
+		{
+			d3d_device_lost();
+			d3d_device_reset();
+		}
+	}
+ }
 
 // init display
 int display_init(HWND hwnd)
@@ -1989,11 +1993,16 @@ void display_midi_event(byte data1, byte data2, byte data3, byte data4)
 {
 	switch(data1 & 0xf0)
 	{
-	case 0x90:	midi_key_states[data2].status = data3; break;
-	case 0x80:	midi_key_states[data2].status = 0; break;
-	}
+	case 0x90:
+		midi_key_states[data2].status = data3;
+		PostMessage(display_hwnd, WM_TIMER, 0, 0);
+		break;
 
-	PostMessage(display_hwnd, WM_TIMER, 0, 0);
+	case 0x80:
+		midi_key_states[data2].status = 0;
+		PostMessage(display_hwnd, WM_TIMER, 0, 0);
+		break;
+	}
 }
 
 // find keyboard key
@@ -2103,8 +2112,7 @@ void dispatch_command(int command, int action)
 		break;
 
 	case CMD_MIDI_KEY:
-		if (song_allow_input())
-			song_send_event(1, action, 1, 0, true);
+		song_send_event(SM_KEY_SIGNATURE, action, 1, 0, true);
 		break;
 
 	case CMD_RECORD:
@@ -2122,19 +2130,19 @@ void dispatch_command(int command, int action)
 		break;
 
 	case CMD_VELOCITY_LEFT:
-		song_send_event(3, 0, action, 10, true);
+		song_send_event(SM_VELOCITY, 0, action, 10, true);
 		break;
 
 	case CMD_VELOCITY_RIGHT:
-		song_send_event(3, 1, action, 10, true);
+		song_send_event(SM_VELOCITY, 1, action, 10, true);
 		break;
 
 	case CMD_OCTSHIFT_LEFT:
-		song_send_event(2, 0, action, 1, true);
+		song_send_event(SM_OCTSHIFT, 0, action, 1, true);
 		break;
 
 	case CMD_OCTSHIFT_RIGHT:
-		song_send_event(2, 1, action, 1, true);
+		song_send_event(SM_OCTSHIFT, 1, action, 1, true);
 		break;
 	}
 }
@@ -2237,7 +2245,7 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z)
 		break;
 	}
 
-	if (song_allow_input() && !handled)
+	if (!handled)
 	{
 		keycode = find_keyboard_key(x, y);
 		midinote = find_midi_note(x, y, &velocity);
@@ -2247,10 +2255,10 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z)
 	if (keycode != previous_keycode)
 	{
 		if (previous_keycode != -1)
-			song_send_event(0, 0, previous_keycode, 0, true);
+			song_send_event(SM_SYSTEM, SMS_KEY_EVENT, previous_keycode, 0, true);
 
 		if (keycode != -1)
-			song_send_event(0, 0, keycode, 1, true);
+			song_send_event(SM_SYSTEM, SMS_KEY_EVENT, keycode, 1, true);
 
 		previous_keycode = keycode;
 	}

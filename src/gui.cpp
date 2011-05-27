@@ -20,6 +20,9 @@
 // enable vistual style.
 #pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
+// constants
+static const int default_client_width = 760;
+static const int default_client_height = 340;
 
 // -----------------------------------------------------------------------------------------
 // config window
@@ -201,7 +204,7 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
 
 			// dsound output
 			ComboBox_SetItemHeight(output_list, 0, 16);
-			ComboBox_AddString(output_list, "(无)");
+			ComboBox_AddString(output_list, "(自动选择)");
 			ComboBox_SetCurSel(output_list, 0);
 			dsound_enum_device(callback(OUTPUT_TYPE_DSOUND, output_list));
 			wasapi_enum_device(callback(OUTPUT_TYPE_WASAPI, output_list));
@@ -267,7 +270,7 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
 
 					if (result)
 					{
-						config_select_output(OUTPUT_TYPE_NONE, "");
+						config_select_output(OUTPUT_TYPE_AUTO, "");
 						ComboBox_SetCurSel(GetDlgItem(hWnd, IDC_OUTPUT_LIST), 0);
 					}
 
@@ -343,36 +346,49 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 			char buff[256];
 
 			// velocity edit
-			_snprintf(buff, sizeof(buff), "%d", keyboard_get_velocity(channel));
+			_snprintf(buff, sizeof(buff), "%d", config_get_key_velocity(channel));
 			HWND edit = GetDlgItem(hWnd, IDC_KEY_VELOCITY1 + channel);
 			SetDlgItemText(hWnd, IDC_KEY_VELOCITY1 + channel, buff);
 
-			SetWindowSubclass(edit, EditSubProc, 0, 0);
 
 			// velocity slider
 			HWND velocity_slider = GetDlgItem(hWnd, IDC_KEY_VELOCITY_SLIDER1 + channel);
 			SendMessage(velocity_slider, TBM_SETRANGE, (WPARAM) TRUE, (LPARAM) MAKELONG(0, 127));
-			SendMessage(velocity_slider, TBM_SETPOS, (WPARAM) TRUE, (LPARAM) keyboard_get_velocity(channel));
+			SendMessage(velocity_slider, TBM_SETPOS, (WPARAM) TRUE, (LPARAM) config_get_key_velocity(channel));
 
 			// shift
 			HWND octshift = GetDlgItem(hWnd, IDC_KEY_SHIFT1 + channel);
+			ComboBox_ResetContent(octshift);
 			for (int i = 0; i < ARRAY_COUNT(keyboard_shifts); i++)
 			{
 				ComboBox_AddString(octshift, keyboard_shifts[i]);
-				if (atoi(keyboard_shifts[i]) == keyboard_get_octshift(channel))
+				if (atoi(keyboard_shifts[i]) == config_get_key_octshift(channel))
 					ComboBox_SetCurSel(octshift, i);
 			}
 
 			// channel
 			HWND keychannel = GetDlgItem(hWnd, IDC_KEY_CHANNEL1 + channel);
+			ComboBox_ResetContent(keychannel);
 			for (int i = 0; i < 16; i++)
 			{
 				char buff[256];
 				_snprintf(buff, sizeof(buff), "%d", i);
 				ComboBox_AddString(keychannel, buff);
-				if (i == keyboard_get_channel(channel))
+				if (i == config_get_key_channel(channel))
 					ComboBox_SetCurSel(keychannel, i);
 			}
+		}
+
+		// sustain pedal
+		{
+			char buff[256];
+
+			HWND auto_pedal = GetDlgItem(hWnd, IDC_KEY_AUTO_PEDAL);
+			HWND auto_pedal_slider = GetDlgItem(hWnd, IDC_KEY_AUTO_PEDAL_SLIDER);
+
+			_snprintf(buff, sizeof(buff), "%d", config_get_auto_pedal());
+			SetDlgItemText(hWnd, IDC_KEY_AUTO_PEDAL, buff);
+			SetWindowSubclass(auto_pedal, EditSubProc, 0, 0);
 		}
 		break;
 
@@ -385,11 +401,24 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 			{
 				int pos = SendMessage(velocity_slider, TBM_GETPOS, 0, 0);
 
-				keyboard_set_velocity(channel, pos);
+				config_set_key_velocity(channel, pos);
 
 				char temp[256];
-				_snprintf(temp, sizeof(temp), "%d", keyboard_get_velocity(channel));
+				_snprintf(temp, sizeof(temp), "%d", config_get_key_velocity(channel));
 				SetDlgItemText(hWnd, IDC_KEY_VELOCITY1 + channel, temp);
+			}
+		}
+		{
+			HWND pedal_slider = GetDlgItem(hWnd, IDC_KEY_AUTO_PEDAL_SLIDER);
+			if (pedal_slider == (HWND)lParam)
+			{
+				int pos = SendMessage(pedal_slider, TBM_GETPOS, 0, 0);
+
+				config_set_auto_pedal(pos);
+
+				char temp[256];
+				_snprintf(temp, sizeof(temp), "%d", config_get_auto_pedal());
+				SetDlgItemText(hWnd, IDC_KEY_AUTO_PEDAL, temp);
 			}
 		}
 		break;
@@ -419,10 +448,10 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 							if (value < 0) value = 0;
 							if (value > 127) value = 127;
 
-							keyboard_set_velocity(channel, value);
+							config_set_key_velocity(channel, value);
 						}
 
-						value = keyboard_get_velocity(channel);
+						value = config_get_key_velocity(channel);
 						SendMessage(GetDlgItem(hWnd, IDC_KEY_VELOCITY_SLIDER1 + channel), TBM_SETPOS, 1, value);
 						_snprintf(temp, sizeof(temp), "%d", value);
 						SetDlgItemText(hWnd, IDC_KEY_VELOCITY1 + channel, temp);
@@ -440,7 +469,7 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 						char temp[256];
 						GetDlgItemText(hWnd, IDC_KEY_SHIFT1 + channel, temp, sizeof(temp));
 
-						keyboard_set_octshift(channel, atoi(temp));
+						config_set_key_octshift(channel, atoi(temp));
 					}
 					break;
 				}
@@ -456,7 +485,7 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 						char temp[256];
 						GetDlgItemText(hWnd, IDC_KEY_CHANNEL1 + channel, temp, sizeof(temp));
 
-						keyboard_set_channel(channel, atoi(temp));
+						config_set_key_channel(channel, atoi(temp));
 					}
 					break;
 				}
@@ -473,61 +502,30 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
 {
 	struct helpers
 	{
-		static void refresh_list(HWND combolist)
-		{
-			// clear list
-			while (ComboBox_GetCount(combolist))
-				ComboBox_DeleteString(combolist, ComboBox_GetCount(combolist) - 1);
-
-			// set text
-			SetWindowText(combolist, config_get_keymap());
-
-			// add files
-			WIN32_FIND_DATAA data;
-			HANDLE finddata = FindFirstFileA("*.map", &data);
-
-			if (finddata != INVALID_HANDLE_VALUE)
-			{
-				do
-				{
-					ComboBox_AddString(combolist, data.cFileName);
-				}
-				while (FindNextFileA(finddata, &data));
-			}
-			FindClose(finddata);
-		}
-
 		static void update_content(HWND edit)
 		{
-			// get key config
-			char buff[40960];
-			char * pos = buff;
-			char * end = buff + sizeof(buff);
+			uint buff_size = 1024 * 1024;
+			char * buff = new char[buff_size];
 
-			for (int key = 0; key < 256; key++)
-				pos += config_save_keymap(key, pos, end - pos);
+			// save keymap config
+			config_save_keymap(buff, buff_size);
 
 			uint tabstops = 46;
 			Edit_SetTabStops(edit, 1, &tabstops);
 			Edit_SetText(edit, buff);
+
+			delete[] buff;
 		}
 
 		static void apply_content(HWND edit)
 		{
-			// reset keyboard map
-			for (int code = 0; code < 256; code++)
-			{
-				KeyboardEvent empty;
-				keyboard_set_map(code, &empty, &empty);
-			}
+			uint buff_size = 1024 * 1024;
+			char * buff = new char[buff_size];
 
-			// apply configs
-			for (int line = 0; line < Edit_GetLineCount(edit); line++)
-			{
-				char buffer[4096];
-				Edit_GetLine(edit, line, buffer, sizeof(buffer));
-				config_keymap_config(buffer);
-			}
+			Edit_GetText(edit, buff, buff_size);
+			config_parse_keymap(buff);
+
+			delete[] buff;
 		}
 	};
 
@@ -535,10 +533,8 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
 	{
 	case WM_INITDIALOG:
 		{
-			HWND output_list = GetDlgItem(hWnd, IDC_MAP_NAME);
 			HWND output_content = GetDlgItem(hWnd, IDC_MAP_CONTENT);
 
-			helpers::refresh_list(output_list);
 			helpers::update_content(output_content);
 		}
 		break;
@@ -547,47 +543,42 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
 		switch (LOWORD(wParam))
 		{
 		case IDC_MAP_SAVE:
-			char config_name[256];
-			GetDlgItemText(hWnd, IDC_MAP_NAME, config_name, sizeof(config_name));
-
-			if (config_name[0])
-			{
-				PathRenameExtension(config_name, ".map");
-
-				char config_path[256];
-				config_get_media_path(config_path, sizeof(config_path), config_name);
-
-				FILE * fp = fopen(config_path, "w");
-				if (fp)
-				{
-					HWND output_content = GetDlgItem(hWnd, IDC_MAP_CONTENT);
-					HWND output_list = GetDlgItem(hWnd, IDC_MAP_NAME);
-
-					helpers::apply_content(output_content);
-					helpers::update_content(output_content);
-
-					for (int line = 0; line < Edit_GetLineCount(output_content); line++)
-					{
-						char buffer[4096];
-						Edit_GetLine(output_content, line, buffer, sizeof(buffer));
-						fputs(buffer, fp);
-						fputs("\n", fp);
-					}
-					fclose(fp);
-
-					config_set_keymap(config_name);
-					helpers::refresh_list(output_list);
-				}
-			}
+			helpers::update_content(GetDlgItem(hWnd, IDC_MAP_CONTENT));
 			break;
 
 		case IDC_MAP_APPLY:
-			HWND output_list = GetDlgItem(hWnd, IDC_MAP_NAME);
 			HWND output_content = GetDlgItem(hWnd, IDC_MAP_CONTENT);
 
 			helpers::apply_content(output_content);
 			helpers::update_content(output_content);
-			helpers::refresh_list(output_list);
+			break;
+		}
+		break;
+	}
+
+	return 0;
+}
+
+static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg)
+	{
+	case WM_INITDIALOG:
+		{
+			CheckDlgButton(hWnd, IDC_GUI_ENABLE_RESIZE, config_get_enable_resize_window());
+			CheckDlgButton(hWnd, IDC_GUI_ENABLE_HOTKEY, !config_get_enable_hotkey());
+		}
+		break;
+
+	case WM_COMMAND:
+		switch (LOWORD(wParam))
+		{
+		case IDC_GUI_ENABLE_RESIZE:
+			config_set_enable_resize_window(IsDlgButtonChecked(hWnd, IDC_GUI_ENABLE_RESIZE) != 0);
+			break;
+
+		case IDC_GUI_ENABLE_HOTKEY:
+			config_set_enable_hotkey(!IsDlgButtonChecked(hWnd, IDC_GUI_ENABLE_HOTKEY));
 			break;
 		}
 		break;
@@ -608,6 +599,7 @@ setting_pages[] =
 	{ IDD_SETTING_MIDI,		settings_midi_proc },
 	{ IDD_SETTING_KEYBOARD,	settings_keyboard_proc },
 	{ IDD_SETTING_KEYMAP,	settings_keymap_proc },
+	{ IDD_SETTING_GUI,		settings_gui_proc },
 };
 
 static void add_setting_page(HWND list, char * text, int page_id)
@@ -641,8 +633,8 @@ static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 			HWND setting_list = GetDlgItem(hWnd, IDC_SETTING_LIST);
 			add_setting_page(setting_list, "音频", IDD_SETTING_AUDIO);
 			add_setting_page(setting_list, "MIDI", IDD_SETTING_MIDI);
-			add_setting_page(setting_list, "键盘", IDD_SETTING_KEYBOARD);
-			add_setting_page(setting_list, "布局", IDD_SETTING_KEYMAP);
+			add_setting_page(setting_list, "键盘布局", IDD_SETTING_KEYMAP);
+			add_setting_page(setting_list, "界面设置", IDD_SETTING_GUI);
 		}
 		break;
 
@@ -695,7 +687,7 @@ static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 	return 0;
 }
 
-void settings_show(int page = IDD_SETTING_AUDIO)
+static void settings_show(int page = IDD_SETTING_AUDIO)
 {
 	HINSTANCE instance = GetModuleHandle(NULL);
 
@@ -781,6 +773,8 @@ static HMENU menu_key_note = NULL;
 static HMENU menu_key_note_shift = NULL;
 static HMENU menu_key_channel = NULL;
 static HMENU menu_key_control = NULL;
+static HMENU menu_play_speed = NULL;
+static HMENU menu_setting_group = NULL;
 
 static byte selected_key = 0;
 
@@ -794,9 +788,12 @@ enum MENU_ID
 	MENU_ID_VST_PLUGIN_EDITOR,
 	MENU_ID_CONFIG_DEVICE,
 	MENU_ID_KEY_MAP,
+	MENU_ID_KEY_MAP_LOAD,
+	MENU_ID_KEY_MAP_SAVE,
 	MENU_ID_MIDI_SHIFT,
 	MENU_ID_KEY_NOTE,
 	MENU_ID_KEY_NOTE_SHIFT,
+	MENU_ID_KEY_NOTE_CHANNEL,
 	MENU_ID_KEY_CONTROL,
 	MENU_ID_KEY_CLEAR,
 	MENU_ID_KEY_CONFIG,
@@ -808,6 +805,15 @@ enum MENU_ID
 	MENU_ID_FILE_RECORD,
 	MENU_ID_FILE_PLAY,
 	MENU_ID_FILE_STOP,
+
+	MENU_ID_PLAY_SPEED,
+	MENU_ID_SETTING_GROUP,
+	MENU_ID_SETTING_GROUP_ADD,
+	MENU_ID_SETTING_GROUP_DEL,
+	MENU_ID_SETTING_GROUP_COPY,
+	MENU_ID_SETTING_GROUP_PASTE,
+	MENU_ID_SETTING_GROUP_DEFAULT,
+	MENU_ID_SETTING_GROUP_CLEAR,
 };
 
 // midi shift menus
@@ -846,12 +852,17 @@ key_controls[] =
 	{ "停止",				"Stop",		"Stop" },
 	{ "曲调+",				"Key+",		"KeySignature Inc 1" },
 	{ "曲调-",				"Key-",		"KeySignature Dec 1" },
-	{ "左手八度+",			"Oct+",		"KeyboardOctshift 0 Inc 1" },
-	{ "左手八度-",			"Oct-",		"KeyboardOctshift 0 Dec 1" },
-	{ "右手八度+",			"Oct+",		"KeyboardOctshift 1 Inc 1" },
-	{ "右手八度-",			"Oct-",		"KeyboardOctshift 1 Dec 1" },
-	{ "延音踏板",			"RPDL",		"Controller 0 SustainPedal 127", "Controller 0 SustainPedal 0" },
-	{ "延音踏板（翻转）",	"RPDL",		"Controller 0 SustainPedal 0", "Controller 0 SustainPedal 127" },
+	{ "左手八度+",			"LO+",		"Octshift 0 Inc 1" },
+	{ "左手八度-",			"LO-",		"Octshift 0 Dec 1" },
+	{ "右手八度+",			"RO+",		"Octshift 1 Inc 1" },
+	{ "右手八度-",			"R0-",		"Octshift 1 Dec 1" },
+	{ "分组+",				"GP+",		"Group Inc 1" },
+	{ "分组-",				"GP-",		"Group Dec 1" },
+	{ "分组0",				"GP0",		"Group Set 0" },
+	{ "分组1",				"GP1",		"Group Set 1" },
+	{ "分组2",				"GP2",		"Group Set 2" },
+	{ "延音踏板",			"RSP",		"Controller 0 SustainPedal 127", "Controller 0 SustainPedal 0" },
+	{ "延音踏板（翻转）",	"RSP",		"Controller 0 SustainPedal 0", "Controller 0 SustainPedal 127" },
 };
 
 
@@ -874,6 +885,8 @@ static int menu_init()
 	menu_key_note_shift = CreatePopupMenu();
 	menu_key_channel = CreatePopupMenu();
 	menu_key_control = CreatePopupMenu();
+	menu_play_speed = CreatePopupMenu();
+	menu_setting_group = CreatePopupMenu();
 
 	MENUINFO menuinfo;
 	menuinfo.cbSize = sizeof(MENUINFO);
@@ -886,6 +899,7 @@ static int menu_init()
 	AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_record, "录音");
 	AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_instrument, "音源");
 	AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_keymap, "键盘布局");
+	AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_setting_group, "键盘配置");
 	AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_config, "设置");
 	AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_about, "帮助");
 	
@@ -898,6 +912,7 @@ static int menu_init()
 
 	AppendMenu(menu_config, MF_STRING, (UINT_PTR)MENU_ID_CONFIG_DEVICE, "选项...");
 	AppendMenu(menu_config, MF_POPUP,  (UINT_PTR)menu_midi_shift, "曲调");
+	AppendMenu(menu_config, MF_POPUP, (UINT_PTR)menu_play_speed, "播放速度");
 
 	AppendMenu(menu_key_popup,	MF_POPUP, (UINT_PTR)menu_key_note, "音高");
 	AppendMenu(menu_key_popup,	MF_POPUP, (UINT_PTR)menu_key_note_shift, "八度音高");
@@ -1013,52 +1028,63 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case MENU_ID_MIDI_SHIFT:
 		if (pos >= 0 && pos < ARRAY_COUNT(midi_shift_items))
 		{
-			midi_set_key_signature(midi_shift_items[pos].shift);
+			config_set_key_signature(midi_shift_items[pos].shift);
 		}
 		break;
 
 	case MENU_ID_KEY_NOTE:
 		{
-			KeyboardEvent events[2];
-			keyboard_get_map(selected_key, events + 0, events + 1);
+			key_bind_t keydown;
+			config_get_key_bind(selected_key, &keydown, NULL);
 
-			for (int i = 0; i < 2; i++)
+			if ((keydown.a >> 4) == 0x9)
 			{
-				switch (events[i].action >> 4)
-				{
-				case 0x8: case 0x9:
-					events[i].arg1 = (byte)((events[i].arg1 / 12) * 12 + pos);
-					break;
-
-				default:
-					events[i].action = (0x9 - i) << 4;
-					events[i].arg1 = (byte)(60 + pos);
-					events[i].arg2 = 127;
-				}
+				keydown.b = (byte)((keydown.b / 12) * 12 + pos);
+			}
+			else
+			{
+				keydown.a = 0x90;
+				keydown.b = (byte)(60 + pos);
+				keydown.c = 127;
 			}
 
-			keyboard_set_label(selected_key, NULL);
-			keyboard_set_map(selected_key, events + 0, events + 1);
+			config_set_key_label(selected_key, NULL);
+			config_set_key_bind(selected_key, &keydown, NULL);
 		}
 		break;
 
 	case MENU_ID_KEY_NOTE_SHIFT:
 		{
-			KeyboardEvent events[2];
-			keyboard_get_map(selected_key, events + 0, events + 1);
+			key_bind_t keydown;
+			config_get_key_bind(selected_key, &keydown, NULL);
 
-			for (int i = 0; i < 2; i++)
+			if ((keydown.a >> 4) == 0x9)
 			{
-				switch (events[i].action >> 4)
-				{
-				case 0x8: case 0x9:
-					events[i].arg1 = (byte)(12 + pos * 12 + (events[i].arg1 % 12));
-					break;
-				}
+				keydown.b = (byte)(12 + pos * 12 + (keydown.b % 12));
+			}
+			else
+			{
+				keydown.a = 0x90;
+				keydown.b = (byte)(12 + pos * 12);
+				keydown.c = 127;
 			}
 
-			keyboard_set_label(selected_key, NULL);
-			keyboard_set_map(selected_key, events + 0, events + 1);
+			config_set_key_label(selected_key, NULL);
+			config_set_key_bind(selected_key, &keydown, NULL);
+		}
+		break;
+
+	case MENU_ID_KEY_NOTE_CHANNEL:
+		{
+			key_bind_t keydown;
+			config_get_key_bind(selected_key, &keydown, NULL);
+
+			if ((keydown.a >> 4) == 0x9)
+			{
+				keydown.a = static_cast<byte>((keydown.a & 0xf0) | (pos & 0x0f));
+			}
+
+			config_set_key_bind(selected_key, &keydown, NULL);
 		}
 		break;
 
@@ -1069,25 +1095,25 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			if (key_controls[pos].keydown)
 			{
 				_snprintf(temp, sizeof(temp), "keydown %d %s", selected_key, key_controls[pos].keydown);
-				config_keymap_config(temp);
+				config_parse_keymap(temp);
 			}
 			if (key_controls[pos].keyup)
 			{
 				_snprintf(temp, sizeof(temp), "keyup %d %s", selected_key, key_controls[pos].keyup);
-				config_keymap_config(temp);
+				config_parse_keymap(temp);
 			}
 			if (key_controls[pos].label)
 			{
-				keyboard_set_label(selected_key, key_controls[pos].label);
+				config_set_key_label(selected_key, key_controls[pos].label);
 			}
 		}
 		break;
 
 	case MENU_ID_KEY_CLEAR:
 		{
-			KeyboardEvent events[2];
-			keyboard_set_map(selected_key, events + 0, events + 1);
-			keyboard_set_label(selected_key, NULL);
+			key_bind_t events[2];
+			config_set_key_bind(selected_key, events + 0, events + 1);
+			config_set_key_label(selected_key, NULL);
 		}
 		break;
 
@@ -1133,13 +1159,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					result = song_open(ofn.lpstrFile);
 
 				if (result == 0)
-				{
 					song_start_playback();
-				}
-				else
-				{
-					MessageBox(gui_get_window(), "打开乐谱失败！", APP_NAME, MB_OK);
-				}
 			}
 		}
 		break;
@@ -1190,6 +1210,109 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		song_stop_record();
 		break;
 
+	case MENU_ID_PLAY_SPEED:
+		if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION))
+		{
+			double speed = atof(buff);
+			if (speed <= 0) speed = 1;
+			song_set_play_speed(speed);
+		}
+		break;
+
+	case MENU_ID_KEY_MAP_LOAD:
+		{
+			char dir[260];
+			char temp[260];
+
+			config_get_media_path(dir, sizeof(dir), config_get_keymap());
+			PathRemoveFileSpec(dir);
+
+			OPENFILENAME ofn;
+			memset(&ofn, 0, sizeof(ofn));
+			ofn.lStructSize = sizeof(ofn);
+			ofn.hwndOwner = hwnd;
+			ofn.lpstrFile = temp;
+			ofn.lpstrFile[0] = 0;
+			ofn.nMaxFile = sizeof(temp);
+			ofn.lpstrFilter = "FreePiano键盘配置 (*.map)\0*.map\0";
+			ofn.nFilterIndex = 1;
+			ofn.Flags = OFN_PATHMUSTEXIST;
+			ofn.lpstrDefExt = ".map";
+			ofn.nFileExtension = 4;
+			ofn.lpstrInitialDir = dir;
+
+			if (GetOpenFileName(&ofn))
+				config_set_keymap(ofn.lpstrFile);
+		}
+		break;
+
+	case MENU_ID_KEY_MAP_SAVE:
+		{
+			char dir[260];
+			char temp[260] = {0};
+
+			config_get_media_path(dir, sizeof(dir), config_get_keymap());
+			PathRemoveFileSpec(dir);
+
+			OPENFILENAME ofn;
+			memset(&ofn, 0, sizeof(ofn));
+			ofn.lStructSize = sizeof(ofn);
+			ofn.hwndOwner = hwnd;
+			ofn.lpstrFile = temp;
+			ofn.lpstrFile[0] = 0;
+			ofn.nMaxFile = sizeof(temp);
+			ofn.lpstrFilter = "FreePiano键盘配置 (*.map)\0*.map\0";
+			ofn.nFilterIndex = 1;
+			ofn.Flags = OFN_PATHMUSTEXIST;
+			ofn.lpstrDefExt = ".map";
+			ofn.nFileExtension = 4;
+			ofn.lpstrInitialDir = dir;
+
+			if (GetSaveFileName(&ofn))
+			{
+				char buffer[40960];
+				config_save_keymap(buffer, sizeof(buffer));
+
+				FILE * fp = fopen(temp, "wb");
+				if (fp)
+				{
+					fputs(buffer, fp);
+					fclose(fp);
+
+					config_set_keymap(temp);
+				}
+			}
+		}
+		break;
+		
+	case MENU_ID_SETTING_GROUP:
+		if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION))
+			song_send_event(SM_SETTING_GROUP, 0, atoi(buff), 0, true);
+		break;
+
+	case MENU_ID_SETTING_GROUP_ADD:
+		config_set_setting_group_count(config_get_setting_group_count() + 1);
+		config_set_setting_group(config_get_setting_group_count() - 1);
+		break;
+
+	case MENU_ID_SETTING_GROUP_DEL:
+		config_set_setting_group_count(config_get_setting_group_count() - 1);
+		break;
+
+	case MENU_ID_SETTING_GROUP_COPY:
+		config_copy_key_setting();
+		break;
+
+	case MENU_ID_SETTING_GROUP_PASTE:
+		config_paste_key_setting();
+		break;
+
+	case MENU_ID_SETTING_GROUP_DEFAULT:
+		config_default_key_setting();
+		break;
+
+	case MENU_ID_SETTING_GROUP_CLEAR:
+		break;
 	};
 
 	return 0;
@@ -1219,7 +1342,7 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 						strncpy(buffer, start, sizeof(buffer));
 						PathRemoveExtension(buffer);
 
-						if (!found && _stricmp(value, config_get_instrument_path()) == 0)
+						if (!found && _stricmp(buffer, config_get_instrument_path()) == 0)
 						{
 							found = true;
 							AppendMenu(menu_instrument, MF_STRING | MF_CHECKED, 0, buffer);
@@ -1258,19 +1381,30 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					const char * filename = PathFindFileName(value);
 					bool checked = _stricmp(filename, config_get_keymap()) == 0;
 					AppendMenu(menu, MF_STRING | (checked ? MF_CHECKED : 0), MENU_ID_KEY_MAP, filename);
+					found |= checked;
 				};
 
 				HMENU menu;
+				bool found;
 			};
 
 			// remove all menu items.
 			while (int count = GetMenuItemCount(menu))
 				RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
+			// append action menus
+			AppendMenu(menu, MF_STRING, MENU_ID_KEY_MAP_LOAD,	"载入...");
+			AppendMenu(menu, MF_STRING, MENU_ID_KEY_MAP_SAVE,	"保存...");
+			AppendMenu(menu, MF_SEPARATOR, 0, NULL);
+
 			// enum key maps.
 			enum_callback cb;
 			cb.menu = menu;
+			cb.found = !*config_get_keymap();
 			keyboard_enum_keymap(cb);
+
+			if (!cb.found)
+				AppendMenu(menu, MF_STRING | MF_CHECKED, MENU_ID_KEY_MAP, config_get_keymap());
 		}
 
 		// midi shift
@@ -1282,7 +1416,7 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			for (int i = 0; i < ARRAY_COUNT(midi_shift_items); i++)
 			{
-				bool checked = midi_get_key_signature() == midi_shift_items[i].shift;
+				bool checked = config_get_key_signature() == midi_shift_items[i].shift;
 				AppendMenu(menu, MF_STRING | (checked ? MF_CHECKED : 0), MENU_ID_MIDI_SHIFT, midi_shift_items[i].name);
 			}
 		}
@@ -1295,14 +1429,14 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			while (int count = GetMenuItemCount(menu))
 				RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
-			KeyboardEvent keydown;
-			keyboard_get_map(selected_key, &keydown, NULL);
+			key_bind_t keydown;
+			config_get_key_bind(selected_key, &keydown, NULL);
 
 			int selected = -1;
 
-			switch (keydown.action >> 4)
+			switch (keydown.a >> 4)
 			{
-			case 0x8: case 0x9: selected = keydown.arg1 % 12;
+			case 0x8: case 0x9: selected = keydown.b % 12;
 			}
 
 			for (int i = 0; i < ARRAY_COUNT(keys); i++)
@@ -1318,14 +1452,14 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			while (int count = GetMenuItemCount(menu))
 				RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
-			KeyboardEvent keydown;
-			keyboard_get_map(selected_key, &keydown, NULL);
+			key_bind_t keydown;
+			config_get_key_bind(selected_key, &keydown, NULL);
 
 			int selected = -1;
 
-			switch (keydown.action >> 4)
+			switch (keydown.a >> 4)
 			{
-			case 0x8: case 0x9: selected = keydown.arg1 / 12 - 1;
+			case 0x8: case 0x9: selected = keydown.b / 12 - 1;
 			}
 
 			for (int i = 0; i < ARRAY_COUNT(shifts); i++)
@@ -1336,16 +1470,16 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 			static const char * channels[] = { "左手", "右手", };
 			
-			KeyboardEvent keydown;
-			keyboard_get_map(selected_key, &keydown, NULL);
-			int selected = (keydown.action & 0xf);
+			key_bind_t keydown;
+			config_get_key_bind(selected_key, &keydown, NULL);
+			int selected = (keydown.a & 0xf);
 
 			// remove all menu items.
 			while (int count = GetMenuItemCount(menu))
 				RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
 			for (int i = 0; i < ARRAY_COUNT(channels); i++)
-				AppendMenu(menu, MF_STRING | (selected == i ? MF_CHECKED : 0), MENU_ID_KEY_NOTE, channels[i]);
+				AppendMenu(menu, MF_STRING | (selected == i ? MF_CHECKED : 0), MENU_ID_KEY_NOTE_CHANNEL, channels[i]);
 		}
 
 		else if (menu == menu_key_control)
@@ -1364,6 +1498,42 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			EnableMenuItem(menu, MENU_ID_FILE_PLAY, MF_BYCOMMAND | (!song_is_empty() && !song_is_recording() && !song_is_playing() ? MF_ENABLED : MF_DISABLED));
 			EnableMenuItem(menu, MENU_ID_FILE_STOP, MF_BYCOMMAND | (song_is_playing() || song_is_recording() ? MF_ENABLED : MF_DISABLED));
 			EnableMenuItem(menu, MENU_ID_FILE_RECORD, MF_BYCOMMAND | (!song_is_recording() ? MF_ENABLED : MF_DISABLED));
+		}
+
+		else if (menu == menu_play_speed)
+		{
+			static const char * speeds[] = { "0.25x", "0.5x", "1.0x", "2.0x" };
+
+			// remove all menu items.
+			while (int count = GetMenuItemCount(menu))
+				RemoveMenu(menu, count - 1, MF_BYPOSITION);
+
+			for (int i = 0; i < ARRAY_COUNT(speeds); i++)
+				AppendMenu(menu, MF_STRING | (song_get_play_speed() == atof(speeds[i]) ? MF_CHECKED : 0), MENU_ID_PLAY_SPEED, speeds[i]);
+		}
+
+		else if (menu == menu_setting_group)
+		{
+			// remove all menu items.
+			while (int count = GetMenuItemCount(menu))
+				RemoveMenu(menu, count - 1, MF_BYPOSITION);
+
+
+			for (uint i = 0; i < config_get_setting_group_count(); i++)
+			{
+				char buff[256];
+				_snprintf(buff, sizeof(buff), "%d", i);
+				AppendMenu(menu, MF_STRING | (config_get_setting_group() == i ? MF_CHECKED : 0), MENU_ID_SETTING_GROUP, buff);
+			}
+
+			// group count
+			AppendMenu(menu, MF_SEPARATOR, 0, NULL);
+			AppendMenu(menu, MF_STRING, MENU_ID_SETTING_GROUP_ADD, "增加分组");
+			AppendMenu(menu, MF_STRING, MENU_ID_SETTING_GROUP_DEL, "减少分组");
+			AppendMenu(menu, MF_SEPARATOR, 0, NULL);
+			AppendMenu(menu, MF_POPUP, MENU_ID_SETTING_GROUP_COPY, "拷贝配置");
+			AppendMenu(menu, MF_POPUP, MENU_ID_SETTING_GROUP_PASTE, "粘贴配置");
+			AppendMenu(menu, MF_POPUP, MENU_ID_SETTING_GROUP_DEFAULT, "恢复默认配置");
 		}
 
 	}
@@ -1393,9 +1563,55 @@ static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 
 	switch (uMsg)
 	{
+	case WM_CREATE:
+		DragAcceptFiles(hWnd, TRUE);
+		break;
+
 	case WM_ACTIVATE:
 		keyboard_enable(WA_INACTIVE != LOWORD(wParam));
 		break;
+
+	case WM_SIZE:
+		keyboard_enable(wParam != SIZE_MINIMIZED);
+		break;
+
+	case WM_SIZING:
+		{
+			if (!config_get_enable_resize_window())
+			{
+				RECT fixed_size = { 0, 0, default_client_width, default_client_height };
+				RECT * rect = (RECT*)lParam;
+				AdjustWindowRect(&fixed_size, GetWindowLong(hWnd, GWL_STYLE), GetMenu(hWnd) != NULL);
+
+				switch (wParam)
+				{
+				case WMSZ_TOP:
+				case WMSZ_TOPLEFT:
+				case WMSZ_TOPRIGHT:
+					rect->top = rect->bottom - (fixed_size.bottom - fixed_size.top);
+					break;
+
+				default:
+					rect->bottom = rect->top + (fixed_size.bottom - fixed_size.top);
+					break;
+				}
+
+				switch (wParam)
+				{
+				case WMSZ_LEFT:
+				case WMSZ_TOPLEFT:
+				case WMSZ_BOTTOMLEFT:
+					rect->left = rect->right - (fixed_size.right - fixed_size.left);
+					break;
+
+				default:
+					rect->right = rect->left + (fixed_size.right - fixed_size.left);
+					break;
+				}
+
+				return 1;
+			}
+		};
 
 	case WM_PAINT:
 		display_render();
@@ -1409,6 +1625,14 @@ static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 		// disable sys menu
 		if (wParam == SC_KEYMENU)
 			return 0;
+		break;
+
+	case WM_ENTERMENULOOP:
+		keyboard_enable(false);
+		break;
+
+	case WM_EXITMENULOOP:
+		keyboard_enable(true);
 		break;
 
 	case WM_EXITSIZEMOVE:
@@ -1430,6 +1654,49 @@ static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_INITMENUPOPUP:
 	case WM_UNINITMENUPOPUP:
 		return menu_on_popup(hWnd, uMsg, wParam, lParam);
+
+
+	case WM_DROPFILES:
+		{
+			HDROP drop = (HDROP)wParam;
+			char filepath[MAX_PATH];
+			int len = DragQueryFile(drop, 0, filepath, sizeof(filepath));
+
+			if (len > 0)
+			{
+				const char * extension = PathFindExtension(filepath);
+
+				// drop a music file
+				if (_stricmp(extension, ".lyt") == 0)
+				{
+					if (song_open_lyt(filepath) == 0)
+						song_start_playback();
+					return 0;
+				}
+
+				if (_stricmp(extension, ".fpm") == 0)
+				{
+					if (song_open(filepath) == 0)
+						song_start_playback();
+					return 0;
+				}
+
+				// drop a instrument
+				if (_stricmp(extension, ".dll") == 0)
+				{
+					config_select_instrument(INSTRUMENT_TYPE_VSTI, filepath);
+					return 0;
+				}
+
+				// drop a map file
+				if (_stricmp(extension, ".map") == 0)
+				{
+					config_set_keymap(filepath);
+					return 0;
+				}
+			}
+		}
+		break;
 	}
 
 	// display process message
@@ -1463,18 +1730,16 @@ int gui_init()
 	// init menu
 	menu_init();
 	
-	int width = 760;
-	int height = 340;
 	uint style = WS_OVERLAPPEDWINDOW;
 
 	int screenwidth = GetSystemMetrics(SM_CXSCREEN);
 	int screenheight = GetSystemMetrics(SM_CYSCREEN);
 
 	RECT rect;
-	rect.left = (screenwidth - width) / 2;
-	rect.top = (screenheight - height) / 2;
-	rect.right = rect.left + width;
-	rect.bottom = rect.top + height;
+	rect.left = (screenwidth - default_client_width) / 2;
+	rect.top = (screenheight - default_client_height) / 2;
+	rect.right = rect.left + default_client_width;
+	rect.bottom = rect.top + default_client_height;
 
 	AdjustWindowRect(&rect, style, TRUE);
 
