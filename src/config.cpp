@@ -173,10 +173,10 @@ static name_t action_names[] =
 
 	{ "NoteOff",			0x80 },
 	{ "NoteOn",				0x90 },
-	{ "NoteAftertouch",		0xa0 },
+	{ "KeyPressure",		0xa0 },
 	{ "Controller",			0xb0 },
-	{ "ProgramChange",		0xc0 },
-	{ "ChannelAftertouch",	0xd0 },
+	{ "Program",			0xc0 },
+	{ "ChannelPressure",	0xd0 },
 	{ "PitchBend",			0xe0 },
 };
 
@@ -363,6 +363,7 @@ static name_t value_action_names[] =
 	{ "Set",		0 },
 	{ "Inc",		1 },
 	{ "Dec",		2 },
+	{ "Flip",		3 },
 };
 
 static name_t instrument_type_names[] = 
@@ -388,6 +389,7 @@ static name_t boolean_names[] =
 	{ "yes",			1 },
 	{ "true",			1 },
 };
+
 
 // -----------------------------------------------------------------------------------------
 // configurations
@@ -426,13 +428,22 @@ struct setting_t
 	char key_signature;
 	char auto_pedal;
 	char delay_keyup[16];
+	char midi_program[16];
+	char midi_controller[16][256];
 
 	void clear()
 	{
 		memset(this, 0, sizeof(setting_t));
 
 		for (int i = 0; i < 16; i++)
+		{
 			key_velocity[i] = 127;
+
+			midi_program[i] = -1;
+
+			for (int j = 0; j < 128; j++)
+				midi_controller[i][j] = -1;
+		}
 	}
 };
 
@@ -600,6 +611,42 @@ void config_set_key_channel(byte channel, byte value)
 	}
 }
 
+// get midi program
+byte config_get_program(byte channel)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].midi_program))
+		return settings[current_setting].midi_program[channel];
+	else
+		return 0;
+}
+
+// set midi program
+void config_set_program(byte channel, byte value)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].midi_program))
+	{
+		settings[current_setting].midi_program[channel] = value;
+	}
+}
+
+// get midi program
+byte config_get_controller(byte channel, byte id)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].midi_controller))
+		return settings[current_setting].midi_controller[channel][id];
+	else
+		return 0;
+}
+
+// set midi program
+void config_set_controller(byte channel, byte id, byte value)
+{
+	if (channel < ARRAY_COUNT(settings[current_setting].midi_controller))
+	{
+		settings[current_setting].midi_controller[channel][id] = value;
+	}
+}
+
 // get auto pedal time
 char config_get_auto_pedal()
 {
@@ -641,6 +688,18 @@ void config_set_setting_group(uint id)
 {
 	if (id < setting_count)
 		current_setting = id;
+
+	// update status
+	for (int ch = 0; ch < 16; ch++)
+	{
+		for (int i = 0; i < 127; i++)
+			if (config_get_controller(ch, i) < 128)
+				midi_send_event(0xb0 | ch, i, config_get_controller(ch, i), 0);
+
+		if (config_get_program(ch) < 128)
+			midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
+	}
+
 }
 
 // get setting group count
@@ -913,7 +972,9 @@ static bool match_event(char ** str, key_bind_t * e)
 		case 0x0:
 			break;
 
-		case 0x8: case 0x9: case 0xa:
+		case 0x8:	// NoteOff
+		case 0x9:	// NoteOn
+		case 0xa:	// NoteAfterTouch
 			if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg1))
 				return false;
 
@@ -921,18 +982,31 @@ static bool match_event(char ** str, key_bind_t * e)
 			e->c = match_number(str, &arg2) ? arg2 : 127;
 			break;
 
-		case 0xb:
+		case 0xb:	// Controller
 			if (!match_value(str, controller_names, ARRAY_COUNT(controller_names), &arg1))
 				return false;
 
 			if (!match_number(str, &arg2))
 				return false;
 
+			match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg3);
+
 			e->b = arg1 & 0x7f;
 			e->c = arg2 & 0x7f;
+			e->d = arg3;
 			break;
 
-		case 0xc: case 0xd:
+		case 0xc:	// ProgramChange
+			if (!match_number(str, &arg1))
+				return false;
+
+			match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2);
+
+			e->b = arg1 & 0x7f;
+			e->c = arg2;
+			break;
+
+		case 0xd:
 			if (!match_number(str, &arg1))
 				return false;
 
@@ -1115,6 +1189,32 @@ static int config_parse_keymap_line(char * s)
 		}
 	}
 
+	else if (match_word(&s, "Program"))
+	{
+		uint channel;
+		uint value;
+
+		if (match_number(&s, &channel) &&
+			match_number(&s, &value))
+		{
+			config_set_program(channel, value);
+		}
+	}
+
+	else if (match_word(&s, "Controller"))
+	{
+		uint channel;
+		uint id;
+		uint value;
+
+		if (match_number(&s, &channel) &&
+			match_number(&s, &id) &&
+			match_number(&s, &value))
+		{
+			config_set_controller(channel, id, value);
+		}
+	}
+
 	return -1;
 }
 
@@ -1207,23 +1307,24 @@ static int print_keyboard_event(char * buff, int buffer_size, int key, key_bind_
 
 		switch (e.a)
 		{
-		case 1:	// key
-		case 5:	// volume
+		case SM_KEY_SIGNATURE:	// key
+		case SM_VOLUME:	// volume
 			s += print_value(s, end - s, e.b, value_action_names, ARRAY_COUNT(value_action_names));
 			s += print_value(s, end - s, e.c, NULL, 0);
 			break;
 
-		case 2:	// oct
-		case 3:	// vel
-		case 4:	// channel
+		case SM_OCTSHIFT:	// oct
+		case SM_VELOCITY:	// vel
+		case SM_CHANNEL:	// channel
+		case SM_DELAY_KEYUP:
 			s += print_value(s, end - s, e.b, NULL, 0);
 			s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
 			s += print_value(s, end - s, e.d, NULL, 0);
 			break;
 
-		case 6:	// play
-		case 7:	// rec
-		case 8:	// stop
+		case SM_PLAY:	// play
+		case SM_RECORD:	// rec
+		case SM_STOP:	// stop
 			break;
 
 		default:
@@ -1248,6 +1349,7 @@ static int print_keyboard_event(char * buff, int buffer_size, int key, key_bind_
 			break;
 
 		case 0xa:
+		case 0xd:
 			s += print_value(s, end - s, e.b, note_names, ARRAY_COUNT(note_names));
 			s += print_value(s, end - s, e.c, NULL, 0);
 			break;
@@ -1255,6 +1357,13 @@ static int print_keyboard_event(char * buff, int buffer_size, int key, key_bind_
 		case 0xb:
 			s += print_value(s, end - s, e.b, controller_names, ARRAY_COUNT(controller_names));
 			s += print_value(s, end - s, e.c, NULL, 0);
+
+			if (e.d) s += print_value(s, end - s, e.d, value_action_names, ARRAY_COUNT(controller_names));
+			break;
+
+		case 0xc:
+			s += print_value(s, end - s, e.b, NULL, 0);
+			if (e.c) s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(controller_names));
 			break;
 
 		default:
@@ -1279,20 +1388,37 @@ static int config_save_key_settings(char * buff, int buffer_size)
 	s += _snprintf(s, end - s, "KeySignature\t%d\r\n", config_get_key_signature());
 
 	// save keyboard status
-	for (int i = 0; i < 16; i ++)
+	for (int ch = 0; ch < 16; ch ++)
 	{
-		if (i < 2 || config_get_key_octshift(i) != 0)
-			s += _snprintf(s, end - s, "Octshift\t%d\t%d\r\n", i, config_get_key_octshift(i));
+		if (config_get_key_octshift(ch) != 0)
+			s += _snprintf(s, end - s, "Octshift\t%d\t%d\r\n", ch, config_get_key_octshift(ch));
 
-		if (i < 2 || config_get_key_velocity(i) != 127)
-			s += _snprintf(s, end - s, "Velocity\t%d\t%d\r\n", i, config_get_key_velocity(i));
+		if (config_get_key_velocity(ch) != 127)
+			s += _snprintf(s, end - s, "Velocity\t%d\t%d\r\n", ch, config_get_key_velocity(ch));
 
-		if (i < 2 || config_get_key_channel(i) != 0)
-			s += _snprintf(s, end - s, "Channel\t%d\t%d\r\n", i, config_get_key_channel(i));
+		if (config_get_key_channel(ch) != 0)
+			s += _snprintf(s, end - s, "Channel\t%d\t%d\r\n", ch, config_get_key_channel(ch));
+
+		// program
+		if (config_get_program(ch) < 128)
+			s += _snprintf(s, end - s, "Program\t%d\t%d\r\n", ch, config_get_program(ch));
+
+		// controller
+		for (int id = 0; id < 127; id++)
+		{
+			if (config_get_controller(ch, id) < 128)
+			{
+				s += _snprintf(s, end - s, "Controller\t%d", ch);
+				s += print_value(s, end - s, id, controller_names, ARRAY_COUNT(controller_names));
+				s += print_value(s, end - s, config_get_controller(ch, id), NULL, NULL);
+				s += _snprintf(s, end - s, "\r\n");
+			}
+		}
 
 		// delay keyup
-		if (config_get_delay_keyup(i))
-			s += _snprintf(s, end - s, "DelayKeyup\t%d\t%d\r\n", i, config_get_delay_keyup(i));
+		if (config_get_delay_keyup(ch))
+			s += _snprintf(s, end - s, "DelayKeyup\t%d\t%d\r\n", ch, config_get_delay_keyup(ch));
+
 	}
 
 	// auto pedal
@@ -1958,4 +2084,16 @@ void config_default_key_setting()
 			FreeResource(hrc);
 		}
 	}
+}
+
+// get key name
+const char * config_get_key_name(byte code)
+{
+	for (name_t * name = key_names; name < key_names + ARRAY_COUNT(key_names); name++)
+		if (name->value == code)
+			return name->name;
+
+	static char buff[16];
+	_snprintf(buff, sizeof(buff), "%d", code);
+	return buff;
 }

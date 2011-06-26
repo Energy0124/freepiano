@@ -26,6 +26,7 @@ typedef unsigned long ulong;
 #define ARRAY_END(a)	(a + sizeof(a) / sizeof(a[0]))
 
 #define APP_NAME	"FreePiano"
+#define APP_VERSION	0x01010000
 
 
 struct thread_lock_t

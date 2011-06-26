@@ -20,3 +20,6 @@ void gui_popup_keymenu(byte code, int x, int y);
 
 // show song info
 int gui_show_song_info();
+
+// get selected key
+int gui_get_selected_key();

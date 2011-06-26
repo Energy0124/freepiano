@@ -3,6 +3,7 @@
 #include "synthesizer_vst.h"
 #include "display.h"
 #include "song.h"
+#include "config.h"
 
 static HMIDIOUT midi_out_device = NULL;
 static HMIDIIN midi_in_device = NULL;
@@ -13,9 +14,6 @@ static thread_lock_t midi_output_lock;
 
 // note state
 static byte note_states[16][128] = {0};
-
-// controllers
-static byte controllers[128] = {0};
 
 // open output device
 int midi_open_output(const char * name)
@@ -71,7 +69,7 @@ static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR d
 		byte data3 = data >> 16;
 		byte data4 = data >> 24;
 
-		song_send_event(data1, data2, data3, data4);
+		song_send_event(data1, data2, data3, data4, true);
 	}
 }
 
@@ -121,6 +119,22 @@ void midi_close_input()
 	}
 }
 
+// wrap value
+static int wrap_value(int value, int min_v, int max_v)
+{
+	if (value < min_v) value = max_v;
+	if (value > max_v) value = min_v;
+	return value;
+}
+
+// clamp value
+static int clamp_value(int value, int min_v, int max_v)
+{
+	if (value < min_v) value = min_v;
+	if (value > max_v) value = max_v;
+	return value;
+}
+
 
 // send event
 void midi_send_event(byte data1, byte data2, byte data3, byte data4)
@@ -135,7 +149,47 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 	{
 	case 0x80:	note_states[data1 & 0xf][data2 & 0x7f] = 0; break;
 	case 0x90:	note_states[data1 & 0xf][data2 & 0x7f] = 1; break;
-	case 0xb0:	controllers[data2 & 0x7f] = data3; break;
+	case 0xb0:	// Controller
+		{
+			int ch = data1 & 0x0f;
+			int id = data2 & 0x7f;
+			int value = config_get_controller(ch, id);
+
+			switch (data4)
+			{
+			case 0:	value = data3; break;
+			case 1:	value = value + (char)data3; break;
+			case 2:	value = value - (char)data3; break;
+			case 3:	value = 127 - value; break;
+			}
+			
+			value = clamp_value(value, 0, 127);
+			config_set_controller(ch, id, value);
+			data3 = value;
+			data4 = 0;
+		}
+		break;
+
+	case 0xc0:	// ProgramChange
+		{
+			int ch = data1 & 0x0f;
+			int value = config_get_program(ch);
+
+			switch (data3)
+			{
+			case 0:	value = data2; break;
+			case 1:	value = value + (char)data2; break;
+			case 2:	value = value - (char)data2; break;
+			case 3:	value = 127 - value; break;
+			}
+
+			value = clamp_value(value, 0, 127);
+			config_set_program(ch, value);
+			data2 = value;
+			data3 = 0;
+			data4 = 0;
+		}
+		break;
 	}
 
 	// send midi event to vst plugin
@@ -214,12 +268,11 @@ void midi_reset()
 				midi_send_event(0x80 | ch, note, 0, 0);
 		}
 
-		midi_send_event(0xb0 | ch, 0x40, controllers[0x40], 0); 
-	}
-}
+		for (int i = 0; i < 128; i++)
+			if (config_get_controller(ch, i) < 128)
+				midi_send_event(0xb0 | ch, i, config_get_controller(ch, i), 0); 
 
-// get controller value
-char midi_get_controller_value(byte controller)
-{
-	return controllers[controller & 0x7f];
+		if (config_get_program(ch) < 128)
+			midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
+	}
 }

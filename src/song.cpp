@@ -40,7 +40,7 @@ static song_info_t song_info;
 static thread_lock_t song_lock;
 
 // current version
-static uint current_version = 0x01010000;
+static uint current_version = 0x01020000;
 
 // -----------------------------------------------------------------------------------------
 // event parser
@@ -329,8 +329,8 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record)
 			config_set_delay_keyup(ch, value);
 		}
 		break;
-
 	}
+
 }
 
 // -----------------------------------------------------------------------------------------
@@ -419,19 +419,28 @@ void song_start_record()
 		song_add_event(0, SM_AUTO_PEDAL, config_get_auto_pedal(), 0, 0);
 
 		// record key settings
-		for (int i = 0; i < 16; i++)
+		for (int ch = 0; ch < 16; ch++)
 		{
-			if (config_get_key_octshift(i))
-				song_add_event(0, SM_OCTSHIFT, i, 0, config_get_key_octshift(i));
+			if (config_get_key_octshift(ch))
+				song_add_event(0, SM_OCTSHIFT, ch, 0, config_get_key_octshift(ch));
 
-			if (config_get_key_velocity(i) != 127)
-				song_add_event(0, SM_VELOCITY, i, 0, config_get_key_velocity(i));
+			if (config_get_key_velocity(ch) != 127)
+				song_add_event(0, SM_VELOCITY, ch, 0, config_get_key_velocity(ch));
 
-			if (config_get_key_channel(i))
-				song_add_event(0, SM_CHANNEL, i, 0, config_get_key_channel(i));
+			if (config_get_key_channel(ch))
+				song_add_event(0, SM_CHANNEL, ch, 0, config_get_key_channel(ch));
 
-			if (config_get_delay_keyup(i))
-				song_add_event(0, SM_DELAY_KEYUP, i, 0, config_get_delay_keyup(i));
+			if (config_get_delay_keyup(ch))
+				song_add_event(0, SM_DELAY_KEYUP, ch, 0, config_get_delay_keyup(ch));
+			
+			if (config_get_program(ch) < 128)
+				song_add_event(0, 0xc0 | ch, config_get_program(ch), 0, 0);
+
+			for (int id = 0; id < 128; id ++)
+			{
+				if (config_get_controller(ch, id) < 128)
+					song_add_event(0, 0xb0 | ch, id, config_get_controller(ch, id), 0);
+			}
 		}
 		
 		// record keymaps
@@ -473,7 +482,7 @@ void song_start_record()
 	song_add_event(0, SM_SETTING_GROUP, current_group, 0, 0);
 
 	// pedal
-	song_add_event(0, 0xb0, 0x40, midi_get_controller_value(0x40), 0);
+	song_add_event(0, 0xb0, 0x40, config_get_controller(0, 0x40), 0);
 }
 
 // stop record
@@ -645,7 +654,7 @@ void song_update(double time_elapsed)
 
 		if (song_auto_pedal_timer < 0)
 		{
-			pedal_value = midi_get_controller_value(0x40);
+			pedal_value = config_get_controller(0, 0x40);
 
 			if (pedal_value)
 			{
@@ -662,7 +671,7 @@ void song_update(double time_elapsed)
 		{
 			if (pedal_value)
 			{
-				int value = midi_get_controller_value(0x40);
+				int value = config_get_controller(0, 0x40);
 
 				if (value != pedal_value)
 				{

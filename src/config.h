@@ -155,6 +155,18 @@ int config_get_key_channel(byte channel);
 // get channel
 void config_set_key_channel(byte channel, byte value);
 
+// get program
+byte config_get_program(byte channel);
+
+// set midi program
+void config_set_program(byte channel, byte value);
+
+// get program
+byte config_get_controller(byte channel, byte id);
+
+// set midi program
+void config_set_controller(byte channel, byte id, byte value);
+
 // get setting group
 uint config_get_setting_group();
 
@@ -178,3 +190,6 @@ void config_set_delay_keyup(byte channel, char value);
 
 // get keyup mode 
 char config_get_delay_keyup(byte channel);
+
+// get key name
+const char * config_get_key_name(byte code);

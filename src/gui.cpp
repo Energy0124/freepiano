@@ -378,18 +378,6 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 					ComboBox_SetCurSel(keychannel, i);
 			}
 		}
-
-		// sustain pedal
-		{
-			char buff[256];
-
-			HWND auto_pedal = GetDlgItem(hWnd, IDC_KEY_AUTO_PEDAL);
-			HWND auto_pedal_slider = GetDlgItem(hWnd, IDC_KEY_AUTO_PEDAL_SLIDER);
-
-			_snprintf(buff, sizeof(buff), "%d", config_get_auto_pedal());
-			SetDlgItemText(hWnd, IDC_KEY_AUTO_PEDAL, buff);
-			SetWindowSubclass(auto_pedal, EditSubProc, 0, 0);
-		}
 		break;
 
 	case WM_HSCROLL:
@@ -406,19 +394,6 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 				char temp[256];
 				_snprintf(temp, sizeof(temp), "%d", config_get_key_velocity(channel));
 				SetDlgItemText(hWnd, IDC_KEY_VELOCITY1 + channel, temp);
-			}
-		}
-		{
-			HWND pedal_slider = GetDlgItem(hWnd, IDC_KEY_AUTO_PEDAL_SLIDER);
-			if (pedal_slider == (HWND)lParam)
-			{
-				int pos = SendMessage(pedal_slider, TBM_GETPOS, 0, 0);
-
-				config_set_auto_pedal(pos);
-
-				char temp[256];
-				_snprintf(temp, sizeof(temp), "%d", config_get_auto_pedal());
-				SetDlgItemText(hWnd, IDC_KEY_AUTO_PEDAL, temp);
 			}
 		}
 		break;
@@ -511,8 +486,12 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
 			config_save_keymap(buff, buff_size);
 
 			uint tabstops = 46;
+			LockWindowUpdate(edit);
+			int scroll = GetScrollPos(edit, SB_VERT);
 			Edit_SetTabStops(edit, 1, &tabstops);
 			Edit_SetText(edit, buff);
+			Edit_Scroll(edit, scroll, 0);
+			LockWindowUpdate(NULL);
 
 			delete[] buff;
 		}
@@ -633,7 +612,8 @@ static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 			HWND setting_list = GetDlgItem(hWnd, IDC_SETTING_LIST);
 			add_setting_page(setting_list, "ÒôÆµ", IDD_SETTING_AUDIO);
 			add_setting_page(setting_list, "MIDI", IDD_SETTING_MIDI);
-			add_setting_page(setting_list, "¼üÅÌ²¼¾Ö", IDD_SETTING_KEYMAP);
+			add_setting_page(setting_list, "ÑÝ×àÉèÖÃ", IDD_SETTING_KEYBOARD);
+			add_setting_page(setting_list, "¼üÅÌ½Å±¾", IDD_SETTING_KEYMAP);
 			add_setting_page(setting_list, "½çÃæÉèÖÃ", IDD_SETTING_GUI);
 		}
 		break;
@@ -777,6 +757,7 @@ static HMENU menu_play_speed = NULL;
 static HMENU menu_setting_group = NULL;
 
 static byte selected_key = 0;
+static byte preview_key = 0;
 
 // menu id
 enum MENU_ID
@@ -861,8 +842,14 @@ key_controls[] =
 	{ "·Ö×é0",				"GP0",		"Group Set 0" },
 	{ "·Ö×é1",				"GP1",		"Group Set 1" },
 	{ "·Ö×é2",				"GP2",		"Group Set 2" },
-	{ "ÑÓÒôÌ¤°å",			"RSP",		"Controller 0 SustainPedal 127", "Controller 0 SustainPedal 0" },
-	{ "ÑÓÒôÌ¤°å£¨·­×ª£©",	"RSP",		"Controller 0 SustainPedal 0", "Controller 0 SustainPedal 127" },
+	{ "ÑÓÒôÌ¤°å£¨¿ª£©",		"RSP+",		"Controller 0 SustainPedal 127" },
+	{ "ÑÓÒôÌ¤°å£¨¹Ø£©",		"RSP-",		"Controller 0 SustainPedal 0" },
+	{ "ÑÓÒôÌ¤°å£¨·­×ª£©",	"RSP",		"Controller 0 SustainPedal 0 Flip" },
+	{ "ÒôÉ«+",			"P+",			"Program 0 1 Inc" },
+	{ "ÒôÉ«-",			"P-",			"Program 0 1 Dec" },
+	{ "ÒôÉ«0",			"P0",			"Program 0 0" },
+	{ "ÒôÉ«1",			"P1",			"Program 0 1" },
+	{ "ÒôÉ«2",			"P2",			"Program 0 2" },
 };
 
 
@@ -1079,9 +1066,16 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			key_bind_t keydown;
 			config_get_key_bind(selected_key, &keydown, NULL);
 
-			if ((keydown.a >> 4) == 0x9)
+			switch (keydown.a >> 4)
 			{
+			case 0x9:
+			case 0x8:
+			case 0xa:
+			case 0xb:
+			case 0xc:
+			case 0xd:
 				keydown.a = static_cast<byte>((keydown.a & 0xf0) | (pos & 0x0f));
+				break;
 			}
 
 			config_set_key_bind(selected_key, &keydown, NULL);
@@ -1094,12 +1088,12 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			char temp[256];
 			if (key_controls[pos].keydown)
 			{
-				_snprintf(temp, sizeof(temp), "keydown %d %s", selected_key, key_controls[pos].keydown);
+				_snprintf(temp, sizeof(temp), "keydown %s %s", config_get_key_name(selected_key), key_controls[pos].keydown);
 				config_parse_keymap(temp);
 			}
 			if (key_controls[pos].keyup)
 			{
-				_snprintf(temp, sizeof(temp), "keyup %d %s", selected_key, key_controls[pos].keyup);
+				_snprintf(temp, sizeof(temp), "keyup %s %s", config_get_key_name(selected_key), key_controls[pos].keyup);
 				config_parse_keymap(temp);
 			}
 			if (key_controls[pos].label)
@@ -1320,10 +1314,10 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	HMENU menu = (HMENU)wParam;
+
 	if (uMsg == WM_INITMENUPOPUP)
 	{
-		HMENU menu = (HMENU)wParam;
-
 		if (menu == menu_instrument)
 		{
 			// remove all menu items.
@@ -1539,7 +1533,6 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	}
 	else if (uMsg == WM_UNINITMENUPOPUP)
 	{
-
 	}
 
 	return 0;
@@ -1548,8 +1541,9 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 // popup key menu
 void gui_popup_keymenu(byte code, int x, int y)
 {
-	selected_key = code;
+	preview_key = selected_key = code;
 	TrackPopupMenuEx(menu_key_popup, TPM_LEFTALIGN, x, y, gui_get_window(), NULL);
+	preview_key = -1;
 }
 
 // -----------------------------------------------------------------------------------------
@@ -1786,4 +1780,10 @@ void gui_show()
 {
 	ShowWindow(mainhwnd, SW_SHOW);
 	display_render();
+}
+
+// get selected key
+int gui_get_selected_key()
+{
+	return preview_key;
 }

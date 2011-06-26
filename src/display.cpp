@@ -1716,7 +1716,8 @@ static void draw_keyboard()
 			uint img = map.a ? keyboard_note_down : keyboard_unmapped_down;
 
 			// draw key button
-			if (!key->status) img ++;
+			if (!key->status && (keyboard_states + gui_get_selected_key() != key))
+				img ++;
 			draw_image_border(img, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
 
 			// key label
@@ -1809,7 +1810,7 @@ static void draw_keyboard_controls()
 	};
 
 	// sustain pedal
-	_snprintf(buff, sizeof(buff), "%d", midi_get_controller_value(0x40));
+	_snprintf(buff, sizeof(buff), "%d", config_get_controller(0, 0x40));
 	draw_string(92, 222, 0xff6e6e6e, buff, 11, 1, 0);
 
 	// midi key
@@ -2105,10 +2106,7 @@ void dispatch_command(int command, int action)
 	switch (command)
 	{
 	case CMD_SUSTAIN:
-		if (midi_get_controller_value(0x40))
-			song_send_event(0xb0, 0x40, 0, 0, true);
-		else
-			song_send_event(0xb0, 0x40, 127, 0, true);
+		song_send_event(0xb0, 0x40, 0, 3, true);
 		break;
 
 	case CMD_MIDI_KEY:
