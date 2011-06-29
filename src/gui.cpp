@@ -1724,16 +1724,28 @@ int gui_init()
 	// init menu
 	menu_init();
 	
-	uint style = WS_OVERLAPPEDWINDOW;
-
 	int screenwidth = GetSystemMetrics(SM_CXSCREEN);
 	int screenheight = GetSystemMetrics(SM_CYSCREEN);
 
+
+#if FULLSCREEN
+	RECT rect = {0, 0, screenwidth, screenheight};
+	uint style = WS_POPUP;
+
+	AdjustWindowRect(&rect, style, FALSE);
+
+	// create window
+	mainhwnd = CreateWindow("FreePianoMainWindow", APP_NAME, style,
+		rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+		NULL, NULL, hInstance, NULL);
+#else
 	RECT rect;
 	rect.left = (screenwidth - default_client_width) / 2;
 	rect.top = (screenheight - default_client_height) / 2;
 	rect.right = rect.left + default_client_width;
 	rect.bottom = rect.top + default_client_height;
+
+	uint style = WS_OVERLAPPEDWINDOW;
 
 	AdjustWindowRect(&rect, style, TRUE);
 
@@ -1741,6 +1753,7 @@ int gui_init()
 	mainhwnd = CreateWindow("FreePianoMainWindow", APP_NAME, style,
 		rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
 		NULL, menu_main, hInstance, NULL);
+#endif
 
 	if (mainhwnd == NULL)
 	{
@@ -1779,6 +1792,8 @@ HWND gui_get_window()
 void gui_show()
 {
 	ShowWindow(mainhwnd, SW_SHOW);
+	SetActiveWindow(mainhwnd);
+	SetForegroundWindow(mainhwnd);
 	display_render();
 }
 

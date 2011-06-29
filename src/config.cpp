@@ -1603,7 +1603,7 @@ int config_load(const char * filename)
 			}
 
 			// resize window
-			else if (match_word(&s, "sizeable"))
+			else if (match_word(&s, "resize"))
 			{
 				uint enable = 0;
 				match_value(&s, boolean_names, ARRAY_COUNT(boolean_names), &enable);

@@ -7,6 +7,7 @@
 #include <windowsx.h>
 #include <gdiplus.h>
 #include <mbctype.h>
+#include <Shlwapi.h>
 
 #include <set>
 
@@ -42,8 +43,8 @@ static HWND display_hwnd = NULL;
 
 static int display_width = 0;
 static int display_height = 0;
-
-#define SCALE_DISPLAY 1
+static const int fixed_width = 760;
+static const int fixed_height = 340;
 
 // vertex format
 struct Vertex
@@ -256,8 +257,7 @@ static texture_node_t * root_texture_node = NULL;
 static FT_Library font_library = NULL;
 
 // default font face
-static FT_Face font_face1 = NULL;
-static FT_Face font_face2 = NULL;
+static FT_Face font_list[4] = {0};
 
 // font character
 struct font_character_t
@@ -295,9 +295,6 @@ static void preload_characters(const wchar_t * text, int len, int size)
 	if (len <= 0)
 		len = wcslen(text);
 
-	// set font size in pixels
-	FT_Set_Pixel_Sizes(font_face1, 0, size);
-
 	for (int i = 0; i < len; i++)
 	{
 		font_character_t cache;
@@ -313,71 +310,89 @@ static void preload_characters(const wchar_t * text, int len, int size)
 		// character is not cached.
 		if (it == font_character_set.end())
 		{
-			// load glyph image into the slot (erase previous one)
-			int error = FT_Load_Char(font_face1, cache.ch, FT_LOAD_RENDER);
-			if (error == 0)
+			FT_Face face = NULL;
+
+			// find a font that can render this character
+			for (int font_id = 0; font_id < ARRAY_COUNT(font_list); font_id++)
 			{
-				FT_GlyphSlot slot = font_face1->glyph;
-
-				// size
-				int size_x = slot->bitmap.width;
-				int size_y = slot->bitmap.rows;
-
-				if (size_x > 0 && size_y > 0)
+				if (font_list[font_id] && FT_Get_Char_Index(font_list[font_id], cache.ch))
 				{
-					// allocates texture node
-					texture_node_t * node = root_texture_node->allocate(size_x + 2, size_y + 2);
+					face = font_list[font_id];
+					break;
+				}
+			}
 
-					if (node)
+			if (face)
+			{
+				// set font size in pixels
+				FT_Set_Pixel_Sizes(face, 0, size);
+
+				// load glyph image into the slot (erase previous one)
+				int error = FT_Load_Char(face, cache.ch, FT_LOAD_RENDER);
+				if (error == 0)
+				{
+					FT_GlyphSlot slot = face->glyph;
+
+					// size
+					int size_x = slot->bitmap.width;
+					int size_y = slot->bitmap.rows;
+
+					if (size_x > 0 && size_y > 0)
 					{
-						RECT data_rect;
-						data_rect.left = (int)node->min_u;
-						data_rect.right = (int)node->min_u + (int)node->width;
-						data_rect.top = (int)node->min_v;
-						data_rect.bottom = (int)node->min_v + (int)node->height;
+						// allocates texture node
+						texture_node_t * node = root_texture_node->allocate(size_x + 2, size_y + 2);
 
-						D3DLOCKED_RECT lock_rect;
-						if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
+						if (node)
 						{
-							for (int y = 0; y < slot->bitmap.rows; ++y)
-							{
-								uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * (y + 1) + 4);
-								byte * src = slot->bitmap.buffer + slot->bitmap.pitch * y;
+							RECT data_rect;
+							data_rect.left = (int)node->min_u;
+							data_rect.right = (int)node->min_u + (int)node->width;
+							data_rect.top = (int)node->min_v;
+							data_rect.bottom = (int)node->min_v + (int)node->height;
 
-								for (int x = 0; x < slot->bitmap.width; x++)
+							D3DLOCKED_RECT lock_rect;
+							if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
+							{
+								for (int y = 0; y < slot->bitmap.rows; ++y)
 								{
-									*dst = (*src << 24) | 0x00ffffff;
-									dst++;
-									src++;
+									uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * (y + 1) + 4);
+									byte * src = slot->bitmap.buffer + slot->bitmap.pitch * y;
+
+									for (int x = 0; x < slot->bitmap.width; x++)
+									{
+										*dst = (*src << 24) | 0x00ffffff;
+										dst++;
+										src++;
+									}
 								}
+
+								resource_texture->UnlockRect(0);
 							}
 
-							resource_texture->UnlockRect(0);
-						}
-
-						// set cache attributes
-						cache.advance_x = slot->advance.x >> 6;
-						cache.bmp_left = slot->bitmap_left;
-						cache.bmp_top = font_face1->size->metrics.ascender / 64 - slot->bitmap_top;
-						cache.texture = node;
-						cache.height = font_face1->size->metrics.height / 64;
-					}
-					else
-					{
-						if (retry)
-						{
-							SAFE_DELETE(root_texture_node->child1);
-							SAFE_DELETE(root_texture_node->child2);
-							root_texture_node->unuse();
-
-							font_character_set.clear();
-							i = 0;
-							retry = false;
-							continue;
+							// set cache attributes
+							cache.advance_x = slot->advance.x >> 6;
+							cache.bmp_left = slot->bitmap_left;
+							cache.bmp_top = face->size->metrics.ascender / 64 - slot->bitmap_top;
+							cache.texture = node;
+							cache.height = face->size->metrics.height / 64;
 						}
 						else
 						{
-							return;
+							if (retry)
+							{
+								SAFE_DELETE(root_texture_node->child1);
+								SAFE_DELETE(root_texture_node->child2);
+								root_texture_node->unuse();
+
+								font_character_set.clear();
+								i = 0;
+								retry = false;
+								continue;
+							}
+							else
+							{
+								return;
+							}
 						}
 					}
 				}
@@ -482,12 +497,6 @@ static texture_node_t * create_string_texture(const char * text, int height)
 {
 	int error;
 
-	// set font size in pixels
-	error = FT_Set_Pixel_Sizes(font_face1, 0, height);
-
-	if (error)
-		return NULL;
-
 
 	int pen_x = 0;
 	int pen_y = 0;
@@ -498,23 +507,44 @@ static texture_node_t * create_string_texture(const char * text, int height)
 	// go over and calculate size
 	for (int n = 0; n < num_chars; n++)
 	{
-		FT_GlyphSlot slot = font_face1->glyph;
+		FT_Face face = NULL;
 
-		// load glyph image into the slot (erase previous one)
-		error = FT_Load_Char(font_face1, text[n], FT_LOAD_RENDER);
-		if ( error )
-			continue; 
+		// find a font that can render this character
+		for (int font_id = 0; font_id < ARRAY_COUNT(font_list); font_id++)
+		{
+			if (font_list[font_id] && FT_Get_Char_Index(font_list[font_id], text[n]))
+			{
+				face = font_list[font_id];
+				break;
+			}
+		}
 
-		// size
-		int width = (slot->bitmap_left) + slot->bitmap.width;
-		int height = font_face1->size->metrics.height / 64;
+		if (face)
+		{
+			FT_GlyphSlot slot = face->glyph;
 
-		// max size
-		if (pen_x + width > size_x) size_x = pen_x + width;
-		if (pen_y + height > size_y) size_y = pen_y + height;
+			// set font size in pixels
+			error = FT_Set_Pixel_Sizes(face, 0, height);
 
-		// increment pen position
-		pen_x += slot->advance.x >> 6;
+			if (error)
+				continue;
+
+			// load glyph image into the slot (erase previous one)
+			error = FT_Load_Char(face, text[n], FT_LOAD_RENDER);
+			if ( error )
+				continue; 
+
+			// size
+			int width = (slot->bitmap_left) + slot->bitmap.width;
+			int height = face->size->metrics.height / 64;
+
+			// max size
+			if (pen_x + width > size_x) size_x = pen_x + width;
+			if (pen_y + height > size_y) size_y = pen_y + height;
+
+			// increment pen position
+			pen_x += slot->advance.x >> 6;
+		}
 	}
 
 	// allocates texture node
@@ -536,33 +566,54 @@ static texture_node_t * create_string_texture(const char * text, int height)
 		// go over again and draw text
 		for (int n = 0; n < num_chars; n++)
 		{
-			FT_GlyphSlot slot = font_face1->glyph;
+			FT_Face face = NULL;
 
-			// load glyph image into the slot (erase previous one)
-			error = FT_Load_Char(font_face1, text[n], FT_LOAD_RENDER);
-			if ( error )
-				continue;
-
-			// darwing position
-			int dx = pen_x + (slot->bitmap_left);
-			int dy = pen_y + font_face1->size->metrics.ascender / 64 - (slot->bitmap_top);
-
-			for (int y = 0; y < slot->bitmap.rows; ++y)
+			// find a font that can render this character
+			for (int font_id = 0; font_id < ARRAY_COUNT(font_list); font_id++)
 			{
-				uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * (dy + y) + 4 * dx);
-				byte * src = slot->bitmap.buffer + slot->bitmap.pitch * y;
-
-
-				for (int x = 0; x < slot->bitmap.width; x++)
+				if (font_list[font_id] && FT_Get_Char_Index(font_list[font_id], text[n]))
 				{
-					*dst = (*src << 24) | 0xffffff;
-					dst++;
-					src++;
+					face = font_list[font_id];
+					break;
 				}
 			}
 
-			// increment pen position
-			pen_x += slot->advance.x >> 6;
+			if (face)
+			{
+				FT_GlyphSlot slot = face->glyph;
+
+				// set font size in pixels
+				error = FT_Set_Pixel_Sizes(face, 0, height);
+
+				if (error)
+					continue;
+
+				// load glyph image into the slot (erase previous one)
+				error = FT_Load_Char(face, text[n], FT_LOAD_RENDER);
+				if (error)
+					continue;
+
+				// darwing position
+				int dx = pen_x + (slot->bitmap_left);
+				int dy = pen_y + face->size->metrics.ascender / 64 - (slot->bitmap_top);
+
+				for (int y = 0; y < slot->bitmap.rows; ++y)
+				{
+					uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * (dy + y) + 4 * dx);
+					byte * src = slot->bitmap.buffer + slot->bitmap.pitch * y;
+
+
+					for (int x = 0; x < slot->bitmap.width; x++)
+					{
+						*dst = (*src << 24) | 0xffffff;
+						dst++;
+						src++;
+					}
+				}
+
+				// increment pen position
+				pen_x += slot->advance.x >> 6;
+			}
 		}
 
 		resource_texture->UnlockRect(0);
@@ -589,10 +640,24 @@ static int font_initialize()
 	char buffer[MAX_PATH];
 	SHGetFolderPath(NULL, CSIDL_FONTS, NULL, SHGFP_TYPE_CURRENT,  font_path);
 
-	// load default fonts.
-	_snprintf(buffer, sizeof(buffer), "%s\\arial.ttf", font_path);
-	error = FT_New_Face(font_library, buffer, 0, &font_face1);
-	if (error)
+	// default fonts
+	static const char * fonts[] = { "arial.ttf", "msyh.ttf", "simsun.ttf" };
+
+	int font_count = 0;
+	for (int i = 0; i < ARRAY_COUNT(fonts); i++)
+	{
+		// load default fonts.
+		_snprintf(buffer, sizeof(buffer), "%s\\%s", font_path, fonts[i]);
+		
+		if (PathFileExists(buffer))
+		{
+			if (0 == FT_New_Face(font_library, buffer, 0, &font_list[font_count]))
+				if (++font_count == ARRAY_COUNT(font_list))
+					break;
+		}
+	}
+
+	if (font_count == 0)
 	{
 		fprintf(stderr, "an error occurred during font library initialization\n");
 		return -1;
@@ -604,8 +669,15 @@ static int font_initialize()
 // shutdown font
 static void font_shutdown()
 {
-	FT_Done_Face(font_face1);
-	FT_Done_Face(font_face2);
+	for (int i = 0; i < ARRAY_COUNT(font_list); i++)
+	{
+		if (font_list[i])
+		{
+			FT_Done_Face(font_list[i]);
+			font_list[i] = NULL;
+		}
+	}
+
 	FT_Done_FreeType(font_library);
 }
 
@@ -1003,8 +1075,12 @@ static void d3d_reset_parameters(D3DPRESENT_PARAMETERS & params, HWND hwnd)
 	params.BackBufferCount = 1;
 	params.MultiSampleType = D3DMULTISAMPLE_NONE;
 	params.MultiSampleQuality = 0;
-	params.SwapEffect = D3DSWAPEFFECT_COPY;
+	params.SwapEffect = D3DSWAPEFFECT_DISCARD;
+#if FULLSCREEN
+	params.Windowed = FALSE;
+#else
 	params.Windowed = TRUE;
+#endif
 	params.FullScreen_RefreshRateInHz = 0;
 	params.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
 	params.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
@@ -1019,12 +1095,17 @@ static void d3d_reset_parameters(D3DPRESENT_PARAMETERS & params, HWND hwnd)
 	params.BackBufferWidth = (rect1.right - rect1.left) - (rect2.right - rect2.left);
 	params.BackBufferHeight = (rect1.bottom - rect1.top) - (rect2.bottom - rect2.top);
 
+	char buff[256];
+	sprintf(buff, "%d x %d\n", params.BackBufferWidth, params.BackBufferHeight);
+	OutputDebugString(buff);
+
+
 #if SCALE_DISPLAY
-	display_width = 760;
-	display_height = 340;
+	display_width = fixed_width;
+	display_height = fixed_height;
 #else
 	display_width = params.BackBufferWidth;
-	display_height = BackBufferHeight;
+	display_height = params.BackBufferHeight;
 #endif
 }
 
@@ -1188,6 +1269,9 @@ static void d3d_device_lost()
 // reset 
 static int d3d_device_reset()
 {
+	if (!device)
+		return 0;
+
 	HRESULT hr;
 	D3DPRESENT_PARAMETERS params;
 
@@ -1872,6 +1956,9 @@ static void draw_keyboard_controls()
 // draw main window
  void display_render()
 {
+	if (device == NULL)
+		return;
+
 	// begin scene
 	if (SUCCEEDED(device->BeginScene()))
 	{
@@ -1889,8 +1976,20 @@ static void draw_keyboard_controls()
 			tx, ty, 0, 1,
 		};
 
+		D3DMATRIX view = {
+			1, 0, 0, 0,
+			0, 1, 0, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1,
+		};
+
+#if !SCALE_DISPLAY
+		view._41 = (float)((display_width - fixed_width) / 2);
+		view._42 = (float)((display_height - fixed_height) / 2);
+#endif
+
 		device->SetTransform(D3DTS_PROJECTION, &projection);
-		device->SetTransform(D3DTS_VIEW, &matrix_identity);
+		device->SetTransform(D3DTS_VIEW, &view);
 
 #ifdef _DEBUG
 		if (GetAsyncKeyState(VK_CONTROL) && GetAsyncKeyState(VK_F1))
@@ -1907,7 +2006,7 @@ static void draw_keyboard_controls()
 		else
 #endif
 		{
-			draw_image(background, 0, 0, (float)display_width, (float)display_height, 0xffffffff);
+			draw_image(background, 0, 0, (float)fixed_width, (float)fixed_height, 0xffffffff);
 			draw_keyboard();
 			draw_midi_keyboard();
 			draw_keyboard_controls();
@@ -2154,8 +2253,13 @@ static void adjust_mouse_position(int & x, int & y)
 	if (rect.right > rect.left &&
 		rect.bottom > rect.top)
 	{
+#if SCALE_DISPLAY
 		x = x * display_width / (rect.right - rect.left);
 		y = y * display_height / (rect.bottom - rect.top);
+#else
+		x -= (display_width - fixed_width) / 2;
+		y -= (display_height - fixed_height) / 2;
+#endif
 	}
 }
 

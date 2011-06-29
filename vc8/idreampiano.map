@@ -70,6 +70,52 @@ key	5	NoteOn	0	g6
 key	6	NoteOn	0	a6
 key	7	NoteOn	0	b6
 key	8	NoteOn	0	c7
+
+keydown	space	Controller	0	SustainPedal	127
+keyup	space	Controller	0	SustainPedal	0
+
+keydown	F1	Group		Inc	1
+keydown	F2	Group		Dec	1
+keydown	F3	KeySignature	Inc	1
+keydown	F4	KeySignature	Dec	1
+
+keydown	F5	Octshift	0	Inc	1
+keydown	F6	Octshift	0	Dec	1
+keydown	F7	Octshift	1	Inc	1
+keydown	F8	Octshift	1	Dec	1
+
+label	F5	LV+
+label	F6	LV-
+label	F7	RV+
+label	F8	RV-
+
+keydown	F9	Velocity	0	Inc	1
+keydown	F10	Velocity	0	Dec	1
+keydown	F11	Velocity	1	Inc	1
+keydown	F12	Velocity	1	Dec	1
+
+keydown	ScrollLock	Record
+keydown	PrintScreen	Play
+keydown	Pause	Stop
+
+label	F1	GP+
+label	F2	GP-
+label	F3	Key+
+label	F4	Key-
+label	F5	LO+
+label	F6	LO-
+label	F7	RO+
+label	F8	RO-
+label	F9	LV+
+label	F10	LV-
+label	F11	RV+
+label	F12	RV-
+
+label	ScrollLock	Rec
+label	PrintScreen	Play
+label	Pause	Stop
+label	space	Sustain Pedal
+
 key	9	NoteOn	0	d7
 key	0	NoteOn	0	e7
 key	-	NoteOn	0	f7
@@ -77,19 +123,49 @@ key	=	NoteOn	0	g7
 key	\	NoteOn	0	a7
 
 
-keydown	~	KeyboardOctshift	1	Inc	1
-label	~	Oct+
-keydown	Tab	KeyboardOctshift	0	Inc	1
-label	Tab	Oct+
-keydown	CapsLock	KeySignature	Inc	1
-label	CapsLock	Key+
-keydown	Shift	KeySignature	Dec	1
-label	Shift	Key-
+keydown	space	Controller	0	SustainPedal	127
+keyup	space	Controller	0	SustainPedal	0
+
+keydown	F1	Group		Inc	1
+keydown	F2	Group		Dec	1
+keydown	F3	KeySignature	Inc	1
+keydown	F4	KeySignature	Dec	1
+
+keydown	F5	Octshift	0	Inc	1
+keydown	F6	Octshift	0	Dec	1
+keydown	F7	Octshift	1	Inc	1
+keydown	F8	Octshift	1	Dec	1
+
+label	F5	LV+
+label	F6	LV-
+label	F7	RV+
+label	F8	RV-
+
+keydown	F9	Velocity	0	Inc	1
+keydown	F10	Velocity	0	Dec	1
+keydown	F11	Velocity	1	Inc	1
+keydown	F12	Velocity	1	Dec	1
 
 keydown	ScrollLock	Record
-label	ScrollLock	Rec
 keydown	PrintScreen	Play
-label	PrintScreen	Play
 keydown	Pause	Stop
+
+label	F1	GP+
+label	F2	GP-
+label	F3	Key+
+label	F4	Key-
+label	F5	LO+
+label	F6	LO-
+label	F7	RO+
+label	F8	RO-
+label	F9	LV+
+label	F10	LV-
+label	F11	RV+
+label	F12	RV-
+
+label	ScrollLock	Rec
+label	PrintScreen	Play
 label	Pause	Stop
+label	space	Sustain Pedal
+
 
