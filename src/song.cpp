@@ -1013,7 +1013,6 @@ int song_open_lyt(const char * filename)
 	{
 		song_end = NULL;
 		fclose(fp);
-		MessageBox(gui_get_window(), "´ò¿ªÀÖÆ×Ê§°Ü£¡", APP_NAME, MB_OK);
 		return err;
 	}
 

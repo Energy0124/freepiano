@@ -1,0 +1,45 @@
+#Play
+keydown %s Play
+label %s Play
+#Record
+keydown %s Record
+label %s Rec
+#Stop
+keydown %s Stop
+label %s Stop
+#Increase key signature
+keydown %s KeySignature Inc 1
+label %s Key+
+#Decrease key signature
+keydown %s KeySignature Dec 1
+label %s Key-
+#Increase left octshift
+keydown %s Octshift 0 Inc 1
+label %s LO+
+#Decrease left octshift
+keydown %s Octshift 0 Dec 1
+label %s LO-
+#Increase right octshift
+keydown %s Octshift 1 Inc 1
+label %s RO+
+#Decrease right octshift
+keydown %s Octshift 1 Dec 1
+label %s RO-
+#Next group
+keydown %s Group Inc 1
+label %s GP+
+#Previous group
+keydown %s Group Dec 1
+label %s GP+
+#Flip sustain pedal
+keydown %s Controller 0 SustainPedal 0 Flip
+label %s SUS
+#Next instrument
+keydown %s Program 0 1 Inc
+label %s P+
+#Previous instrument
+keydown %s Program 0 1 Dec
+label %s P-
+#Select instrument 1 (Modify script for others)
+keydown %s Program 0 1
+label %s P1

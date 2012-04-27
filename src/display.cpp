@@ -13,15 +13,10 @@
 
 #include "png.h"
 
-#define USE_LIB_FREE_TYPE		1
-
-#if USE_LIB_FREE_TYPE
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <Knownfolders.h>
 #include <Shlobj.h>
-#endif
-
 
 #include "display.h"
 #include "keyboard.h"
@@ -251,8 +246,6 @@ struct texture_node_t
 // root texture node.
 static texture_node_t * root_texture_node = NULL;
 
-#if USE_LIB_FREE_TYPE
-
 // free type library
 static FT_Library font_library = NULL;
 
@@ -337,7 +330,7 @@ static void preload_characters(const wchar_t * text, int len, int size)
 					int size_x = slot->bitmap.width;
 					int size_y = slot->bitmap.rows;
 
-					if (size_x > 0 && size_y > 0)
+					if (size_x >= 0 && size_y >= 0)
 					{
 						// allocates texture node
 						texture_node_t * node = root_texture_node->allocate(size_x + 2, size_y + 2);
@@ -496,7 +489,6 @@ static int build_string_vertex(const wchar_t * text, int len, int size, float x,
 static texture_node_t * create_string_texture(const char * text, int height)
 {
 	int error;
-
 
 	int pen_x = 0;
 	int pen_y = 0;
@@ -680,122 +672,6 @@ static void font_shutdown()
 
 	FT_Done_FreeType(font_library);
 }
-
-#else
-
-// default windows font
-static HFONT default_font = NULL;
-
-// create string texture
-static texture_node_t * create_string_texture(const char * str)
-{
-	HDC hdcWindow = GetDC(NULL);
-	HDC hdcMemDC = CreateCompatibleDC(hdcWindow); 
-	int len = strlen(str);
-
-	// get text size
-	SIZE size;
-	SelectObject(hdcMemDC, default_font);
-	GetTextExtentPoint32(hdcMemDC, str, len, &size);
-
-	// set text and background color
-	SetTextColor(hdcMemDC, RGB(255,255,255));
-	SetBkColor(hdcMemDC, 0);
-
-	// create bitmap
-	BITMAPINFO bmi;
-	ZeroMemory(&bmi.bmiHeader, sizeof(BITMAPINFOHEADER));
-	bmi.bmiHeader.biSize		= sizeof(BITMAPINFOHEADER);
-	bmi.bmiHeader.biWidth		= size.cx;
-	bmi.bmiHeader.biHeight		= -size.cy;
-	bmi.bmiHeader.biPlanes		= 1;
-	bmi.bmiHeader.biBitCount	= 32;
-	bmi.bmiHeader.biCompression = BI_RGB;
-
-	uint * pBits;
-	HBITMAP hBmp = CreateDIBSection(hdcMemDC, &bmi, DIB_RGB_COLORS, (void **) &pBits, NULL, 0);
-
-	if (NULL == hBmp || NULL == pBits)
-	{
-		DeleteDC(hdcWindow);
-		DeleteDC(hdcMemDC);
-		return NULL;
-	}
-
-	SelectObject(hdcMemDC, hBmp);
-
-	// draw text
-	TextOut(hdcMemDC, 0, 0, str, len);
-
-	// allocates texture node
-	texture_node_t * node = root_texture_node->allocate(size.cx, size.cy);
-
-	RECT data_rect;
-	data_rect.left = (int)node->min_u;
-	data_rect.right = (int)node->min_u + (int)node->width;
-	data_rect.top = (int)node->min_v;
-	data_rect.bottom = (int)node->min_v + (int)node->height;
-
-	D3DLOCKED_RECT lock_rect;
-	if (SUCCEEDED(resource_texture->LockRect(0, &lock_rect, &data_rect, D3DLOCK_DISCARD)))
-	{
-		for (int y = 0; y < size.cy; ++y)
-		{
-			uint * dst = (uint*)((byte*)lock_rect.pBits + lock_rect.Pitch * y);
-			uint * src = (uint*)pBits + size.cx * y;
-
-			for (int x = 0; x < size.cx; x++)
-			{
-				*dst = *src | 0xff000000;
-				dst++;
-				src++;
-			}
-		}
-
-		resource_texture->UnlockRect(0);
-
-	}
-
-	DeleteObject(hBmp);
-	DeleteDC(hdcMemDC);
-	DeleteDC(hdcWindow);
-
-	return node;
-}
-
-// initialize fonts
-static int font_initialize()
-{
-	SystemParametersInfo(SPI_SETFONTSMOOTHING, TRUE, 0, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-	SystemParametersInfo(SPI_SETFONTSMOOTHINGTYPE, FE_FONTSMOOTHINGSTANDARD, 0, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE); 
-
-	LOGFONT lfont;
-	lfont.lfHeight = -12;
-	lfont.lfWidth = 0;
-	lfont.lfEscapement = 0;
-	lfont.lfOrientation = 0;
-	lfont.lfWeight = FW_MEDIUM;
-	lfont.lfItalic = 0;
-	lfont.lfUnderline = 0;
-	lfont.lfStrikeOut = 0;
-	lfont.lfCharSet = ANSI_CHARSET;
-	lfont.lfOutPrecision = OUT_DEFAULT_PRECIS;
-	lfont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-	lfont.lfQuality = CLEARTYPE_QUALITY;
-	lfont.lfPitchAndFamily = VARIABLE_PITCH | FF_ROMAN;
-	lstrcpy(lfont.lfFaceName,"Arial");
-	default_font = CreateFontIndirect(&lfont);
-
-	return 0;
-}
-
-// shutdown font
-static void font_shutdown()
-{
-	DeleteObject(default_font);
-}
-
-#endif
 
 // -----------------------------------------------------------------------------------------
 // texture loading funcs
@@ -1894,8 +1770,16 @@ static void draw_keyboard_controls()
 	};
 
 	// sustain pedal
-	_snprintf(buff, sizeof(buff), "%d", config_get_controller(0, 0x40));
-	draw_string(92, 222, 0xff6e6e6e, buff, 11, 1, 0);
+	{
+		byte sustain = config_get_controller(0, 0x40);
+
+		if (sustain < 128)
+			_snprintf(buff, sizeof(buff), "%d", config_get_controller(0, 0x40));
+		else
+			strcpy(buff, "-");
+
+		draw_string(92, 222, 0xff6e6e6e, buff, 11, 1, 0);
+	}
 
 	// midi key
 	switch (config_get_key_signature())

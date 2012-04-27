@@ -1,18 +1,13 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 9.00
-# Visual Studio 2005
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "freepiano", "freepiano.vcproj", "{9FB5C3F5-EF33-4CE7-8264-88FC9A904F11}"
-	ProjectSection(ProjectDependencies) = postProject
-		{8CD7292D-D2FA-46F6-8927-88226C737299} = {8CD7292D-D2FA-46F6-8927-88226C737299}
-		{78B079BD-9FC7-4B9E-B4A6-96DA0F00248B} = {78B079BD-9FC7-4B9E-B4A6-96DA0F00248B}
-		{3CACBF66-2E82-4937-98A6-084E0DE5F761} = {3CACBF66-2E82-4937-98A6-084E0DE5F761}
-	EndProjectSection
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "freepiano", "freepiano.vcxproj", "{9FB5C3F5-EF33-4CE7-8264-88FC9A904F11}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib", "zlib.vcproj", "{8CD7292D-D2FA-46F6-8927-88226C737299}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlib", "zlib.vcxproj", "{8CD7292D-D2FA-46F6-8927-88226C737299}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libpng", "libpng.vcproj", "{3CACBF66-2E82-4937-98A6-084E0DE5F761}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libpng", "libpng.vcxproj", "{3CACBF66-2E82-4937-98A6-084E0DE5F761}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "freetype2", "freetype.vcproj", "{78B079BD-9FC7-4B9E-B4A6-96DA0F00248B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "freetype2", "freetype.vcxproj", "{78B079BD-9FC7-4B9E-B4A6-96DA0F00248B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

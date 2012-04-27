@@ -1,7 +1,7 @@
 #pragma once
 
 
-#define	INSTRUMENT_TYPE_NONE		0
+#define	INSTRUMENT_TYPE_MIDI		0
 #define	INSTRUMENT_TYPE_VSTI		1
 
 #define	OUTPUT_TYPE_AUTO			0

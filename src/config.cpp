@@ -12,6 +12,7 @@
 #include "display.h"
 #include "song.h"
 #include "gui.h"
+#include "language.h"
 
 #include "../res/resource.h"
 
@@ -109,8 +110,9 @@ static name_t key_names[] =
 	{ "Win",			DIK_LWIN },
 	{ "Alt",			DIK_LMENU },
 	{ "Space",			DIK_SPACE },
-	{ "Apps",			DIK_APPS },
 	{ "RAlt",			DIK_RMENU },
+	{ "Apps",			DIK_APPS },
+	{ "RWin",			DIK_RWIN },
 	{ "RCtrl",			DIK_RCONTROL },
 	  
 	{ "Num0",			DIK_NUMPAD0 },
@@ -368,7 +370,7 @@ static name_t value_action_names[] =
 
 static name_t instrument_type_names[] = 
 {
-	{ "None",			INSTRUMENT_TYPE_NONE },
+	{ "None",			INSTRUMENT_TYPE_MIDI },
 	{ "VSTI",			INSTRUMENT_TYPE_VSTI },
 };
 
@@ -1079,7 +1081,7 @@ static int config_parse_keymap_line(char * s)
 	else if (match_word(&s, "Label"))
 	{
 		uint key = 0;
-		char buff[256];
+		char buff[256] = " ";
 
 		// match key name
 		if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
@@ -1208,7 +1210,7 @@ static int config_parse_keymap_line(char * s)
 		uint value;
 
 		if (match_number(&s, &channel) &&
-			match_number(&s, &id) &&
+			match_value(&s, controller_names, ARRAY_COUNT(controller_names), &id) &&
 			match_number(&s, &value))
 		{
 			config_set_controller(channel, id, value);
@@ -1636,25 +1638,25 @@ int config_save(const char * filename)
 		return -1;
 
 	if (global.instrument_type)
-	{
 		fprintf(fp, "instrument type %s\r\n", instrument_type_names[global.instrument_type]);
-		if (global.instrument_path[0])
-			fprintf(fp, "instrument path %s\r\n", global.instrument_path);
 
+	if (global.instrument_path[0])
+		fprintf(fp, "instrument path %s\r\n", global.instrument_path);
+
+	if (!vsti_is_show_editor())
 		fprintf(fp, "instrument showui %d\r\n", vsti_is_show_editor());
-	}
-
 
 	if (global.output_type)
-	{
 		fprintf(fp, "output type %s\r\n", output_type_names[global.output_type]);
 
-		if (global.output_device[0])
-			fprintf(fp, "output device %s\r\n", global.output_device);
+	if (global.output_device[0])
+		fprintf(fp, "output device %s\r\n", global.output_device);
 
+	if (global.output_delay != 10)
 		fprintf(fp, "output delay %d\r\n", global.output_delay);
+
+	if (global.output_volume != 100)
 		fprintf(fp, "output volume %d\r\n", global.output_volume);
-	}
 
 	if (global.keymap[0])
 		fprintf(fp, "keyboard map %s\r\n", global.keymap);
@@ -1699,7 +1701,7 @@ int config_select_instrument(int type, const char * name)
 {
 	int result = -1;
 
-	if (type == INSTRUMENT_TYPE_NONE)
+	if (type == INSTRUMENT_TYPE_MIDI)
 	{
 		vsti_unload_plugin();
 		global.instrument_type = type;
@@ -1979,7 +1981,7 @@ void config_get_media_path(char * buff, int buff_size, const char * path)
 
 		// to media path
 #ifdef _DEBUG
-		PathAppend(base, "\\..\\");
+		PathAppend(base, "\\..\\..\\data\\");
 #else
 		PathAppend(base, "\\.\\");
 #endif
@@ -2028,7 +2030,7 @@ int config_get_output_volume()
 void config_set_output_volume(int volume)
 {
 	if (volume < 0) volume = 0;
-	if (volume > 100) volume = 100;
+	if (volume > 200) volume = 200;
 	global.output_volume = volume;
 }
 
@@ -2037,52 +2039,12 @@ void config_default_key_setting()
 {
 	config_clear_key_setting();
 
-	// find resource
-	HRSRC hrsrc = FindResource(0, MAKEINTRESOURCE(IDR_TEXT_DEFAULT_SETTING), "TEXT");
-
-	if (hrsrc)
+	if (lang_text_open(IDR_TEXT_DEFAULT_SETTING))
 	{
-		// load resource
-		HGLOBAL hrc = LoadResource(0, hrsrc);
-
-		if (hrc)
-		{
-			char line[1024];
-			char * line_end = line;
-
-			char* data = (char*)LockResource(hrc);
-			char* end = data + SizeofResource(NULL, hrsrc);
-
-			while (data < end)
-			{
-				if (*data == '\n')
-				{
-					if (line_end > line)
-					{
-						*line_end = 0;
-						config_parse_keymap_line(line);
-						line_end = line;
-					}
-				}
-				else
-				{
-					if (line_end < line + sizeof(line) - 1)
-						*line_end++ = *data;
-				}
-
-				data++;
-			}
-			
-			// last line
-			if (line_end > line)
-			{
-				*line_end = 0;
-				config_parse_keymap_line(line);
-				line_end = line;
-			}
-
-			FreeResource(hrc);
-		}
+		char line[4096];
+		while (lang_text_readline(line, sizeof(line)))
+			config_parse_keymap_line(line);
+		lang_text_close();
 	}
 }
 

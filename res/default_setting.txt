@@ -84,9 +84,6 @@ key	-	NoteOn	0	f7
 key	=	NoteOn	0	g7
 key	back	NoteOn	0	a7
 
-keydown	space	Controller	0	SustainPedal	127
-keyup	space	Controller	0	SustainPedal	0
-
 keydown	F1	Group		Inc	1
 keydown	F2	Group		Dec	1
 keydown	F3	KeySignature	Inc	1
@@ -127,4 +124,4 @@ label	F12	RV-
 label	ScrollLock	Rec
 label	PrintScreen	Play
 label	Pause	Stop
-label	space	Sustain Pedal
+label	space	FreePiano 1.3

@@ -1,0 +1,140 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="asio">
+      <UniqueIdentifier>{7d679236-ef51-4803-a4e7-2a5844146abc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="vst">
+      <UniqueIdentifier>{9ab2cf54-bcea-4b5a-93f9-33648dfdbc48}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="res">
+      <UniqueIdentifier>{a36cc947-ed64-4b24-8a73-e6388b57d466}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\asio\asio.cpp">
+      <Filter>asio</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\asio\asiodrivers.cpp">
+      <Filter>asio</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\asio\asiolist.cpp">
+      <Filter>asio</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\config.cpp" />
+    <ClCompile Include="..\src\display.cpp" />
+    <ClCompile Include="..\src\gui.cpp" />
+    <ClCompile Include="..\src\keyboard.cpp" />
+    <ClCompile Include="..\src\main.cpp" />
+    <ClCompile Include="..\src\midi.cpp" />
+    <ClCompile Include="..\src\output_asio.cpp" />
+    <ClCompile Include="..\src\output_dsound.cpp" />
+    <ClCompile Include="..\src\output_wasapi.cpp" />
+    <ClCompile Include="..\src\pch.cpp" />
+    <ClCompile Include="..\src\song.cpp" />
+    <ClCompile Include="..\src\synthesizer_vst.cpp" />
+    <ClCompile Include="..\src\language.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\src\asio\asio.h">
+      <Filter>asio</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\asio\asiodrivers.h">
+      <Filter>asio</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\asio\asiolist.h">
+      <Filter>asio</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\asio\asiosys.h">
+      <Filter>asio</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\asio\iasiodrv.h">
+      <Filter>asio</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\vst\aeffect.h">
+      <Filter>vst</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\vst\aeffectx.h">
+      <Filter>vst</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\vst\vstfxstore.h">
+      <Filter>vst</Filter>
+    </ClInclude>
+    <ClInclude Include="..\res\resource.h">
+      <Filter>res</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\config.h" />
+    <ClInclude Include="..\src\display.h" />
+    <ClInclude Include="..\src\gui.h" />
+    <ClInclude Include="..\src\keyboard.h" />
+    <ClInclude Include="..\src\midi.h" />
+    <ClInclude Include="..\src\output_asio.h" />
+    <ClInclude Include="..\src\output_dsound.h" />
+    <ClInclude Include="..\src\output_wasapi.h" />
+    <ClInclude Include="..\src\pch.h" />
+    <ClInclude Include="..\src\song.h" />
+    <ClInclude Include="..\src\synthesizer_vst.h" />
+    <ClInclude Include="..\src\language.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\res\background.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\check_button_down.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\check_button_up.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\default_setting.txt">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\icon.ico">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\icon_normal.ico">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\icon_small.ico">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\keyboard_note_down.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\keyboard_note_up.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\keyboard_unmapped_down.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\keyboard_unmapped_up.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\midi_black_down.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\midi_black_up.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\midi_white_down.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\midi_white_up.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\notes.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\controllers_ch.txt">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\controllers_en.txt">
+      <Filter>res</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\res\freepiano.rc">
+      <Filter>res</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>
