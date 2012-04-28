@@ -23,6 +23,7 @@
 #include "gui.h"
 #include "config.h"
 #include "song.h"
+#include "export_mp4.h"
 #include "../res/resource.h"
 
 
@@ -32,14 +33,18 @@ using namespace display_resource;
 static LPDIRECT3D9 d3d9 = NULL;
 static LPDIRECT3DDEVICE9 device = NULL;
 static LPDIRECT3DTEXTURE9 resource_texture = NULL;
+static IDirect3DTexture9 *render_texture = NULL;
+static IDirect3DSurface9 *back_buffer = NULL;
 
 // main window handle.
 static HWND display_hwnd = NULL;
 
 static int display_width = 0;
 static int display_height = 0;
-static const int fixed_width = 760;
-static const int fixed_height = 340;
+
+// get display width
+int display_get_width() { return 752; }
+int display_get_height() { return 336; }
 
 // vertex format
 struct Vertex
@@ -975,10 +980,9 @@ static void d3d_reset_parameters(D3DPRESENT_PARAMETERS & params, HWND hwnd)
 	sprintf(buff, "%d x %d\n", params.BackBufferWidth, params.BackBufferHeight);
 	OutputDebugString(buff);
 
-
 #if SCALE_DISPLAY
-	display_width = fixed_width;
-	display_height = fixed_height;
+	display_width = display_get_width();
+	display_height = display_get_height();
 #else
 	display_width = params.BackBufferWidth;
 	display_height = params.BackBufferHeight;
@@ -1140,6 +1144,8 @@ error:
 // device lost
 static void d3d_device_lost()
 {
+	SAFE_RELEASE(render_texture);
+	SAFE_RELEASE(back_buffer);
 }
 
 // reset 
@@ -1163,9 +1169,15 @@ static int d3d_device_reset()
 
 	// reset device
 	if (FAILED(hr = device->Reset(&params)))
-	{
 		return hr;
-	}
+
+	// create render texture
+	if (FAILED(hr = device->CreateTexture(display_get_width(), display_get_height(), 1, D3DUSAGE_RENDERTARGET, 
+		D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &render_texture, NULL)))
+		return hr;
+
+	if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &back_buffer)))
+		return hr;
 
 	// reset render states
 	device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
@@ -1375,10 +1387,10 @@ static void init_keyboard_states()
 		if (key->code)
 		{
 			KeyboardState & state = keyboard_states[key->code];
-			state.x1 = round(14 + x * key_width);
-			state.y1 = round(14 + y * key_height);
-			state.x2 = round(14 + x * key_width + key->x * key_width);
-			state.y2 = round(14 + y * key_height + key->y * key_height);
+			state.x1 = round(10 + x * key_width);
+			state.y1 = round(13 + y * key_height);
+			state.x2 = round(10 + x * key_width + key->x * key_width);
+			state.y2 = round(13 + y * key_height + key->y * key_height);
 			x += key->x;
 		}
 		else
@@ -1394,8 +1406,8 @@ static void init_midi_keyboard_states()
 {
 	static byte key_flags[12] = { 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0 };
 
-	float x = 16;
-	float y = 250;
+	float x = 12;
+	float y = 248;
 	float w1 = 9;
 	float h1 = 54;
 	float w2 = 14;
@@ -1778,7 +1790,7 @@ static void draw_keyboard_controls()
 		else
 			strcpy(buff, "-");
 
-		draw_string(92, 222, 0xff6e6e6e, buff, 11, 1, 0);
+		draw_string(88, 220, 0xff6e6e6e, buff, 11, 1, 0);
 	}
 
 	// midi key
@@ -1799,30 +1811,30 @@ static void draw_keyboard_controls()
 	default:	_snprintf(buff, sizeof(buff), "%d", config_get_key_signature()); break;
 	}
 
-	draw_string(202, 222, 0xff6e6e6e, buff, 11, 1, 0);
+	draw_string(198, 220, 0xff6e6e6e, buff, 11, 1, 0);
 
 
 	// record
 	if (song_is_recording())
-		draw_image(check_button_down, 244, 220, 244 + 18, 220 + 18, 0xffd23b36);
+		draw_image(check_button_down, 240, 218, 240 + 18, 218 + 18, 0xffd23b36);
 	else
-		draw_image(check_button_up, 244, 220, 244 + 18, 220 + 18, 0xff4d3b36);
+		draw_image(check_button_up, 240, 218, 240 + 18, 218 + 18, 0xff4d3b36);
 
 	// timer
 	_snprintf(buff, sizeof(buff), "%d:%02d", song_get_time() / 1000 / 60, song_get_time() / 1000 % 60);
-	draw_string(332, 222, 0xff6e6e6e, buff, 11, 1, 0);
+	draw_string(328, 220, 0xff6e6e6e, buff, 11, 1, 0);
 
 	// play
 	if (song_is_playing())
-		draw_image(check_button_down, 359, 220, 359 + 18, 220 + 18, 0xff53ce36);
+		draw_image(check_button_down, 355, 218, 355 + 18, 218 + 18, 0xff53ce36);
 	else
-		draw_image(check_button_up, 359, 220, 359 + 18, 220 + 18, 0xff4d5c37);
+		draw_image(check_button_up, 355, 218, 355 + 18, 218 + 18, 0xff4d5c37);
 
 	// velocity
 	_snprintf(buff, sizeof(buff), "%d", config_get_key_velocity(0));
-	draw_string(512, 222, 0xff6e6e6e, buff, 11, 1, 0);
+	draw_string(508, 220, 0xff6e6e6e, buff, 11, 1, 0);
 	_snprintf(buff, sizeof(buff), "%d", config_get_key_velocity(1));
-	draw_string(554, 222, 0xff6e6e6e, buff, 11, 1, 0);
+	draw_string(550, 220, 0xff6e6e6e, buff, 11, 1, 0);
 
 	// octshift
 	{
@@ -1830,50 +1842,67 @@ static void draw_keyboard_controls()
 		int s2 = config_get_key_octshift(1);
 
 		_snprintf(buff, sizeof(buff), "%s%d", s1 > 0 ? "+" : s1 < 0 ? "-" : "", abs(s1));
-		draw_string(672, 222, 0xff6e6e6e, buff, 11, 1, 0);
+		draw_string(668, 220, 0xff6e6e6e, buff, 11, 1, 0);
 
 		_snprintf(buff, sizeof(buff), "%s%d", s2 > 0 ? "+" : s2 < 0 ? "-" : "", abs(s2));
-		draw_string(716, 222, 0xff6e6e6e, buff, 11, 1, 0);
+		draw_string(712, 220, 0xff6e6e6e, buff, 11, 1, 0);
 	}
 }
 
-// draw main window
- void display_render()
+static void setup_matrix(float x, float y, float width, float height)
 {
-	if (device == NULL)
-		return;
+	float sx = 2.0f / width;
+	float sy = -2.0f / height;
+	float tx = -1 - sx * 0.5f;
+	float ty = 1 - sy * 0.5f;
 
+	D3DMATRIX projection = {
+		sx, 0, 0, 0,
+		0, sy, 0, 0,
+		0, 0,  1, 0,
+		tx, ty, 0, 1,
+	};
+
+	D3DMATRIX view = {
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		x, y, 0, 1,
+	};
+
+	device->SetTransform(D3DTS_PROJECTION, &projection);
+	device->SetTransform(D3DTS_VIEW, &view);
+}
+
+// draw
+static void display_draw()
+{
 	// begin scene
 	if (SUCCEEDED(device->BeginScene()))
 	{
-		float sx = 2.0f / (float)display_width;
-		float sy = -2.0f / (float)display_height;
-		float tx = -1 + sx * 0.5f;
-		float ty = 1 + sy * 0.5f;
-		tx = -1 - sx * 0.5f;
-		ty = 1 - sy * 0.5f;
+		float width = (float)display_get_width();
+		float height = (float)display_get_height();
 
-		D3DMATRIX projection = {
-			sx, 0, 0, 0,
-			0, sy, 0, 0,
-			0, 0, 1, 0,
-			tx, ty, 0, 1,
-		};
+		IDirect3DSurface9 *surface;
+		if (SUCCEEDED(render_texture->GetSurfaceLevel(0, &surface))) {
+			device->SetRenderTarget(0, surface);
+			setup_matrix(0, 0, width, height);
+			draw_image(background, 0, 0, (float)display_get_width(), (float)display_get_height(), 0xffffffff);
+			draw_keyboard();
+			draw_midi_keyboard();
+			draw_keyboard_controls();
+			surface->Release();
+		}
 
-		D3DMATRIX view = {
-			1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1,
-		};
+		device->SetRenderTarget(0, back_buffer);
 
 #if !SCALE_DISPLAY
-		view._41 = (float)((display_width - fixed_width) / 2);
-		view._42 = (float)((display_height - fixed_height) / 2);
+		device->Clear(0, 0, D3DCLEAR_TARGET, 0x00000000, 0, 0);
+		setup_matrix((display_width - width) / 2, (display_height - height) / 2, display_width, display_height);
 #endif
+		set_texture(render_texture);
+		draw_sprite(0, 0, width, height, 0, 0, width, height, 0xffffffff);
 
-		device->SetTransform(D3DTS_PROJECTION, &projection);
-		device->SetTransform(D3DTS_VIEW, &view);
 
 #ifdef _DEBUG
 		if (GetAsyncKeyState(VK_CONTROL) && GetAsyncKeyState(VK_F1))
@@ -1887,17 +1916,18 @@ static void draw_keyboard_controls()
 			// draw resource texture
 			draw_sprite(0, 0, 512, 512, 0, 0, 512, 512, 0xffffffff);
 		}
-		else
 #endif
-		{
-			draw_image(background, 0, 0, (float)fixed_width, (float)fixed_height, 0xffffffff);
-			draw_keyboard();
-			draw_midi_keyboard();
-			draw_keyboard_controls();
-		}
-
 		device->EndScene();
 	}
+}
+
+// draw main window
+ void display_render()
+{
+	if (device == NULL)
+		return;
+
+	display_draw();
 
 	HRESULT hr = device->Present(NULL, NULL, NULL, NULL);
 	if (hr == D3DERR_DEVICELOST)
@@ -2059,14 +2089,14 @@ static int find_control_button(int x, int y)
 	}
 	buttons[] =
 	{
-		{ 73, 221, 36, 15, CMD_SUSTAIN },
-		{ 185, 221, 36, 15, CMD_MIDI_KEY },
-		{ 245, 221, 65, 15, CMD_RECORD },
-		{ 361, 221, 53, 15, CMD_PLAY },
-		{ 494, 221, 36, 15, CMD_VELOCITY_LEFT },
-		{ 538, 221, 36, 15, CMD_VELOCITY_RIGHT },
-		{ 655, 221, 36, 15, CMD_OCTSHIFT_LEFT },
-		{ 699, 221, 36, 15, CMD_OCTSHIFT_RIGHT },
+		{ 69, 219, 36, 15, CMD_SUSTAIN },
+		{ 181, 219, 36, 15, CMD_MIDI_KEY },
+		{ 241, 219, 65, 15, CMD_RECORD },
+		{ 357, 219, 53, 15, CMD_PLAY },
+		{ 490, 219, 36, 15, CMD_VELOCITY_LEFT },
+		{ 534, 219, 36, 15, CMD_VELOCITY_RIGHT },
+		{ 651, 219, 36, 15, CMD_OCTSHIFT_LEFT },
+		{ 695, 219, 36, 15, CMD_OCTSHIFT_RIGHT },
 	};
 
 	for (int i = 0; i < ARRAY_COUNT(buttons); i++)
@@ -2141,8 +2171,8 @@ static void adjust_mouse_position(int & x, int & y)
 		x = x * display_width / (rect.right - rect.left);
 		y = y * display_height / (rect.bottom - rect.top);
 #else
-		x -= (display_width - fixed_width) / 2;
-		y -= (display_height - fixed_height) / 2;
+		x -= (display_width - display_get_width()) / 2;
+		y -= (display_height - display_get_height()) / 2;
 #endif
 	}
 }
@@ -2150,6 +2180,9 @@ static void adjust_mouse_position(int & x, int & y)
 // mouse control
 static int mouse_control(HWND window, uint msg, int x, int y, int z)
 {
+	if (export_rendering())
+		return 0;
+
 	static int previous_keycode = -1;
 	static int previous_midi_note = -1;
 
@@ -2280,6 +2313,54 @@ static void mouse_menu(int x, int y)
 	}
 }
 
+// capture bitmap
+static int capture_bitmap24(unsigned char *pixels, int strike)
+{
+	HRESULT hr;
+	D3DLOCKED_RECT rect;
+	IDirect3DTexture9 *texture = NULL;
+	IDirect3DSurface9 *src_surface = NULL;
+	IDirect3DSurface9 *dst_surface = NULL;
+	if (FAILED(hr = device->CreateTexture(display_get_width(), display_get_height(), 1,  0,
+		D3DFMT_X8R8G8B8, D3DPOOL_SYSTEMMEM, &texture, NULL)))
+		goto cleanup;
+
+	if (FAILED(hr = texture->GetSurfaceLevel(0, &dst_surface)))
+		goto cleanup;
+
+	if (FAILED(hr = render_texture->GetSurfaceLevel(0, &src_surface)))
+		goto cleanup;
+
+	if (FAILED(hr = device->GetRenderTargetData(src_surface, dst_surface)))
+		goto cleanup;
+
+	if (SUCCEEDED(hr = texture->LockRect(0, &rect, NULL, D3DLOCK_READONLY)))
+	{
+		unsigned char *line = pixels;
+		for (int y = 0; y < display_get_height(); y++)
+		{
+			unsigned char * dst = pixels + y * strike;
+			unsigned char * src = (unsigned char *)rect.pBits + rect.Pitch * y;
+
+			for (int x = 0; x < display_get_width(); x++)
+			{
+				dst[0] = src[0];
+				dst[1] = src[1];
+				dst[2] = src[2];
+				dst += 3;
+				src += 4;
+			}
+		}
+		texture->UnlockRect(0);
+		hr = S_OK;
+	}
+
+cleanup:
+	SAFE_RELEASE(src_surface);
+	SAFE_RELEASE(dst_surface);
+	SAFE_RELEASE(texture);
+	return hr == S_OK;
+}
 // display process emssage
 int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -2314,7 +2395,21 @@ int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 
+	case WM_USER + 10:
+		{
+			unsigned char * pixels = (unsigned char *)wParam;
+			int strike = (int)lParam;
+			display_draw();
+			return capture_bitmap24(pixels, strike);
+		}
+		break;
 	}
 
 	return 0;
+}
+
+// capture bitmap
+int display_capture_bitmap24(unsigned char *pixels, int strike)
+{
+	return SendMessage(gui_get_window(), WM_USER + 10, (WPARAM)pixels, (LPARAM)strike);
 }

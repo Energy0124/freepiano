@@ -8,6 +8,7 @@
 #include "gui.h"
 #include "song.h"
 #include "config.h"
+#include "export_mp4.h"
 
 // global directsound object
 static LPDIRECTSOUND dsound = NULL;
@@ -100,12 +101,20 @@ static DWORD __stdcall dsound_play_thread(void * param)
 			// samples
 			uint samples = write_size / format.nBlockAlign;
 
-			// update 
-			song_update(1000.0 * (double)samples / (double)format.nSamplesPerSec);
+			if (export_rendering())
+			{
+				memset(output_buffer[0], 0, samples * sizeof(float));
+				memset(output_buffer[1], 0, samples * sizeof(float));
+			}
+			else
+			{
+				// update 
+				song_update(1000.0 * (double)samples / (double)format.nSamplesPerSec);
 
-			// call vsti process func
-			vsti_update_config((float)format.nSamplesPerSec, 4096);
-			vsti_process(output_buffer[0], output_buffer[1], samples);
+				// call vsti process func
+				vsti_update_config((float)format.nSamplesPerSec, 4096);
+				vsti_process(output_buffer[0], output_buffer[1], samples);
+			}
 
 			// lock primary buffer
 			void  *ptr1, *ptr2;

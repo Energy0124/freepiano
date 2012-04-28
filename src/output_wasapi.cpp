@@ -10,6 +10,7 @@
 #include "display.h"
 #include "song.h"
 #include "config.h"
+#include "export_mp4.h"
 
 // pkey
 static const PROPERTYKEY PKEY_Device_FriendlyName = { { 0xa45c254e, 0xdf1c, 0x4efd, { 0x80, 0x20,  0x67,  0xd1,  0x46,  0xa8,  0x50,  0xe0 } }, 14 };
@@ -88,14 +89,22 @@ static DWORD __stdcall wasapi_play_thread(void * param)
 				{
 					//printf("write %d\n", numFramesAvailable);
 
-					// update song
-					song_update(1000.0 * (double)32 / (double)pwfx->nSamplesPerSec);
+					if (export_rendering())
+					{
+						memset(output_buffer[0], 0, numFramesProcess * sizeof(float));
+						memset(output_buffer[1], 0, numFramesProcess * sizeof(float));
+					}
+					else
+					{
+						// update song
+						song_update(1000.0 * (double)32 / (double)pwfx->nSamplesPerSec);
 
-					// update effect
-					vsti_update_config((float)pwfx->nSamplesPerSec, 32);
+						// update effect
+						vsti_update_config((float)pwfx->nSamplesPerSec, 32);
 
-					// call vsti process func
-					vsti_process(output_buffer[0], output_buffer[1], numFramesProcess);
+						// call vsti process func
+						vsti_process(output_buffer[0], output_buffer[1], numFramesProcess);
+					}
 
 
 					// Grab the entire buffer for the initial fill operation.

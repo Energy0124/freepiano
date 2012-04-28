@@ -14,6 +14,7 @@
 #include "keyboard.h"
 #include "song.h"
 #include "language.h"
+#include "export_mp4.h"
 #include "../res/resource.h"
 
 #pragma comment(lib, "Shlwapi.lib")
@@ -21,9 +22,22 @@
 // enable vistual style.
 #pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
-// constants
-static const int default_client_width = 760;
-static const int default_client_height = 340;
+static void try_open_song(int err)
+{
+	if (err == 0)
+	{
+		gui_show_song_info();
+		song_start_playback();
+		return;
+	}
+
+	switch (err)
+	{
+	case -1: MessageBox(gui_get_window(), lang_load_string(IDS_ERR_OPEN_SONG), APP_NAME, MB_OK); break;
+	case -2: MessageBox(gui_get_window(), lang_load_string(IDS_ERR_OPEN_SONG_VERSION), APP_NAME, MB_OK); break;
+	default: MessageBox(gui_get_window(), lang_load_string(IDS_ERR_OPEN_SONG_FORMAT), APP_NAME, MB_OK); break;
+	}
+}
 
 // -----------------------------------------------------------------------------------------
 // config window
@@ -611,6 +625,7 @@ static HMENU menu_key_channel = NULL;
 static HMENU menu_key_control = NULL;
 static HMENU menu_play_speed = NULL;
 static HMENU menu_setting_group = NULL;
+static HMENU menu_export = NULL;
 
 static byte selected_key = 0;
 static byte preview_key = 0;
@@ -641,6 +656,7 @@ enum MENU_ID
 	MENU_ID_FILE_RECORD,
 	MENU_ID_FILE_PLAY,
 	MENU_ID_FILE_STOP,
+	MENU_ID_FILE_EXPORT_MP4,
 
 	MENU_ID_PLAY_SPEED,
 	MENU_ID_SETTING_GROUP,
@@ -672,6 +688,7 @@ static int menu_init()
 	menu_key_control = CreatePopupMenu();
 	menu_play_speed = CreatePopupMenu();
 	menu_setting_group = CreatePopupMenu();
+	menu_export = CreatePopupMenu();
 
 	MENUINFO menuinfo;
 	menuinfo.cbSize = sizeof(MENUINFO);
@@ -690,6 +707,7 @@ static int menu_init()
 	
 	AppendMenu(menu_record, MF_STRING, (UINT_PTR)MENU_ID_FILE_OPEN, lang_load_string(IDS_MENU_FILE_OPEN));
 	AppendMenu(menu_record, MF_STRING, (UINT_PTR)MENU_ID_FILE_SAVE, lang_load_string(IDS_MENU_FILE_SAVE));
+	AppendMenu(menu_record, MF_POPUP, (UINT_PTR)menu_export, lang_load_string(IDS_MENU_FILE_EXPORT));
 	AppendMenu(menu_record, MF_SEPARATOR, 0, NULL);
 	AppendMenu(menu_record, MF_STRING, (UINT_PTR)MENU_ID_FILE_RECORD, lang_load_string(IDS_MENU_FILE_RECORD));
 	AppendMenu(menu_record, MF_STRING, (UINT_PTR)MENU_ID_FILE_PLAY, lang_load_string(IDS_MENU_FILE_PLAY));
@@ -711,6 +729,8 @@ static int menu_init()
 	AppendMenu(menu_about, MF_SEPARATOR, 0, NULL);
 	AppendMenu(menu_about, MF_STRING, (UINT_PTR)MENU_ID_HELP_ABOUT, lang_load_string(IDS_MENU_HELP_ABOUT));
 
+	AppendMenu(menu_export, MF_STRING, (UINT_PTR)MENU_ID_FILE_EXPORT_MP4, lang_load_string(IDS_MENU_FILE_EXPORT_MP4));
+
 	return 0;
 }
 
@@ -731,6 +751,7 @@ static void menu_shutdown()
 	DestroyMenu(menu_key_control);
 	DestroyMenu(menu_play_speed);
 	DestroyMenu(menu_setting_group);
+	DestroyMenu(menu_export);
 }
 
 static INT_PTR CALLBACK about_dialog_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -948,15 +969,10 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				const char * extension = PathFindExtension(ofn.lpstrFile);
 
 				if (strcmp(extension, ".lyt") == 0)
-					result = song_open_lyt(ofn.lpstrFile);
+					try_open_song(song_open_lyt(ofn.lpstrFile));
 
 				else if (strcmp(extension, ".fpm") == 0)
-					result = song_open(ofn.lpstrFile);
-
-				if (result == 0)
-					song_start_playback();
-				else
-					MessageBox(gui_get_window(), lang_load_string(IDS_ERR_OPEN_SONG), APP_NAME, MB_OK);
+					try_open_song(song_open(ofn.lpstrFile));
 			}
 		}
 		break;
@@ -1109,6 +1125,31 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case MENU_ID_SETTING_GROUP_CLEAR:
+		break;
+
+	case MENU_ID_FILE_EXPORT_MP4:
+		{
+			song_stop_playback();
+
+			char temp[260];
+			OPENFILENAME ofn;
+			memset(&ofn, 0, sizeof(ofn));
+			ofn.lStructSize = sizeof(ofn);
+			ofn.hwndOwner = hwnd;
+			ofn.lpstrFile = temp;
+			ofn.lpstrFile[0] = 0;
+			ofn.nMaxFile = sizeof(temp);
+			ofn.lpstrFilter = lang_load_filter_string(IDS_SAVE_FILTER_MP4);
+			ofn.nFilterIndex = 1;
+			ofn.Flags = OFN_PATHMUSTEXIST;
+			ofn.lpstrDefExt = ".mp4";
+
+			if (GetSaveFileName(&ofn))
+			{
+				PathRenameExtension(ofn.lpstrFile, ".mp4");
+				export_mp4(ofn.lpstrFile);
+			}
+		}
 		break;
 	};
 
@@ -1289,6 +1330,7 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			EnableMenuItem(menu, MENU_ID_FILE_PLAY, MF_BYCOMMAND | (!song_is_empty() && !song_is_recording() && !song_is_playing() ? MF_ENABLED : MF_DISABLED));
 			EnableMenuItem(menu, MENU_ID_FILE_STOP, MF_BYCOMMAND | (song_is_playing() || song_is_recording() ? MF_ENABLED : MF_DISABLED));
 			EnableMenuItem(menu, MENU_ID_FILE_RECORD, MF_BYCOMMAND | (!song_is_recording() ? MF_ENABLED : MF_DISABLED));
+			EnableMenuItem(menu, (UINT)menu_export, MF_BYCOMMAND | (!song_is_empty() ? MF_ENABLED : MF_DISABLED));
 		}
 
 		else if (menu == menu_play_speed)
@@ -1370,7 +1412,7 @@ static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 		{
 			if (!config_get_enable_resize_window())
 			{
-				RECT fixed_size = { 0, 0, default_client_width, default_client_height };
+				RECT fixed_size = { 0, 0, display_get_width(), display_get_height() };
 				RECT * rect = (RECT*)lParam;
 				AdjustWindowRect(&fixed_size, GetWindowLong(hWnd, GWL_STYLE), GetMenu(hWnd) != NULL);
 
@@ -1460,19 +1502,13 @@ static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 				// drop a music file
 				if (_stricmp(extension, ".lyt") == 0)
 				{
-					if (song_open_lyt(filepath) == 0)
-						song_start_playback();
-					else
-						MessageBox(gui_get_window(), lang_load_string(IDS_ERR_OPEN_SONG), APP_NAME, MB_OK);
+					try_open_song(song_open_lyt(filepath));
 					return 0;
 				}
 
 				if (_stricmp(extension, ".fpm") == 0)
 				{
-					if (song_open(filepath) == 0)
-						song_start_playback();
-					else
-						MessageBox(gui_get_window(), lang_load_string(IDS_ERR_OPEN_SONG), APP_NAME, MB_OK);
+					try_open_song(song_open(filepath));
 					return 0;
 				}
 
@@ -1544,10 +1580,10 @@ int gui_init()
 		NULL, NULL, hInstance, NULL);
 #else
 	RECT rect;
-	rect.left = (screenwidth - default_client_width) / 2;
-	rect.top = (screenheight - default_client_height) / 2;
-	rect.right = rect.left + default_client_width;
-	rect.bottom = rect.top + default_client_height;
+	rect.left = (screenwidth - display_get_width()) / 2;
+	rect.top = (screenheight - display_get_height()) / 2;
+	rect.right = rect.left + display_get_width();
+	rect.bottom = rect.top + display_get_height();
 
 	uint style = WS_OVERLAPPEDWINDOW;
 
@@ -1605,4 +1641,69 @@ void gui_show()
 int gui_get_selected_key()
 {
 	return preview_key;
+}
+
+static HWND export_hwnd = NULL;
+
+static INT_PTR CALLBACK export_progress_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg)
+	{
+	case WM_INITDIALOG:
+		{
+			// output volume slider
+			HWND progress_bar = GetDlgItem(hWnd, IDC_EXPORT_PROGRESS);
+
+			SendMessage(progress_bar, PBM_SETRANGE, 
+				(WPARAM) TRUE,                   // redraw flag 
+				(LPARAM) MAKELONG(0, 100));		 // min. & max. positions 
+
+			export_hwnd = hWnd;
+		}
+		break;
+
+	case WM_COMMAND:
+		switch (LOWORD(wParam))
+		{
+		case IDCANCEL:
+			EndDialog(hWnd, 0);
+			break;
+		}
+		break;
+
+	case WM_CLOSE:
+		EndDialog(hWnd, 0);
+		break;
+
+	case WM_DESTROY:
+		export_hwnd = NULL;
+		break;
+	}
+	return 0;
+}
+
+// show export progress
+int gui_show_export_progress()
+{
+	return DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_EXPORTING), gui_get_window(), export_progress_proc);
+}
+
+// update progress
+void gui_update_export_progress(int progress)
+{
+	// output volume slider
+	HWND progress_bar = GetDlgItem(export_hwnd, IDC_EXPORT_PROGRESS);
+	PostMessage(progress_bar, PBM_SETPOS, (WPARAM)progress, 0);
+}
+
+// close hide progress
+void gui_close_export_progress()
+{
+	PostMessage(export_hwnd, WM_CLOSE, 0, 0);
+}
+
+// is exporting
+bool gui_is_exporting()
+{
+	return export_hwnd != NULL;
 }

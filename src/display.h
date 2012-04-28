@@ -42,3 +42,12 @@ void display_render();
 
 // display process emssage
 int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+// get display width
+int display_get_width();
+
+// get display height
+int display_get_height();
+
+// capture bitmap
+int display_capture_bitmap24(unsigned char *pixels, int strike);

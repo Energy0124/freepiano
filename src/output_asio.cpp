@@ -10,6 +10,7 @@
 #include "synthesizer_vst.h"
 #include "song.h"
 #include "config.h"
+#include "export_mp4.h"
 
 static IASIO* driver = NULL;
 static int driver_index = -1;
@@ -254,13 +255,20 @@ static ASIOTime *callback_buffer_switch_timeinfo(ASIOTime *timeInfo, long index,
 
 	static float output_buffer[2][4096];
 
-	// update 
-	song_update(1000.0 * (double)driver_info.preferredSize / (double)driver_info.sampleRate);
+	if (export_rendering())
+	{
+		memset(output_buffer[0], 0, buffSize * sizeof(float));
+		memset(output_buffer[1], 0, buffSize * sizeof(float));
+	}
+	else
+	{
+		// update 
+		song_update(1000.0 * (double)driver_info.preferredSize / (double)driver_info.sampleRate);
 
-
-	// call vsti process func
-	vsti_update_config((float)driver_info.sampleRate, driver_info.preferredSize);
-	vsti_process(output_buffer[0], output_buffer[1], buffSize);
+		// call vsti process func
+		vsti_update_config((float)driver_info.sampleRate, driver_info.preferredSize);
+		vsti_process(output_buffer[0], output_buffer[1], buffSize);
+	}
 
 //#if WINDOWS && _DEBUG
 //	// a few debug messages for the Windows device driver developer

@@ -6,6 +6,7 @@
 #include "display.h"
 #include "config.h"
 #include "song.h"
+#include "export_mp4.h"
 
 // buffer size
 
@@ -115,7 +116,7 @@ static byte keydown_status[256] = {0};
 
 static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (enable_keyboard && nCode == HC_ACTION)
+	if (enable_keyboard && !export_rendering() && nCode == HC_ACTION)
 	{
 		KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
 

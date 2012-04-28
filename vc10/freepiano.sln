@@ -9,6 +9,12 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libpng", "libpng.vcxproj", 
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "freetype2", "freetype.vcxproj", "{78B079BD-9FC7-4B9E-B4A6-96DA0F00248B}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libfaac", "libfaac.vcxproj", "{FB73CA17-68AF-4AB7-9DE2-40379B105EEE}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libmp4v2", "libmp4v2.vcxproj", "{1C38F3A3-B73C-42AD-8753-348B635F328A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libx264", "libx264.vcxproj", "{A8D6E4CD-1885-4B03-8E41-5F3DB825BAA6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -31,6 +37,18 @@ Global
 		{78B079BD-9FC7-4B9E-B4A6-96DA0F00248B}.Debug|Win32.Build.0 = Debug|Win32
 		{78B079BD-9FC7-4B9E-B4A6-96DA0F00248B}.Release|Win32.ActiveCfg = Release|Win32
 		{78B079BD-9FC7-4B9E-B4A6-96DA0F00248B}.Release|Win32.Build.0 = Release|Win32
+		{FB73CA17-68AF-4AB7-9DE2-40379B105EEE}.Debug|Win32.ActiveCfg = Debug|Win32
+		{FB73CA17-68AF-4AB7-9DE2-40379B105EEE}.Debug|Win32.Build.0 = Debug|Win32
+		{FB73CA17-68AF-4AB7-9DE2-40379B105EEE}.Release|Win32.ActiveCfg = Release|Win32
+		{FB73CA17-68AF-4AB7-9DE2-40379B105EEE}.Release|Win32.Build.0 = Release|Win32
+		{1C38F3A3-B73C-42AD-8753-348B635F328A}.Debug|Win32.ActiveCfg = Debug|Win32
+		{1C38F3A3-B73C-42AD-8753-348B635F328A}.Debug|Win32.Build.0 = Debug|Win32
+		{1C38F3A3-B73C-42AD-8753-348B635F328A}.Release|Win32.ActiveCfg = Release|Win32
+		{1C38F3A3-B73C-42AD-8753-348B635F328A}.Release|Win32.Build.0 = Release|Win32
+		{A8D6E4CD-1885-4B03-8E41-5F3DB825BAA6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A8D6E4CD-1885-4B03-8E41-5F3DB825BAA6}.Debug|Win32.Build.0 = Debug|Win32
+		{A8D6E4CD-1885-4B03-8E41-5F3DB825BAA6}.Release|Win32.ActiveCfg = Release|Win32
+		{A8D6E4CD-1885-4B03-8E41-5F3DB825BAA6}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

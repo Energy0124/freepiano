@@ -1,0 +1,321 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectName>libx264</ProjectName>
+    <ProjectGuid>{A8D6E4CD-1885-4B03-8E41-5F3DB825BAA6}</ProjectGuid>
+    <RootNamespace>libx264</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
+    <RunCodeAnalysis Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</RunCodeAnalysis>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>Full</Optimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <AdditionalIncludeDirectories>../3rd/x264/common;../3rd/x264/extras;../3rd/x264;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NDEBUG;_LIB;WIN32;__X264__;HAVE_MMX=1;__SSE__;ARCH_X86=1;SYS_WINDOWS=1;HAVE_STDINT_H=1;HAVE_THREAD=1;HAVE_WIN32THREAD=1;HAVE_INTERLACED=1;X264_CHROMA_FORMAT=0;PTW32_STATIC_LIB=0;HAVE_GPL=1;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <StringPooling>true</StringPooling>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <WarningLevel>Level3</WarningLevel>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <CompileAs>Default</CompileAs>
+      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <EnablePREfast>false</EnablePREfast>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0804</Culture>
+    </ResourceCompile>
+    <Lib>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalIncludeDirectories>../3rd/x264/common;../3rd/x264/extras;../3rd/x264;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DEBUG;_LIB;WIN32;__X264__;HAVE_MMX=1;__SSE__;ARCH_X86=1;SYS_WINDOWS=1;HAVE_STDINT_H=1;HAVE_THREAD=1;HAVE_WIN32THREAD=1;HAVE_INTERLACED=1;X264_CHROMA_FORMAT=0;PTW32_STATIC_LIB=0;HAVE_GPL=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <StringPooling>true</StringPooling>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions</EnableEnhancedInstructionSet>
+      <WarningLevel>Level3</WarningLevel>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>Default</CompileAs>
+      <DisableSpecificWarnings>4996;4305;4244;4018;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0804</Culture>
+    </ResourceCompile>
+    <Lib>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\3rd\x264\common\bitstream.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\osdep.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\threadpool.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\win32thread.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\encoder\analyse.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\encoder\cabac.c" />
+    <ClCompile Include="..\3rd\x264\encoder\cavlc.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\encoder\encoder.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\encoder\lookahead.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\encoder\macroblock.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\encoder\me.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\encoder\ratecontrol.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\rectangle.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\encoder\set-enc.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\cabac-core.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\common.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\cpu.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\dct.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\deblock.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\frame.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\macroblock-core.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\x86\mc-c.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\mc.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\mvpred.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\pixel.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\x86\predict-c.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\predict.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\quant.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\set.c">
+    </ClCompile>
+    <ClCompile Include="..\3rd\x264\common\vlc.c">
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\3rd\x264\common\bitstream.h" />
+    <ClInclude Include="..\3rd\x264\common\threadpool.h" />
+    <ClInclude Include="..\3rd\x264\common\win32thread.h" />
+    <ClInclude Include="..\3rd\x264\encoder\analyse.h" />
+    <ClInclude Include="..\3rd\x264\encoder\macroblock.h" />
+    <ClInclude Include="..\3rd\x264\encoder\me.h" />
+    <ClInclude Include="..\3rd\x264\encoder\ratecontrol.h" />
+    <ClInclude Include="..\3rd\x264\common\rectangle.h" />
+    <ClInclude Include="..\3rd\x264\encoder\set.h" />
+    <ClInclude Include="..\3rd\x264\common\cabac.h" />
+    <ClInclude Include="..\3rd\x264\common\common.h" />
+    <ClInclude Include="..\3rd\x264\common\cpu.h" />
+    <ClInclude Include="..\3rd\x264\common\dct.h" />
+    <ClInclude Include="..\3rd\x264\common\frame.h" />
+    <ClInclude Include="..\3rd\x264\common\macroblock.h" />
+    <ClInclude Include="..\3rd\x264\common\mc.h" />
+    <ClInclude Include="..\3rd\x264\common\osdep.h" />
+    <ClInclude Include="..\3rd\x264\common\pixel.h" />
+    <ClInclude Include="..\3rd\x264\common\predict.h" />
+    <ClInclude Include="..\3rd\x264\common\quant.h" />
+    <ClInclude Include="..\3rd\x264\common\set.h" />
+    <ClInclude Include="..\3rd\x264\common\x86\util.h" />
+    <ClInclude Include="..\3rd\x264\extras\getopt.h" />
+    <ClInclude Include="..\3rd\x264\extras\inttypes.h" />
+    <ClInclude Include="..\3rd\x264\extras\stdint.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\3rd\x264\common\x86\cabac-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\const-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\cpu-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\dct-32.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\dct-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\deblock-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\mc-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\mc-a2.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\pixel-32.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\pixel-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\predict-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\quant-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\3rd\x264\common\x86\sad-a.asm">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\3rd\x264\common\x86\bitstream-a.asm">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assembly %(FullPath)</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">yasm -I..\3rd\x264\common\x86\ -f win32 -O2 -DPREFIX -DNON_MOD16_STACK=1 -DBIT_DEPTH=8 -o "$(IntDir)%(Filename)".obj "%(FullPath)"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Assembly %(FullPath)</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename).obj;%(Outputs)</Outputs>
+    </CustomBuild>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

@@ -23,3 +23,15 @@ int gui_show_song_info();
 
 // get selected key
 int gui_get_selected_key();
+
+// show export progress
+int gui_show_export_progress();
+
+// update progress
+void gui_update_export_progress(int progress);
+
+// close hide progress
+void gui_close_export_progress();
+
+// is exporting
+bool gui_is_exporting();

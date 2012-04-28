@@ -11,6 +11,7 @@
 #include "keyboard.h"
 #include "config.h"
 #include "gui.h"
+#include "language.h"
 
 struct song_event_t
 {
@@ -1005,9 +1006,6 @@ int song_open_lyt(const char * filename)
 
 		// mark song protected
 		song_info.write_protected = true;
-
-		// display song info
-		gui_show_song_info();
 	}
 	catch (int err)
 	{
@@ -1089,26 +1087,12 @@ int song_open(const char * filename)
 		// mark song protected
 		song_info.write_protected = true;
 
-		// display song info
-		gui_show_song_info();
-
 		return 0;
 	}
 	catch (int err)
 	{
 		song_end = NULL;
-		fclose(fp);
-
-		switch (err)
-		{
-		case -2:
-			MessageBox(gui_get_window(), "无法打开使用新版本创作的FreePiano音乐, 请升级至最新版本！", APP_NAME, MB_OK);
-			break;
-
-		default:
-			MessageBox(gui_get_window(), "不支持的文件格式！", APP_NAME, MB_OK);
-			break;
-		}
+		if (fp) fclose(fp);
 		return err;
 	}
 }

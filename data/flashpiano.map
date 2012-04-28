@@ -1,0 +1,181 @@
+key	a	NoteOn	0	c3
+key	b	NoteOn	0	d3
+key	c	NoteOn	0	e3
+key	d	NoteOn	0	f3
+key	e	NoteOn	0	g3
+key	f	NoteOn	0	a3
+key	g	NoteOn	0	b3
+key	-	NoteOn	0	c#3
+key	[	NoteOn	0	d#3
+key	`	NoteOn	0	f#3
+key	;	NoteOn	0	g#3
+key	1	NoteOn	0	a#3
+
+key	h	NoteOn	0	c4
+key	i	NoteOn	0	d4
+key	j	NoteOn	0	e4
+key	k	NoteOn	0	f4
+key	l	NoteOn	0	g4
+key	m	NoteOn	0	a4
+key	n	NoteOn	0	b4
+key	2	NoteOn	0	c#4
+key	3	NoteOn	0	d#4
+key	4	NoteOn	0	f#4
+key	5	NoteOn	0	g#4
+key	6	NoteOn	0	a#4
+
+key	o	NoteOn	0	c5
+key	p	NoteOn	0	d5
+key	q	NoteOn	0	e5
+key	r	NoteOn	0	f5
+key	s	NoteOn	0	g5
+key	t	NoteOn	0	a5
+key	u	NoteOn	0	b5
+key	7	NoteOn	0	c#5
+key	8	NoteOn	0	d#5
+key	9	NoteOn	0	f#5
+key	0	NoteOn	0	g#5
+key	'	NoteOn	0	a#5
+
+key	v	NoteOn	0	c6
+key	w	NoteOn	0	d6
+key	x	NoteOn	0	e6
+key	y	NoteOn	0	f6
+key	z	NoteOn	0	g6
+key	tab	NoteOn	0	a6
+key	space	NoteOn	0	b6
+key	,	NoteOn	0	c#6
+key	.	NoteOn	0	d#6
+key	/	NoteOn	0	f#6
+key	=	NoteOn	0	g#6
+key	f1	NoteOn	0	a#6
+
+key	caps	NoteOn	0	c7
+key	]	NoteOn	0	d7
+key	enter	NoteOn	0	e7
+key	\	NoteOn	0	f7
+key	f5	NoteOn	0	g7
+key	f7	NoteOn	0	a7
+key	f9	NoteOn	0	b7
+key	f2	NoteOn	0	c#7
+key	f3	NoteOn	0	d#7
+key	f4	NoteOn	0	f#7
+key	f6	NoteOn	0	g#7
+key	f8	NoteOn	0	a#7
+
+keydown	up		KeySignature	Inc	1
+label	up		Key+
+keydown	down	KeySignature	Dec	1
+label	down	Key-
+keydown	right	KeyboardVeolcity	0	Inc	10
+label	right	Vel+
+keydown	left	KeyboardVeolcity	0	Dec	10
+label	left	Vel-
+
+keydown	ScrollLock	Record
+label	ScrollLock	Rec
+keydown	PrintScreen	Play
+label	PrintScreen	Play
+keydown	Pause	Stop
+label	Pause	Stop
+
+
+label Esc Esc
+label F1 F1
+label F2 F2
+label F3 F3
+label F4 F4
+label F5 F5
+label F6 F6
+label F7 F7
+label F8 F8
+label F9 F9
+label F10 F10
+label F11 F11
+label F12 F12
+label ~ ~
+label 1 1
+label 2 2
+label 3 3
+label 4 4
+label 5 5
+label 6 6
+label 7 7
+label 8 8
+label 9 9
+label 0 0
+label - -
+label = =
+label Backspace Backspace
+label Tab Tab
+label Q Q
+label W W
+label E E
+label R R
+label T T
+label Y Y
+label U U
+label I I
+label O O
+label P P
+label [ [
+label ] ]
+label \ \
+label Caps Caps
+label A A
+label S S
+label D D
+label F F
+label G G
+label H H
+label J J
+label K K
+label L L
+label ; ;
+label ' '
+label Enter Enter
+label Shift Shift
+label Z Z
+label X X
+label C C
+label V V
+label B B
+label N N
+label M M
+label , ,
+label . .
+label / /
+label RShift Shift
+label Ctrl Ctrl
+label Win Win
+label Alt Alt
+label Space  
+label RAlt Alt
+label RWin Win
+label Apps Menu
+label RCtrl Ctrl
+
+label Insert Ins
+label Home Home
+label Pgup PgUp
+label Delete Del
+label End End
+label Pgdn PgDn
+
+label NumLock Num
+label Num0 0
+label Num. .
+label NumEnter Ret
+label Num1 1
+label Num2 2
+label Num3 3
+label Num4 4
+label Num5 5
+label Num6 6
+label Num7 7
+label Num8 8
+label Num9 9
+label Num* *
+label Num/ /
+label Num+ +
+label Num- -
