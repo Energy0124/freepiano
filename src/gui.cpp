@@ -808,7 +808,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case MENU_ID_VST_PLUGIN_NONE:
-		config_select_instrument(INSTRUMENT_TYPE_VSTI, "");
+		config_select_instrument(INSTRUMENT_TYPE_MIDI, "");
 		break;
 
 	case MENU_ID_VST_PLUGIN:
@@ -1330,7 +1330,9 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			EnableMenuItem(menu, MENU_ID_FILE_PLAY, MF_BYCOMMAND | (!song_is_empty() && !song_is_recording() && !song_is_playing() ? MF_ENABLED : MF_DISABLED));
 			EnableMenuItem(menu, MENU_ID_FILE_STOP, MF_BYCOMMAND | (song_is_playing() || song_is_recording() ? MF_ENABLED : MF_DISABLED));
 			EnableMenuItem(menu, MENU_ID_FILE_RECORD, MF_BYCOMMAND | (!song_is_recording() ? MF_ENABLED : MF_DISABLED));
-			EnableMenuItem(menu, (UINT)menu_export, MF_BYCOMMAND | (!song_is_empty() ? MF_ENABLED : MF_DISABLED));
+
+            bool enable_export = (config_get_instrument_type() == INSTRUMENT_TYPE_VSTI) && !song_is_empty();
+			EnableMenuItem(menu, (UINT)menu_export, MF_BYCOMMAND | (enable_export ? MF_ENABLED : MF_DISABLED));
 		}
 
 		else if (menu == menu_play_speed)

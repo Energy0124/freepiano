@@ -50,4 +50,4 @@ int display_get_width();
 int display_get_height();
 
 // capture bitmap
-int display_capture_bitmap24(unsigned char *pixels, int strike);
+int display_capture_bitmap_I420(unsigned char **planes, int *strikes);

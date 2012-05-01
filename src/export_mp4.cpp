@@ -10,19 +10,7 @@
 #include "../3rd/libfaac/faac.h"
 
 extern "C" {
-
-#define __X264__
-#define HAVE_MMX	1
-#define SYS_WINDOWS	1
-#define HAVE_STDINT_H 1
-#define HAVE_AVS 1
-#define HAVE_GPL 1
-#define HAVE_THREAD 1
-#define HAVE_WIN32THREAD 1
-#define HAVE_INTERLACED 1
-#define X264_CHROMA_FORMAT 0
-#define PTW32_STATIC_LIB 0
-#include "../3rd/x264/common/common.h"
+#include "../3rd/libx264/include/x264.h"
 }
 
 static bool exporting = false;
@@ -33,11 +21,139 @@ static void show_error(const char *msg)
 	puts(msg);
 }
 
+#if 0
+static FILE* fp_raw = NULL;
+static FILE* fp_264 = NULL;
+static FILE* fp_aac = NULL;
+static void dump_open(x264_t *encoder)
+{
+    fp_raw = fopen("dump.raw", "wb");
+    fp_264 = fopen("dump.264", "wb");
+    fp_aac = fopen("dump.aac", "wb");
+
+    if (1) {
+        x264_nal_t *headers;
+        int i_nal;
+        x264_encoder_headers(encoder, &headers, &i_nal);
+        for (int i = 0; i < i_nal; i++) {
+            fwrite(headers[i].p_payload, headers[i].i_payload, 1, fp_264);
+        }
+    }
+}
+static void dump_close()
+{
+    if (fp_raw) fclose(fp_raw);
+    if (fp_264) fclose(fp_264);
+    if (fp_aac) fclose(fp_aac);
+    fp_raw = fp_264 = fp_aac = NULL;
+}
+static void dump_raw(void *data, size_t size) { fwrite(data, size, 1, fp_raw); }
+static void dump_264(void *data, size_t size) { fwrite(data, size, 1, fp_264); }
+static void dump_aac(void *data, size_t size) { fwrite(data, size, 1, fp_aac); }
+#else
+static void dump_open(x264_t *encoder) {}
+static void dump_close() {}
+static void dump_raw(void *data, size_t size) {}
+static void dump_264(void *data, size_t size) {}
+static void dump_aac(void *data, size_t size) {}
+#endif
+
+typedef struct
+{
+  struct
+  {
+    int size_min;
+    int next;
+    int cnt;
+    int idx[17];
+    int poc[17];
+  } dpb;
+  int cnt;
+  int cnt_max;
+  int *frame;
+} h264_dpb_t; 
+
+static void DpbInit(h264_dpb_t *p)
+{
+    p->dpb.cnt = 0;
+    p->dpb.next = 0;
+    p->dpb.size_min = 0;
+    p->cnt = 0;
+    p->cnt_max = 0;
+    p->frame = NULL;
+}
+static void DpbClean(h264_dpb_t *p)
+{
+    free(p->frame);
+}
+static void DpbUpdate(h264_dpb_t *p, int is_forced)
+{
+    int i;
+    int pos;
+    if (!is_forced && p->dpb.cnt < 16)
+        return;
+    /* find the lowest poc */
+    pos = 0;
+    for (i = 1; i < p->dpb.cnt; i++)
+    {
+        if (p->dpb.poc[i] < p->dpb.poc[pos])
+            pos = i;
+    }
+    //fprintf(stderr, "lowest=%d\n", pos);
+    /* save the idx */
+    if (p->dpb.idx[pos] >= p->cnt_max)
+    {
+        int inc = 1000 + (p->dpb.idx[pos]-p->cnt_max);
+        p->cnt_max += inc;
+        p->frame = (int*)realloc(p->frame, sizeof(int)*p->cnt_max);
+        for (i=0;i<inc;i++)
+            p->frame[p->cnt_max-inc+i] = -1; /* To detect errors latter */
+    }
+    p->frame[p->dpb.idx[pos]] = p->cnt++;
+    /* Update the dpb minimal size */
+    if (pos > p->dpb.size_min)
+        p->dpb.size_min = pos;
+    /* update dpb */
+    for (i = pos; i < p->dpb.cnt-1; i++)
+    {
+        p->dpb.idx[i] = p->dpb.idx[i+1];
+        p->dpb.poc[i] = p->dpb.poc[i+1];
+    }
+    p->dpb.cnt--;
+}
+static void DpbFlush(h264_dpb_t *p)
+{
+    while (p->dpb.cnt > 0)
+        DpbUpdate(p, true);
+}
+static void DpbAdd(h264_dpb_t *p, int poc, int is_idr)
+{
+    if (is_idr)
+        DpbFlush(p);
+    p->dpb.idx[p->dpb.cnt] = p->dpb.next;
+    p->dpb.poc[p->dpb.cnt] = poc;
+    p->dpb.cnt++;
+    p->dpb.next++;
+
+    DpbUpdate(p, false);
+}
+static int DpbFrameOffset(h264_dpb_t *p, int idx)
+{
+    if (idx >= p->cnt)
+        return 0;
+    if (p->frame[idx] < 0)
+        return p->dpb.size_min; /* We have an error (probably broken/truncated bitstream) */
+    return p->dpb.size_min + p->frame[idx] - idx;
+}
+
 // playing thread
 static DWORD __stdcall export_rendering_thread(void * parameter)
 {
 	// temp buffer for vsti process
-	int samples_per_sec = 44100;
+	const int samples_per_sec = 44100;
+    const int frames_per_sec = 30;
+    const int mp4_time_scale = 90000;
+
 	uint result = -1;
 	DWORD input_samples;
 	DWORD output_size;
@@ -67,29 +183,30 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 
 	song_start_playback();
 
-
 	// x264 encoder param
 	x264_param_t param;
 	x264_param_default(&param);
-	x264_param_default(&param);
-    //x264_param_default_preset(&param, "ultrafast", NULL);
+    x264_param_default_preset(&param, "medium", NULL);
 	param.i_width = display_get_width();
 	param.i_height = display_get_height();
-	param.i_csp = X264_CSP_RGB;
-	param.i_threads = 1;
+	param.i_csp = X264_CSP_I420;
+    param.b_repeat_headers = 0;
 
 	// create x264 encoder
 	x264_picture_t picture;
 	x264_picture_init(&picture);
-	x264_picture_alloc(&picture, X264_CSP_RGB, param.i_width, param.i_height);
+    x264_picture_alloc(&picture, param.i_csp, param.i_width, param.i_height);
 	picture.i_type = X264_TYPE_AUTO;
 	picture.i_qpplus1 = 0;
+
+    h264_dpb_t h264_dpb;
+    DpbInit(&h264_dpb);
 
 	x264_encoder = x264_encoder_open(&param);
 	if (!x264_encoder)
 	{
 		show_error("Can't create x264 encoder.");
-		goto cleanup;
+		goto done;
 	}
 	x264_encoder_parameters(x264_encoder, &param);
 
@@ -98,7 +215,7 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 	if (faac_encoder == NULL)
 	{
 		show_error("Failed create faac encoder.");
-		goto cleanup;
+		goto done;
 	}
 
 	// allocate output buffer
@@ -106,21 +223,24 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 	if (faac_buffer == NULL)
 	{
 		show_error("Faild allocate buffer");
-		goto cleanup;
+		goto done;
 	}
 
 	// allocate input buffer
-	input_buffer = new float[input_samples];
+    const uint input_buffer_count = 4;
+    uint input_buffer_id = 0;
+	input_buffer = new float[input_buffer_count * input_samples];
 	if (input_buffer == NULL)
 	{
 		show_error("Faild allocate buffer");
-		goto cleanup;
+		goto done;
 	}
+    memset(input_buffer, 0, input_buffer_count * input_samples * sizeof(float));
 
 	// get format.
 	faacEncConfigurationPtr faac_format = faacEncGetCurrentConfiguration(faac_encoder);
 	faac_format->inputFormat = FAAC_INPUT_FLOAT;
-	faac_format->outputFormat = 0; //RAW
+	faac_format->outputFormat = 0; //0:RAW
 	faac_format->mpegVersion = MPEG4;
 	faac_format->aacObjectType = LOW;
 	faac_format->allowMidside = 1;
@@ -131,7 +251,7 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 	if(!faacEncSetConfiguration(faac_encoder, faac_format))
 	{
 		show_error("Unsupported parameters!");
-		goto cleanup;
+		goto done;
 	}
 
 
@@ -139,11 +259,11 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 	if (file == MP4_INVALID_FILE_HANDLE)
 	{
 		show_error("Can't create file.");
-		goto cleanup;
+		goto done;
 	}
 
-	MP4SetTimeScale(file, 90000);
-	MP4TrackId audio_track = MP4AddAudioTrack(file, samples_per_sec, MP4_INVALID_DURATION, MP4_MPEG4_AUDIO_TYPE);
+	MP4SetTimeScale(file, mp4_time_scale);
+	MP4TrackId audio_track = MP4AddAudioTrack(file, samples_per_sec, input_samples / 2, MP4_MPEG4_AUDIO_TYPE);
 	MP4SetAudioProfileLevel(file, 0x0F);
 
     BYTE *ASC = 0;
@@ -151,36 +271,38 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 	faacEncGetDecoderSpecificInfo(faac_encoder, &ASC, &ASCLength);
 	MP4SetTrackESConfiguration(file, audio_track, (unsigned __int8 *)ASC, ASCLength);
 
-	MP4TrackId video_track = MP4AddH264VideoTrack(file, 90000, 90000 / 30, param.i_width, param.i_height,
-		0x64, //sps[1] AVCProfileIndication
-		0x00, //sps[2] profile_compat
-		0x1f, //sps[3] AVCLevelIndication
-		3); // 4 bytes length before each NAL unit
-	MP4SetVideoProfileLevel(file, 0x7F);
+    MP4TrackId video_track;
+    {
+        x264_nal_t *nal;
+        int i_nal;
+        x264_encoder_headers(x264_encoder, &nal, &i_nal);
+
+        uint8_t *sps = nal[0].p_payload;
+    	video_track = MP4AddH264VideoTrack(file, mp4_time_scale, mp4_time_scale / frames_per_sec, param.i_width, param.i_height,
+            sps[5], sps[6], sps[7], 3);
+        MP4SetVideoProfileLevel(file, 0x7f);
+        MP4AddH264SequenceParameterSet(file, video_track, nal[0].p_payload + 4, nal[0].i_payload - 4);
+        MP4AddH264PictureParameterSet(file, video_track, nal[1].p_payload + 4, nal[0].i_payload - 4);
+    }
 
 	uint frame_size = input_samples / 2;
 	uint delay_samples = frame_size;
 	uint total_samples = 0;
 	uint encoded_samples = 0;
 	uint progress = 0;
+    uint frame_count = 0;
+    uint frame_duration = mp4_time_scale / frames_per_sec;
 
 	double total_time = 0;
 	double capture_time = 0;
-	double capture_delta = 1.0 / 30.0;
+	double capture_delta = 1.0 / (double)frames_per_sec;
 
-	FILE* fp = fopen("test.264", "wb");
-	{
-		x264_nal_t *headers;
-		int i_nal;
-        x264_encoder_headers(x264_encoder, &headers, &i_nal);
-		for (int i = 0; i < i_nal; i++) {
-			fwrite(headers[i].p_payload, headers[i].i_payload, 1, fp);
-		}
-	}
+    dump_open(x264_encoder);
 	for (;;)
 	{
 		float temp_buffer[2][32];
-		float *input_position = input_buffer;
+		float *input_position = input_buffer + input_samples * input_buffer_id;
+        input_buffer_id = (input_buffer_id + 1) % input_buffer_count;
 
 		// generate frame data
 		for (int samples_left = frame_size; samples_left;)
@@ -215,7 +337,14 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 				x264_picture_t pic_out;
 
 				// capture image from display
-				display_capture_bitmap24(picture.img.plane[0], picture.img.i_stride[0]);
+				display_capture_bitmap_I420(picture.img.plane, picture.img.i_stride);
+
+                for (int i = 0; i < param.i_height; i++)
+                    dump_raw(picture.img.plane[0] + i * picture.img.i_stride[0], param.i_width);
+                for (int i = 0; i < param.i_height / 2; i++)
+                    dump_raw(picture.img.plane[1] + i * picture.img.i_stride[1], param.i_width / 2);
+                for (int i = 0; i < param.i_height / 2; i++)
+                    dump_raw(picture.img.plane[2] + i * picture.img.i_stride[2], param.i_width / 2);
 
 				// encode image to H.264
 				i_frame_size = x264_encoder_encode(x264_encoder, &nal, &i_nal, &picture, &pic_out);
@@ -223,20 +352,27 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 
 				for (int nal_id = 0; nal_id < i_nal; ++nal_id)
 				{
-					fwrite(nal[nal_id].p_payload, nal[nal_id].i_payload, 1, fp);
+                    uint size = nal[nal_id].i_payload;
+                    uint8_t *nalu = nal[nal_id].p_payload;
 
-					if (nal[nal_id].i_payload >= 4)
-					{
-						uint size = htonl(nal[nal_id].i_payload - 4);
-						memcpy(nal[nal_id].p_payload, &size, 4);
-					}
-					
+					dump_264(nalu, size);
+
+                    nalu[0] = ((size - 4) >> 24) & 0xff;
+                    nalu[1] = ((size - 4) >> 16) & 0xff;
+                    nalu[2] = ((size - 4) >> 8) & 0xff;
+                    nalu[3] = ((size - 4) >> 0) & 0xff;
+
 					// write samples
-					if (!MP4WriteSample(file, video_track, nal[nal_id].p_payload, nal[nal_id].i_payload, MP4_INVALID_DURATION, 0, 1))
+                    MP4Duration dur = mp4_time_scale / frames_per_sec;
+                    if (!MP4WriteSample(file, video_track, nalu, size, dur, 0, pic_out.b_keyframe))
 					{
 						show_error("Encode mp4 error.");
-						goto cleanup;
-					}
+						goto done;
+                    }
+
+                    bool slice_is_idr = nal[nal_id].i_type == 5;
+                    DpbAdd(&h264_dpb, pic_out.i_pts, slice_is_idr);
+                    frame_count++;
 				}
 
 				capture_time += capture_delta;
@@ -249,11 +385,12 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 			input_samples = 0;
 
 		// call the actual encoding routine
-		int bytes_encoded = faacEncEncode(faac_encoder, (int32_t *)input_buffer, input_samples, faac_buffer, output_size);
+        int32_t* src = (int32_t*)input_buffer + input_buffer_id * input_samples;
+		int bytes_encoded = faacEncEncode(faac_encoder, src, input_samples, faac_buffer, output_size);
 		if (bytes_encoded < 0)
 		{
 			show_error("Encode aac error.");
-			goto cleanup;
+			goto done;
 		}
 
 		// all done
@@ -273,10 +410,11 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 			MP4Duration dur = samples_left > frame_size ? frame_size : samples_left;
 			MP4Duration ofs = encoded_samples > 0 ? 0 : delay_samples;
 
+            dump_aac(faac_buffer, bytes_encoded);
 			if (!MP4WriteSample(file, audio_track, faac_buffer, (DWORD)bytes_encoded, dur, ofs, 1))
 			{
 				show_error("Encode mp4 error.");
-				goto cleanup;
+				goto done;
 			}
 
 			encoded_samples += dur;
@@ -290,11 +428,23 @@ static DWORD __stdcall export_rendering_thread(void * parameter)
 		}
 	}
 
-cleanup:
-	x264_picture_clean(&picture);
-	fclose(fp);
+done:
+    DpbFlush(&h264_dpb);
+    if (h264_dpb.dpb.size_min > 0) {
+        for (uint ix = 0; ix < frame_count; ix++) {
+            const int offset = DpbFrameOffset(&h264_dpb, ix);
+            MP4SetSampleRenderingOffset(file, video_track, 1 + ix, offset * frame_duration);
+        }
+    }
+    DpbClean(&h264_dpb);
 
-	if (file) MP4Close(file);
+    dump_close();
+	x264_picture_clean(&picture);
+	if (file)
+    {
+        MP4Close(file);
+        MP4Optimize(filename);
+    }
 	if (faac_encoder) faacEncClose(faac_encoder);
 	if (faac_buffer) delete[] faac_buffer;
 	if (input_buffer) delete[] input_buffer;

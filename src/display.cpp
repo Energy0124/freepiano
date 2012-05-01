@@ -2313,8 +2313,15 @@ static void mouse_menu(int x, int y)
 	}
 }
 
+#define rgbtoy(b, g, r, y) \
+y=(unsigned char)(((int)(30*r) + (int)(59*g) + (int)(11*b))/100)
+
+#define rgbtouv(b, g, r, u, v) \
+u=(unsigned char)(((int)(-17*r) - (int)(33*g) + (int)(50*b)+12800)/100); \
+v=(unsigned char)(((int)(50*r) - (int)(42*g) - (int)(8*b)+12800)/100)
+
 // capture bitmap
-static int capture_bitmap24(unsigned char *pixels, int strike)
+static int capture_bitmap_I420(unsigned char **planes, int *strikes)
 {
 	HRESULT hr;
 	D3DLOCKED_RECT rect;
@@ -2336,19 +2343,32 @@ static int capture_bitmap24(unsigned char *pixels, int strike)
 
 	if (SUCCEEDED(hr = texture->LockRect(0, &rect, NULL, D3DLOCK_READONLY)))
 	{
-		unsigned char *line = pixels;
-		for (int y = 0; y < display_get_height(); y++)
-		{
-			unsigned char * dst = pixels + y * strike;
-			unsigned char * src = (unsigned char *)rect.pBits + rect.Pitch * y;
+        int height = display_get_height();
+        int width = display_get_width();
 
-			for (int x = 0; x < display_get_width(); x++)
-			{
-				dst[0] = src[0];
-				dst[1] = src[1];
-				dst[2] = src[2];
-				dst += 3;
-				src += 4;
+		for (int y = 0; y < height / 2; y++)
+		{
+            BYTE *yline = planes[0] + y * 2 * strikes[0];
+            BYTE *uline = planes[1] + y * strikes[1];
+            BYTE *vline = planes[2] + y * strikes[2];
+			BYTE * rgb = (BYTE *)rect.pBits + rect.Pitch * y * 2;
+
+            for (int x = 0; x < width / 2; x++)
+            {
+                uint sr = 0, sg = 0, sb = 0;
+                rgbtoy(rgb[0], rgb[1], rgb[2], yline[0]); sr += rgb[0]; sg += rgb[1]; sb += rgb[2];
+                rgb += rect.Pitch; yline += strikes[0];
+                rgbtoy(rgb[0], rgb[1], rgb[2], yline[0]); sr += rgb[0]; sg += rgb[1]; sb += rgb[2];
+                rgb += 4; yline ++;
+                rgbtoy(rgb[0], rgb[1], rgb[2], yline[0]); sr += rgb[0]; sg += rgb[1]; sb += rgb[2];
+                rgb -= rect.Pitch; yline -= strikes[0];
+                rgbtoy(rgb[0], rgb[1], rgb[2], yline[0]); sr += rgb[0]; sg += rgb[1]; sb += rgb[2];
+
+                rgb += 4; yline++;
+                sr /= 4; sg /= 4; sb /= 4;
+                rgbtouv(sr, sg, sb, *uline, *vline);
+                uline++;
+                vline++;
 			}
 		}
 		texture->UnlockRect(0);
@@ -2397,10 +2417,10 @@ int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	case WM_USER + 10:
 		{
-			unsigned char * pixels = (unsigned char *)wParam;
-			int strike = (int)lParam;
+			unsigned char **planes = (unsigned char **)wParam;
+            int *strikes = (int*)lParam;
 			display_draw();
-			return capture_bitmap24(pixels, strike);
+			return capture_bitmap_I420(planes, strikes);
 		}
 		break;
 	}
@@ -2409,7 +2429,7 @@ int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 }
 
 // capture bitmap
-int display_capture_bitmap24(unsigned char *pixels, int strike)
+int display_capture_bitmap_I420(unsigned char **planes, int *strikes)
 {
-	return SendMessage(gui_get_window(), WM_USER + 10, (WPARAM)pixels, (LPARAM)strike);
+	return SendMessage(gui_get_window(), WM_USER + 10, (WPARAM)planes, (LPARAM)strikes);
 }

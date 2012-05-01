@@ -1714,6 +1714,7 @@ int config_select_instrument(int type, const char * name)
 		if (name == NULL || name[0] == '\0')
 		{
 			vsti_unload_plugin();
+            global.instrument_type = INSTRUMENT_TYPE_MIDI;
 			global.instrument_path[0] = 0;
 			result = 0;
 		}
@@ -1774,6 +1775,12 @@ int config_select_instrument(int type, const char * name)
 	midi_reset();
 
 	return result;
+}
+
+// get instrument type
+int config_get_instrument_type()
+{
+    return global.instrument_type;
 }
 
 const char * config_get_instrument_path()

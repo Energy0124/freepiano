@@ -52,8 +52,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
 	// open lyt
 	//song_open_lyt("test3.lyt");
-	song_open("D:\\code\\freepiano\\trunk\\data\\song\\Superrh - the dawn.fpm");
-	export_mp4("test.mp4");
+	//song_open("D:\\src\\freepiano\\trunk\\data\\song\\kiss the rain.fpm");
+	//export_mp4("test.mp4");
 
 	MSG msg;
 	while (GetMessage(&msg, NULL, NULL, NULL))
