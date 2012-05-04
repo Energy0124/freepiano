@@ -649,6 +649,7 @@ enum MENU_ID
 	MENU_ID_KEY_CLEAR,
 	MENU_ID_KEY_CONFIG,
 	MENU_ID_HELP_HOMEPAGE,
+	MENU_ID_HELP_ONLINE,
 	MENU_ID_HELP_ABOUT,
 
 	MENU_ID_FILE_OPEN,
@@ -726,6 +727,7 @@ static int menu_init()
 
 
 	AppendMenu(menu_about, MF_STRING, (UINT_PTR)MENU_ID_HELP_HOMEPAGE, lang_load_string(IDS_MENU_HELP_HOMEPAGE));
+	AppendMenu(menu_about, MF_STRING, (UINT_PTR)MENU_ID_HELP_ONLINE, lang_load_string(IDS_MENU_HELP_ONLINE));
 	AppendMenu(menu_about, MF_SEPARATOR, 0, NULL);
 	AppendMenu(menu_about, MF_STRING, (UINT_PTR)MENU_ID_HELP_ABOUT, lang_load_string(IDS_MENU_HELP_ABOUT));
 
@@ -941,6 +943,10 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	case MENU_ID_HELP_HOMEPAGE:
 		ShellExecute(NULL, "open", "http://freepiano.tiwb.com", NULL, NULL, 0);
+		break;
+
+	case MENU_ID_HELP_ONLINE:
+		ShellExecute(NULL, "open", "http://freepiano.tiwb.com/category/help", NULL, NULL, 0);
 		break;
 
 	case MENU_ID_HELP_ABOUT:
