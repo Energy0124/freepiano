@@ -106,7 +106,7 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record) {
       ch[i + 1] = 0;
 
       if (--keyboard_label_key_size == 0) {
-        config_set_key_label(keyboard_label_key_code, keyboard_label_text);
+        config_bind_set_label(keyboard_label_key_code, keyboard_label_text);
         break;
       }
     }
@@ -115,29 +115,11 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record) {
 
   // mapping a key.
   if (keyboard_map_key_code) {
-    key_bind_t keydown, keyup;
-
-    // get previous keymap
-    config_get_key_bind(keyboard_map_key_code, &keydown, &keyup);
-
     switch (keyboard_map_key_type) {
-     case 0:
-       keydown.a = a;
-       keydown.b = b;
-       keydown.c = c;
-       keydown.d = d;
-       break;
-
-     case 1:
-       keyup.a = a;
-       keyup.b = b;
-       keyup.c = c;
-       keyup.d = d;
-       break;
+     case 0: config_bind_add_keydown(keyboard_map_key_code, key_bind_t(a, b, c, d)); break;
+     case 1: config_bind_add_keyup(keyboard_map_key_code, key_bind_t(a, b, c, d)); break;
     }
 
-    // set keymap
-    config_set_key_bind(keyboard_map_key_code, &keydown, &keyup);
     keyboard_map_key_code = 0;
     return;
   }
@@ -409,21 +391,27 @@ void song_start_record() {
 
     // record keymaps
     for (int i = 0; i < 256; i++) {
-      key_bind_t keydown, keyup;
-      config_get_key_bind(i, &keydown, &keyup);
+      int count;
+      key_bind_t bind[256];
 
-      if (keydown.a) {
-        song_add_event(0, SM_SYSTEM, SMS_KEY_MAP, i, 0);
-        song_add_event(0, keydown.a, keydown.b, keydown.c, keydown.d);
+      count = config_bind_get_keydown(i, bind, 256);
+      for (int j = 0; j < count; j++) {
+        if (bind[j].a) {
+          song_add_event(0, SM_SYSTEM, SMS_KEY_MAP, i, 0);
+          song_add_event(0, bind[j].a, bind[j].b, bind[j].c, bind[j].d);
+        }
       }
 
-      if (keyup.a) {
-        song_add_event(0, SM_SYSTEM, SMS_KEY_MAP, i, 1);
-        song_add_event(0, keyup.a, keyup.b, keyup.c, keyup.d);
+      count = config_bind_get_keyup(i, bind, 256);
+      for (int j = 0; j < count; j++) {
+        if (bind[j].a) {
+          song_add_event(0, SM_SYSTEM, SMS_KEY_MAP, i, 1);
+          song_add_event(0, bind[j].a, bind[j].b, bind[j].c, bind[j].d);
+        }
       }
 
-      if (*config_get_key_label(i)) {
-        const char *label = config_get_key_label(i);
+      if (*config_bind_get_label(i)) {
+        const char *label = config_bind_get_label(i);
         int size = strlen(label);
 
         song_add_event(0, SM_SYSTEM, SMS_KEY_LABEL, i, size);
@@ -635,13 +623,13 @@ song_info_t* song_get_info() {
 static void read(void *buff, int size, FILE *fp) {
   int ret = fread(buff, 1, size, fp);
   if (ret != size)
-    throw - 1;
+    throw -1;
 }
 
 static void write(const void *buff, int size, FILE *fp) {
   int ret = fwrite(buff, 1, size, fp);
   if (ret != size)
-    throw - 1;
+    throw -1;
 }
 
 static void read_string(char *buff, size_t buff_size, FILE *fp) {
@@ -653,7 +641,7 @@ static void read_string(char *buff, size_t buff_size, FILE *fp) {
     read(buff, count, fp);
     buff[count] = 0;
   } else   {
-    throw - 1;
+    throw -1;
   }
 }
 
@@ -672,7 +660,7 @@ static void read_idp_string(char *buff, size_t buff_size, FILE *fp) {
     read(buff, buff_size, fp);
     buff[count] = 0;
   } else   {
-    throw - 1;
+    throw -1;
   }
 }
 
@@ -692,7 +680,7 @@ int song_open_lyt(const char *filename) {
     // read magic
     read(header, 16, fp);
     if (strcmp(header, "iDreamPianoSong") != 0)
-      throw - 1;
+      throw -1;
 
     // start record
     song_init_record();
@@ -946,7 +934,7 @@ int song_open(const char *filename) {
 
   try {
     if (!fp)
-      throw - 1;
+      throw -1;
 
     char magic[sizeof("FreePianoSong")];
     char instrument[256];
@@ -954,12 +942,12 @@ int song_open(const char *filename) {
     // magic
     read(magic, sizeof("FreePianoSong"), fp);
     if (memcmp(magic, "FreePianoSong", sizeof("FreePianoSong")) != 0)
-      throw - 1;
+      throw -1;
 
     // version
     read(&song_info.version, sizeof(song_info.version), fp);
     if (song_info.version > current_version)
-      throw - 2;
+      throw -2;
 
     // start record
     song_init_record();

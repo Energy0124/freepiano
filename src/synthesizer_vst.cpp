@@ -7,6 +7,7 @@
 #include "synthesizer_vst.h"
 #include "display.h"
 #include "config.h"
+#include "export_mp4.h"
 
 // global vst effect instance
 static AEffect *effect = NULL;
@@ -89,8 +90,13 @@ static VstIntPtr VSTCALLBACK HostCallback(AEffect *effect, VstInt32 opcode, VstI
      printf("PLUG> HostCallback (opcode %d)\n index = %d, value = %p, ptr = %p, opt = %f\n", opcode, index, FromVstPtr<void>(value), ptr, opt);
      break;
 
+
    case audioMasterGetCurrentProcessLevel:
-     printf("PLUG> HostCallback (opcode %d)\n index = %d, value = %p, ptr = %p, opt = %f\n", opcode, index, FromVstPtr<void>(value), ptr, opt);
+     if (export_rendering()) {
+       return kVstProcessLevelOffline;
+     } else {
+       return kVstProcessLevelRealtime;
+     }
      break;
 
    case audioMasterGetAutomationState:

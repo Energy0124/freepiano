@@ -1549,7 +1549,7 @@ static void draw_keyboard() {
       key_bind_t map;
 
       // get keyboard map
-      config_get_key_bind(key - keyboard_states, &map, NULL);
+      config_bind_get_keydown(key - keyboard_states, &map, 1);
 
       float x1 = key->x1;
       float y1 = key->y1;
@@ -1564,7 +1564,7 @@ static void draw_keyboard() {
       draw_image_border(img, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
 
       // key label
-      const char *label = config_get_key_label(key - keyboard_states);
+      const char *label = config_bind_get_label(key - keyboard_states);
       if (label[0]) {
         draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, label, 10, 1, 1);
       }

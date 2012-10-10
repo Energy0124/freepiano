@@ -105,18 +105,23 @@ int config_save_keymap(char *buff, int buffer_size);
 int config_parse_keymap(const char *command);
 
 
+// clear key binding
+void config_bind_clear_keydown(byte code);
+void config_bind_clear_keyup(byte code);
 
 // get key binding
-void config_get_key_bind(byte code, key_bind_t *keydown, key_bind_t *keyup);
+int config_bind_get_keydown(byte code, key_bind_t *buffer, int size);
+int config_bind_get_keyup(byte code, key_bind_t *buffer, int size);
 
-// set keyboard action
-void config_set_key_bind(byte code, key_bind_t *keydown, key_bind_t *keyup);
+// add key binding
+void config_bind_add_keydown(byte code, key_bind_t bind);
+void config_bind_add_keyup(byte code, key_bind_t bind);
 
-// set keyboard label
-void config_set_key_label(byte code, const char *label);
+// set label
+void config_bind_set_label(byte code, const char *label);
 
 // get keyboard label
-const char* config_get_key_label(byte code);
+const char* config_bind_get_label(byte code);
 
 // clear key setting
 void config_clear_key_setting();

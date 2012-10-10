@@ -8,6 +8,8 @@
 #include "song.h"
 #include "export_mp4.h"
 
+#include <map>
+
 // buffer size
 
 #define DINPUT_BUFFER_SIZE  32
@@ -23,11 +25,11 @@ static HANDLE input_event = NULL;
 static HANDLE input_thread = NULL;
 
 // auto generated keyup events
-static struct keyup_t {
+struct keyup_t {
   byte delay_channel;
   key_bind_t map;
-}
-key_up_event[256];
+};
+static std::multimap<byte, keyup_t> key_up_map;
 
 // keyboard enable
 static bool enable_keyboard = true;
@@ -275,61 +277,78 @@ void keyboard_key_event(int code, int keydown) {
 
   // keydown event
   if (keydown) {
-    key_bind_t down;
-    key_bind_t &up = key_up_event[code].map;
+    key_bind_t temp[256];
 
     // get key bind
-    config_get_key_bind(code, &down, &up);
+    int num_keydown = config_bind_get_keydown(code, temp, ARRAYSIZE(temp));
+    for (int i = 0; i < num_keydown; i++) {
+      key_bind_t down = temp[i];
 
-    // translate to real midi event
-    modify_midi_event(up);
-    key_up_event[code].delay_channel = 0;
+      // note on
+      if ((down.a & 0xf0) == 0x90) {
+        byte ch = down.a & 0x0f;
 
-    // note on
-    if ((down.a & 0xf0) == 0x90) {
-      byte ch = down.a & 0x0f;
+        // reset delay keyup event
+        delay_keyup_reset(ch * 128 + down.b);
 
-      // setup delay keyup
-      key_up_event[code].delay_channel = ch;
+        // translate to real midi event
+        modify_midi_event(down);
 
-      // reset delay keyup event
-      delay_keyup_reset(ch * 128 + down.b);
+        // auto generate note off event
+        keyup_t up;
+        up.delay_channel = ch;
+        up.map.a = 0x80 | (down.a & 0x0f);
+        up.map.b = down.b;
+        up.map.c = down.c;
+        up.map.d = down.d;
+        key_up_map.insert(std::pair<byte, keyup_t>(code, up));
+      }
 
-      // translate to real midi event
-      modify_midi_event(down);
-
-      // auto generate note off event
-      if (up.a == 0) {
-        up.a = 0x80 | (down.a & 0x0f);
-        up.b = down.b;
-        up.c = down.c;
-        up.d = down.d;
+      // send event to song
+      if (down.a) {
+        song_send_event(down.a, down.b, down.c, down.d);
       }
     }
 
-    // send event to song
-    if (down.a) {
-      song_send_event(down.a, down.b, down.c, down.d);
+    // add key up events.
+    int num_keyup = config_bind_get_keyup(code, temp, ARRAYSIZE(temp));
+    for (int i = 0; i < num_keyup; i++) {
+      keyup_t up;
+      up.map = temp[i];
+      up.delay_channel = up.map.a & 0x0f;
+
+      // translate to real midi event
+      modify_midi_event(up.map);
+
+      // insert keyup event to keyup map
+      key_up_map.insert(std::pair<byte, keyup_t>(code, up));
     }
   }
   // keyup event
   else {
-    keyup_t &up = key_up_event[code];
+    auto it = key_up_map.find(code);
+    while (it != key_up_map.end() && it->first == code) {
+      keyup_t &up = it->second;
 
-    if (up.map.a) {
-      if ((up.map.a & 0xf0) == 0x80 && config_get_delay_keyup(up.delay_channel)) {
-        delay_keyup_add(up.delay_channel * 128 + up.map.b, up.map);
+      if (up.map.a) {
+        // delay keyup is enabled and this is a note off event.
+        if ((up.map.a & 0xf0) == 0x80 && config_get_delay_keyup(up.delay_channel)) {
+          // add event to delay keyup queue.
+          delay_keyup_add(up.delay_channel * 128 + up.map.b, up.map);
 
-        // send event to display to correct midi keyup
-        display_midi_event(up.map.a, up.map.b, up.map.c, up.map.d);
+          // send event to display to correct midi keyup
+          display_midi_event(up.map.a, up.map.b, up.map.c, up.map.d);
+        }
+
+        // send keyup event
+        else {
+          song_send_event(up.map.a, up.map.b, up.map.c, up.map.d);
+        }
       }
 
-      // send keyup event
-      else {
-        key_bind_t map = key_up_event[code].map;
-        song_send_event(map.a, map.b, map.c, map.d);
-      }
+      ++it;
     }
+    key_up_map.erase(code);
   }
 }
 

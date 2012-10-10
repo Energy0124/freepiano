@@ -16,6 +16,8 @@
 
 #include "../res/resource.h"
 
+#include <map>
+
 // -----------------------------------------------------------------------------------------
 // config constants
 // -----------------------------------------------------------------------------------------
@@ -405,8 +407,11 @@ struct global_setting_t {
 };
 
 struct setting_t {
-  // key map
-  key_bind_t key_map[256][2];
+  // keymap
+  std::multimap<byte, key_bind_t> keydown_map;
+  std::multimap<byte, key_bind_t> keyup_map;
+
+  // key label
   key_label_t key_label[256];
 
   // key properties
@@ -420,11 +425,22 @@ struct setting_t {
   char midi_controller[16][256];
 
   void clear() {
-    memset(this, 0, sizeof(setting_t));
+    key_signature = 0;
+    auto_pedal = 0;
+
+    keydown_map.clear();
+    keyup_map.clear();
+
+    for (int i = 0; i < 256; i++) {
+      memset(key_label[i].text, 0, sizeof(key_label[i].text));
+    }
 
     for (int i = 0; i < 16; i++) {
+      key_octshift[i] = 0;
       key_velocity[i] = 127;
+      key_channel[i] = 0;
 
+      delay_keyup[i] = 0;
       midi_program[i] = -1;
 
       for (int j = 0; j < 128; j++)
@@ -435,20 +451,27 @@ struct setting_t {
 
 // settings
 static global_setting_t global;
-static setting_t settings[255];
+static setting_t settings[256];
 static uint current_setting = 0;
 static uint setting_count = 1;
+
+// song thread lock
+static thread_lock_t config_lock;
 
 // save current key settings
 static int config_save_key_settings(char *buff, int buffer_size);
 
 // clear keyboard setting
 void config_clear_key_setting() {
+  thread_lock lock(config_lock);
+
   settings[current_setting].clear();
 }
 
 // copy key setting
 void config_copy_key_setting() {
+  thread_lock lock(config_lock);
+
   if (OpenClipboard(NULL)) {
     // temp buffer
     uint buff_size = 1024 * 1024;
@@ -478,6 +501,8 @@ void config_copy_key_setting() {
 
 // paste key setting
 void config_paste_key_setting() {
+  thread_lock lock(config_lock);
+
   if (OpenClipboard(NULL)) {
     if (IsClipboardFormatAvailable(CF_TEXT)) {
       HGLOBAL hglb = GetClipboardData(CF_TEXT);
@@ -485,6 +510,7 @@ void config_paste_key_setting() {
         char *lptstr = (char *)GlobalLock(hglb);
 
         if (lptstr != NULL) {
+          config_clear_key_setting();
           config_parse_keymap(lptstr);
           GlobalUnlock(hglb);
         }
@@ -495,40 +521,101 @@ void config_paste_key_setting() {
 }
 
 
-// get keyboard bind
-void config_get_key_bind(byte code, key_bind_t *keydown, key_bind_t *keyup) {
-  if (keydown) *keydown = settings[current_setting].key_map[code][0];
-  if (keyup) *keyup = settings[current_setting].key_map[code][1];
+int config_bind_get_keydown(byte code, key_bind_t *buff, int size) {
+  thread_lock lock(config_lock);
+
+  int result = 0;
+  if (buff) {
+    auto it = settings[current_setting].keydown_map.find(code);
+    auto end = settings[current_setting].keydown_map.end();
+
+    while (it != end && it->first == code) {
+      if (result < size) {
+        buff[result] = it->second;
+        ++result;
+      }
+      ++it;
+    }
+  }
+  return result;
 }
 
-// set keyboard action
-void config_set_key_bind(byte code, key_bind_t *keydown, key_bind_t *keyup) {
-  if (keydown) settings[current_setting].key_map[code][0] = *keydown;
-  if (keyup) settings[current_setting].key_map[code][1] = *keyup;
+int config_bind_get_keyup(byte code, key_bind_t *buff, int size) {
+  thread_lock lock(config_lock);
+
+  int result = 0;
+  if (buff) {
+    auto it = settings[current_setting].keyup_map.find(code);
+    auto end = settings[current_setting].keyup_map.end();
+
+    while (it != end && it->first == code) {
+      if (result < size) {
+        buff[result] = it->second;
+      }
+      ++it;
+    }
+  }
+  return result;
 }
 
-// set keyboard label
-void config_set_key_label(byte code, const char *label) {
+void config_bind_clear_keydown(byte code) {
+  thread_lock lock(config_lock);
+
+  settings[current_setting].keydown_map.erase(code);
+}
+
+void config_bind_clear_keyup(byte code) {
+  thread_lock lock(config_lock);
+
+  settings[current_setting].keyup_map.erase(code);
+}
+
+void config_bind_add_keydown(byte code, key_bind_t bind) {
+  thread_lock lock(config_lock);
+
+  if (bind.a) {
+    settings[current_setting].keydown_map.insert(std::pair<byte, key_bind_t>(code, bind));
+  }
+}
+
+void config_bind_add_keyup(byte code, key_bind_t bind) {
+  thread_lock lock(config_lock);
+
+  if (bind.a) {
+    settings[current_setting].keyup_map.insert(std::pair<byte, key_bind_t>(code, bind));
+  }
+}
+
+void config_bind_set_label(byte code, const char *label) {
+  thread_lock lock(config_lock);
+
   strncpy(settings[current_setting].key_label[code].text, label ? label : "", sizeof(key_label_t));
 }
 
-// set keyboard label
-const char* config_get_key_label(byte code) {
+const char* config_bind_get_label(byte code) {
+  thread_lock lock(config_lock);
+
   return settings[current_setting].key_label[code].text;
 }
 
 // set key signature
 void config_set_key_signature(char key) {
+  thread_lock lock(config_lock);
+
   settings[current_setting].key_signature = key;
 }
 
 // get key signature
 char config_get_key_signature() {
+  thread_lock lock(config_lock);
+
   return settings[current_setting].key_signature;
 }
 
 // set oct shift
 void config_set_key_octshift(byte channel, char shift) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].key_octshift)) {
     settings[current_setting].key_octshift[channel] = shift;
   }
@@ -536,6 +623,8 @@ void config_set_key_octshift(byte channel, char shift) {
 
 // get oct shift
 char config_get_key_octshift(byte channel) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].key_octshift))
     return settings[current_setting].key_octshift[channel];
   else
@@ -544,6 +633,8 @@ char config_get_key_octshift(byte channel) {
 
 // set velocity
 void config_set_key_velocity(byte channel, byte velocity) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].key_velocity)) {
     settings[current_setting].key_velocity[channel] = velocity;
   }
@@ -551,6 +642,8 @@ void config_set_key_velocity(byte channel, byte velocity) {
 
 // get velocity
 byte config_get_key_velocity(byte channel) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].key_velocity))
     return settings[current_setting].key_velocity[channel];
   else
@@ -559,6 +652,8 @@ byte config_get_key_velocity(byte channel) {
 
 // get channel
 int config_get_key_channel(byte channel) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].key_channel))
     return settings[current_setting].key_channel[channel];
   else
@@ -567,6 +662,8 @@ int config_get_key_channel(byte channel) {
 
 // get channel
 void config_set_key_channel(byte channel, byte value) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].key_channel)) {
     settings[current_setting].key_channel[channel] = value;
   }
@@ -574,6 +671,8 @@ void config_set_key_channel(byte channel, byte value) {
 
 // get midi program
 byte config_get_program(byte channel) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].midi_program))
     return settings[current_setting].midi_program[channel];
   else
@@ -582,6 +681,8 @@ byte config_get_program(byte channel) {
 
 // set midi program
 void config_set_program(byte channel, byte value) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].midi_program)) {
     settings[current_setting].midi_program[channel] = value;
   }
@@ -589,6 +690,8 @@ void config_set_program(byte channel, byte value) {
 
 // get midi program
 byte config_get_controller(byte channel, byte id) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].midi_controller))
     return settings[current_setting].midi_controller[channel][id];
   else
@@ -597,6 +700,8 @@ byte config_get_controller(byte channel, byte id) {
 
 // set midi program
 void config_set_controller(byte channel, byte id, byte value) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].midi_controller)) {
     settings[current_setting].midi_controller[channel][id] = value;
   }
@@ -604,11 +709,15 @@ void config_set_controller(byte channel, byte id, byte value) {
 
 // get auto pedal time
 char config_get_auto_pedal() {
+  thread_lock lock(config_lock);
+
   return settings[current_setting].auto_pedal;
 }
 
 // set auto pedal time
 void config_set_auto_pedal(char value) {
+  thread_lock lock(config_lock);
+
   if (value < 0)
     value = 0;
 
@@ -617,6 +726,8 @@ void config_set_auto_pedal(char value) {
 
 // reset config
 static void config_reset() {
+  thread_lock lock(config_lock);
+
   // reset global settings
   memset(&global, 0, sizeof(global));
   global.output_delay = 10;
@@ -631,11 +742,14 @@ static void config_reset() {
 
 // get setting group
 uint config_get_setting_group() {
+  thread_lock lock(config_lock);
   return current_setting;
 }
 
 // set setting group
 void config_set_setting_group(uint id) {
+  thread_lock lock(config_lock);
+
   if (id < setting_count)
     current_setting = id;
 
@@ -653,11 +767,14 @@ void config_set_setting_group(uint id) {
 
 // get setting group count
 uint config_get_setting_group_count() {
+  thread_lock lock(config_lock);
   return setting_count;
 }
 
 // set setting group count
 void config_set_setting_group_count(uint count) {
+  thread_lock lock(config_lock);
+
   if (count < 1)
     count = 1;
 
@@ -677,12 +794,16 @@ void config_set_setting_group_count(uint count) {
 
 // set keyup mode
 void config_set_delay_keyup(byte channel, char value) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].delay_keyup))
     settings[current_setting].delay_keyup[channel] = value;
 }
 
 // get keyup mode
 char config_get_delay_keyup(byte channel) {
+  thread_lock lock(config_lock);
+
   if (channel < ARRAY_COUNT(settings[current_setting].delay_keyup))
     return settings[current_setting].delay_keyup[channel];
   else
@@ -963,7 +1084,6 @@ static int config_parse_keymap_line(char *s) {
   if (match_word(&s, "Key") || match_word(&s, "Keydown")) {
     uint key = 0;
     key_bind_t keydown;
-    key_bind_t keyup;
 
     // match key name
     if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
@@ -972,7 +1092,7 @@ static int config_parse_keymap_line(char *s) {
     // match midi event
     if (match_event(&s, &keydown)) {
       // set that action
-      config_set_key_bind(key, &keydown, &keyup);
+      config_bind_add_keydown(key, keydown);
       return 0;
     }
   }
@@ -988,8 +1108,7 @@ static int config_parse_keymap_line(char *s) {
     // match midi event
     if (match_event(&s, &keyup)) {
       // set that action
-      config_set_key_bind(key, NULL, &keyup);
-
+      config_bind_add_keyup(key, keyup);
       return 0;
     }
   }
@@ -1006,7 +1125,7 @@ static int config_parse_keymap_line(char *s) {
     match_line(&s, buff, sizeof(buff));
 
     // set key label
-    config_set_key_label(key, buff);
+    config_bind_set_label(key, buff);
   }
   // octshift
   else if (match_word(&s, "Octshift")) {
@@ -1098,6 +1217,8 @@ static int config_parse_keymap_line(char *s) {
 }
 
 int config_parse_keymap(const char *command) {
+  thread_lock lock(config_lock);
+
   char line[1024];
   char *line_end = line;
   int result = 0;
@@ -1129,6 +1250,8 @@ int config_parse_keymap(const char *command) {
 
 // load keymap
 int config_load_keymap(const char *filename) {
+  thread_lock lock(config_lock);
+
   char line[256];
   config_get_media_path(line, sizeof(line), filename);
 
@@ -1170,28 +1293,30 @@ static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t
 
   s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
 
+  // Control messages
   if (e.a < 0x80) {
     s += print_value(s, end - s, e.a, action_names, ARRAY_COUNT(action_names));
 
     switch (e.a) {
-     case SM_KEY_SIGNATURE:     // key
-     case SM_VOLUME:    // volume
+     case SM_KEY_SIGNATURE:
+     case SM_VOLUME:
+     case SM_SETTING_GROUP:
        s += print_value(s, end - s, e.b, value_action_names, ARRAY_COUNT(value_action_names));
        s += print_value(s, end - s, e.c, NULL, 0);
        break;
 
-     case SM_OCTSHIFT:      // oct
-     case SM_VELOCITY:      // vel
-     case SM_CHANNEL:       // channel
+     case SM_OCTSHIFT:
+     case SM_VELOCITY:
+     case SM_CHANNEL:
      case SM_DELAY_KEYUP:
        s += print_value(s, end - s, e.b, NULL, 0);
        s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
        s += print_value(s, end - s, e.d, NULL, 0);
        break;
 
-     case SM_PLAY:      // play
-     case SM_RECORD:    // rec
-     case SM_STOP:      // stop
+     case SM_PLAY:
+     case SM_RECORD:
+     case SM_STOP:
        break;
 
      default:
@@ -1200,7 +1325,10 @@ static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t
        s += print_value(s, end - s, e.d, NULL, 0);
        break;
     }
-  } else {
+  }
+
+  // Midi messages
+  else {
     s += print_value(s, end - s, e.a & 0xf0, action_names, ARRAY_COUNT(action_names));
     s += print_value(s, end - s, e.a & 0x0f, NULL, 0);
 
@@ -1287,27 +1415,38 @@ static int config_save_key_settings(char *buff, int buffer_size) {
 
   // save key bindings
   for (int key = 0; key < 256; key++) {
-    key_bind_t keydown, keyup;
-    config_get_key_bind(key, &keydown, &keyup);
+    key_bind_t temp[256];
+    bool first;
+    int count;
 
-    if (keydown.a) {
-      s += _snprintf(s, end - s, "Keydown");
-      s += print_keyboard_event(s, end - s, key, keydown);
-      s += _snprintf(s, end - s, "\r\n");
+    count = config_bind_get_keydown(key, temp, ARRAYSIZE(temp));
+    first = true;
+    for (int i = 0; i < count; i++) {
+      if (temp[i].a) {
+        s += _snprintf(s, end - s, first ? "Keydown" : "Keydown");
+        s += print_keyboard_event(s, end - s, key, temp[i]);
+        s += _snprintf(s, end - s, "\r\n");
+        first = false;
+      }
     }
 
-    if (keyup.a) {
-      s += _snprintf(s, end - s, "Keyup");
-      s += print_keyboard_event(s, end - s, key, keyup);
-      s += _snprintf(s, end - s, "\r\n");
+    count = config_bind_get_keyup(key, temp, ARRAYSIZE(temp));
+    first = true;
+    for (int i = 0; i < count; i++) {
+      if (temp[i].a) {
+        s += _snprintf(s, end - s, first ? "Keyup" : "Keyup");
+        s += print_keyboard_event(s, end - s, key, temp[i]);
+        s += _snprintf(s, end - s, "\r\n");
+        first = false;
+      }
     }
   }
 
   for (int key = 0; key < 256; key++) {
-    if (*config_get_key_label(key)) {
+    if (*config_bind_get_label(key)) {
       s += _snprintf(s, end - s, "Label");
       s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
-      s += _snprintf(s, end - s, "\t%s\r\n", config_get_key_label(key));
+      s += _snprintf(s, end - s, "\t%s\r\n", config_bind_get_label(key));
     }
   }
 
@@ -1316,6 +1455,8 @@ static int config_save_key_settings(char *buff, int buffer_size) {
 
 // save keymap
 int config_save_keymap(char *buff, int buffer_size) {
+  thread_lock lock(config_lock);
+
   char *end = buff + buffer_size;
   char *s = buff;
 
@@ -1369,6 +1510,8 @@ static int config_apply() {
 
 // load
 int config_load(const char *filename) {
+  thread_lock lock(config_lock);
+
   char line[256];
   config_get_media_path(line, sizeof(line), filename);
 
@@ -1447,6 +1590,8 @@ int config_load(const char *filename) {
 
 // save
 int config_save(const char *filename) {
+  thread_lock lock(config_lock);
+
   char file_path[256];
   config_get_media_path(file_path, sizeof(file_path), filename);
 
@@ -1496,6 +1641,8 @@ int config_save(const char *filename) {
 
 // initialize config
 int config_init() {
+  thread_lock lock(config_lock);
+
   config_reset();
   return 0;
 }
@@ -1513,6 +1660,8 @@ void config_shutdown() {
 
 // select instrument
 int config_select_instrument(int type, const char *name) {
+  thread_lock lock(config_lock);
+
   int result = -1;
 
   if (type == INSTRUMENT_TYPE_MIDI) {
@@ -1576,36 +1725,50 @@ int config_select_instrument(int type, const char *name) {
 
 // get instrument type
 int config_get_instrument_type() {
+  thread_lock lock(config_lock);
+
   return global.instrument_type;
 }
 
 const char* config_get_instrument_path() {
+  thread_lock lock(config_lock);
+
   return global.instrument_path;
 }
 
 // set enable resize window
 void config_set_enable_resize_window(bool enable) {
+  thread_lock lock(config_lock);
+
   global.enable_resize = enable;
 }
 
 // get enable resize windwo
 bool config_get_enable_resize_window() {
+  thread_lock lock(config_lock);
+
   return global.enable_resize != 0;
 }
 
 // set enable resize window
 void config_set_enable_hotkey(bool enable) {
+  thread_lock lock(config_lock);
+
   global.enable_hotkey = enable;
 }
 
 // get enable resize windwo
 bool config_get_enable_hotkey() {
+  thread_lock lock(config_lock);
+
   return global.enable_hotkey != 0;
 }
 
 
 // select output
 int config_select_output(int type, const char *device) {
+  thread_lock lock(config_lock);
+
   int result = -1;
   asio_close();
   dsound_close();
@@ -1650,6 +1813,8 @@ int config_select_output(int type, const char *device) {
 
 // select midi input
 int config_select_midi_input(const char *device) {
+  thread_lock lock(config_lock);
+
   int result = -1;
   if (result = midi_open_input(device)) {
     global.midi_input[0] = 0;
@@ -1662,11 +1827,14 @@ int config_select_midi_input(const char *device) {
 
 // get midi input
 const char* config_get_midi_input() {
+  thread_lock lock(config_lock);
   return global.midi_input;
 }
 
 // select midi output
 int config_select_midi_output(const char *device) {
+  thread_lock lock(config_lock);
+
   int result = -1;
   if (result = midi_open_output(device)) {
     return result;
@@ -1678,16 +1846,22 @@ int config_select_midi_output(const char *device) {
 
 // get midi output
 const char* config_get_midi_output() {
+  thread_lock lock(config_lock);
+
   return global.midi_output;
 }
 
 // get output delay
 int config_get_output_delay() {
+  thread_lock lock(config_lock);
+
   return global.output_delay;
 }
 
 // get output delay
 void config_set_output_delay(int delay) {
+  thread_lock lock(config_lock);
+
   if (delay < 0)
     delay = 0;
   else if (delay > 500)
@@ -1717,21 +1891,26 @@ void config_set_output_delay(int delay) {
 
 // get output type
 int config_get_output_type() {
+  thread_lock lock(config_lock);
   return global.output_type;
 }
 
 // get output device
 const char* config_get_output_device() {
+  thread_lock lock(config_lock);
   return global.output_device;
 }
 
 // get keymap
 const char* config_get_keymap() {
+  thread_lock lock(config_lock);
   return global.keymap;
 }
 
 // set keymap
 int config_set_keymap(const char *mapname) {
+  thread_lock lock(config_lock);
+
   char path[MAX_PATH];
   config_get_media_path(path, sizeof(path), mapname);
 
@@ -1790,11 +1969,13 @@ void config_get_relative_path(char *buff, int buff_size, const char *path) {
 
 // get volume
 int config_get_output_volume() {
+  thread_lock lock(config_lock);
   return global.output_volume;
 }
 
 // set volume
 void config_set_output_volume(int volume) {
+  thread_lock lock(config_lock);
   if (volume < 0) volume = 0;
   if (volume > 200) volume = 200;
   global.output_volume = volume;
@@ -1802,6 +1983,7 @@ void config_set_output_volume(int volume) {
 
 // reset settings
 void config_default_key_setting() {
+  thread_lock lock(config_lock);
   config_clear_key_setting();
 
   if (lang_text_open(IDR_TEXT_DEFAULT_SETTING)) {

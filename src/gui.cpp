@@ -660,7 +660,10 @@ static int menu_init() {
   AppendMenu(menu_setting_group, MF_SEPARATOR, 0, NULL);
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_COPY, lang_load_string(IDS_MENU_SETTING_GROUP_COPY));
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_PASTE, lang_load_string(IDS_MENU_SETTING_GROUP_PASTE));
+  AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_CLEAR, lang_load_string(IDS_MENU_SETTING_GROUP_CLEAR));
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_DEFAULT, lang_load_string(IDS_MENU_SETTING_GROUP_DEFAULT));
+
+
 
   // Popup menu
   AppendMenu(menu_key_popup,  MF_POPUP, (UINT_PTR)menu_key_note, lang_load_string(IDS_MENU_KEY_NOTE));
@@ -769,7 +772,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
    case MENU_ID_KEY_NOTE: {
      key_bind_t keydown;
-     config_get_key_bind(selected_key, &keydown, NULL);
+     config_bind_get_keydown(selected_key, &keydown, 1);
 
      if ((keydown.a >> 4) == 0x9) {
        keydown.b = (byte)((keydown.b / 12) * 12 + pos);
@@ -779,14 +782,16 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
        keydown.c = 127;
      }
 
-     config_set_key_label(selected_key, NULL);
-     config_set_key_bind(selected_key, &keydown, NULL);
+     config_bind_set_label(selected_key, NULL);
+     config_bind_clear_keydown(selected_key);
+     config_bind_clear_keyup(selected_key);
+     config_bind_add_keydown(selected_key, keydown);
    }
    break;
 
    case MENU_ID_KEY_NOTE_SHIFT: {
      key_bind_t keydown;
-     config_get_key_bind(selected_key, &keydown, NULL);
+     config_bind_get_keydown(selected_key, &keydown, 1);
 
      if ((keydown.a >> 4) == 0x9) {
        keydown.b = (byte)(12 + pos * 12 + (keydown.b % 12));
@@ -796,14 +801,16 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
        keydown.c = 127;
      }
 
-     config_set_key_label(selected_key, NULL);
-     config_set_key_bind(selected_key, &keydown, NULL);
+     config_bind_set_label(selected_key, NULL);
+     config_bind_clear_keydown(selected_key);
+     config_bind_clear_keyup(selected_key);
+     config_bind_add_keydown(selected_key, keydown);
    }
    break;
 
    case MENU_ID_KEY_NOTE_CHANNEL: {
      key_bind_t keydown;
-     config_get_key_bind(selected_key, &keydown, NULL);
+     config_bind_get_keydown(selected_key, &keydown, 1);
 
      switch (keydown.a >> 4) {
       case 0x9:
@@ -816,7 +823,9 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         break;
      }
 
-     config_set_key_bind(selected_key, &keydown, NULL);
+     config_bind_clear_keydown(selected_key);
+     config_bind_clear_keyup(selected_key);
+     config_bind_add_keydown(selected_key, keydown);
    }
    break;
 
@@ -839,9 +848,9 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      break;
 
    case MENU_ID_KEY_CLEAR: {
-     key_bind_t events[2];
-     config_set_key_bind(selected_key, events + 0, events + 1);
-     config_set_key_label(selected_key, NULL);
+     config_bind_clear_keydown(selected_key);
+     config_bind_clear_keyup(selected_key);
+     config_bind_set_label(selected_key, NULL);
    }
    break;
 
@@ -1029,6 +1038,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      break;
 
    case MENU_ID_SETTING_GROUP_CLEAR:
+     config_clear_key_setting();
      break;
 
    case MENU_ID_FILE_EXPORT_MP4: {
@@ -1142,7 +1152,7 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
       key_bind_t keydown;
-      config_get_key_bind(selected_key, &keydown, NULL);
+      config_bind_get_keydown(selected_key, &keydown, 1);
 
       int selected = -1;
 
@@ -1162,7 +1172,7 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
       key_bind_t keydown;
-      config_get_key_bind(selected_key, &keydown, NULL);
+      config_bind_get_keydown(selected_key, &keydown, 1);
 
       int selected = -1;
 
@@ -1177,7 +1187,7 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       const char * *channels = lang_load_string_array(IDS_MENU_KEY_CHANNELS);
 
       key_bind_t keydown;
-      config_get_key_bind(selected_key, &keydown, NULL);
+      config_bind_get_keydown(selected_key, &keydown, 1);
       int selected = (keydown.a & 0xf);
 
       // remove all menu items.
