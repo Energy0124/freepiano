@@ -141,6 +141,7 @@
     <None Include="..\res\controllers_ch.txt" />
     <None Include="..\res\controllers_en.txt" />
     <None Include="..\res\default_setting.txt" />
+    <None Include="..\res\edit_box.png" />
     <None Include="..\res\icon.ico" />
     <None Include="..\res\icon_normal.ico" />
     <None Include="..\res\icon_small.ico" />
@@ -148,11 +149,13 @@
     <None Include="..\res\keyboard_note_up.png" />
     <None Include="..\res\keyboard_unmapped_down.png" />
     <None Include="..\res\keyboard_unmapped_up.png" />
+    <None Include="..\res\logo.png" />
     <None Include="..\res\midi_black_down.png" />
     <None Include="..\res\midi_black_up.png" />
     <None Include="..\res\midi_white_down.png" />
     <None Include="..\res\midi_white_up.png" />
     <None Include="..\res\notes.png" />
+    <None Include="..\res\round_corner.png" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\res\freepiano.rc" />

@@ -12,6 +12,8 @@ int main()
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 #endif
 {
+  //SetThreadUILanguage(LANG_ENGLISH);
+
 	// initialize com
 	if (FAILED(CoInitialize(NULL)))
 		return 1;

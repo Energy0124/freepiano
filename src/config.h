@@ -1,23 +1,22 @@
 #pragma once
 
 
-#define	INSTRUMENT_TYPE_MIDI		0
-#define	INSTRUMENT_TYPE_VSTI		1
+#define INSTRUMENT_TYPE_MIDI        0
+#define INSTRUMENT_TYPE_VSTI        1
 
-#define	OUTPUT_TYPE_AUTO			0
-#define	OUTPUT_TYPE_DSOUND			1
-#define	OUTPUT_TYPE_WASAPI			2
-#define	OUTPUT_TYPE_ASIO			3
+#define OUTPUT_TYPE_AUTO            0
+#define OUTPUT_TYPE_DSOUND          1
+#define OUTPUT_TYPE_WASAPI          2
+#define OUTPUT_TYPE_ASIO            3
 
-struct key_bind_t
-{
-	byte a;
-	byte b;
-	byte c;
-	byte d;
+struct key_bind_t {
+  byte a;
+  byte b;
+  byte c;
+  byte d;
 
-	key_bind_t() : a(0) , b(0) , c(0) , d(0) {}
-	key_bind_t(byte a, byte b, byte c, byte d) : a(a) , b(b) , c(c) , d(d) {}
+  key_bind_t() : a(0), b(0), c(0), d(0) {}
+  key_bind_t(byte a, byte b, byte c, byte d) : a(a), b(b), c(c), d(d) {}
 };
 
 // initialize config
@@ -27,37 +26,37 @@ int config_init();
 void config_shutdown();
 
 // load
-int config_load(const char * filename);
+int config_load(const char *filename);
 
 // save
-int config_save(const char * filename);
+int config_save(const char *filename);
 
 // get media path
-void config_get_media_path(char * buff, int buff_size, const char * path);
+void config_get_media_path(char *buff, int buff_size, const char *path);
 
 // get relative path
-void config_get_relative_path(char * buff, int buff_size, const char * path);
+void config_get_relative_path(char *buff, int buff_size, const char *path);
 
 // select midi input
-int config_select_midi_input(const char * device);
+int config_select_midi_input(const char *device);
 
 // get midi input
-const char * config_get_midi_input();
+const char* config_get_midi_input();
 
 // select midi output
-int config_select_midi_output(const char * device);
+int config_select_midi_output(const char *device);
 
 // get midi output
-const char * config_get_midi_output();
+const char* config_get_midi_output();
 
 // select output
-int config_select_output(int type, const char * device);
+int config_select_output(int type, const char *device);
 
 // get output type
 int config_get_output_type();
 
 // get output device
-const char * config_get_output_device();
+const char* config_get_output_device();
 
 // get output delay
 int config_get_output_delay();
@@ -72,13 +71,13 @@ int config_get_output_volume();
 void config_set_output_volume(int volume);
 
 // select instrument
-int config_select_instrument(int type, const char * name);
+int config_select_instrument(int type, const char *name);
 
 // get instrument type
 int config_get_instrument_type();
 
 // get instrument
-const char * config_get_instrument_path();
+const char* config_get_instrument_path();
 
 // set enable resize window
 void config_set_enable_resize_window(bool enable);
@@ -94,30 +93,30 @@ bool config_get_enable_hotkey();
 
 
 // get keymap
-const char * config_get_keymap();
+const char* config_get_keymap();
 
 // set keymap
-int config_set_keymap(const char * mapname);
+int config_set_keymap(const char *mapname);
 
 // save keymap
-int config_save_keymap(char * buff, int buffer_size);
+int config_save_keymap(char *buff, int buffer_size);
 
 // parse keymap
-int config_parse_keymap(const char * command);
+int config_parse_keymap(const char *command);
 
 
 
 // get key binding
-void config_get_key_bind(byte code, key_bind_t * keydown, key_bind_t * keyup);
+void config_get_key_bind(byte code, key_bind_t *keydown, key_bind_t *keyup);
 
 // set keyboard action
-void config_set_key_bind(byte code, key_bind_t * keydown, key_bind_t * keyup);
+void config_set_key_bind(byte code, key_bind_t *keydown, key_bind_t *keyup);
 
 // set keyboard label
-void config_set_key_label(byte code, const char * label);
+void config_set_key_label(byte code, const char *label);
 
-// get keyboard label 
-const char * config_get_key_label(byte code);
+// get keyboard label
+const char* config_get_key_label(byte code);
 
 // clear key setting
 void config_clear_key_setting();
@@ -188,8 +187,8 @@ void config_set_auto_pedal(char value);
 // set keyup mode
 void config_set_delay_keyup(byte channel, char value);
 
-// get keyup mode 
+// get keyup mode
 char config_get_delay_keyup(byte channel);
 
 // get key name
-const char * config_get_key_name(byte code);
+const char* config_get_key_name(byte code);

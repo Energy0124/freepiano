@@ -2,10 +2,9 @@
 #include "midi.h"
 
 // keymap enum callback
-struct keymap_enum_callback
-{
-	virtual void operator ()(const char * value) = 0;
-}; 
+struct keymap_enum_callback {
+  virtual void operator () (const char *value) = 0;
+};
 
 // initialize keyboard
 int keyboard_init();
@@ -17,7 +16,7 @@ void keyboard_shutdown();
 void keyboard_enable(bool enable);
 
 // enum keymap
-void keyboard_enum_keymap(keymap_enum_callback & callback);
+void keyboard_enum_keymap(keymap_enum_callback &callback);
 
 // reset keyboard
 void keyboard_reset();

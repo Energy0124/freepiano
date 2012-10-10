@@ -1,12 +1,11 @@
 #pragma once
 
-struct wasapi_enum_callback
-{
-	virtual void operator ()(const char * name, void * device) = 0;
+struct wasapi_enum_callback {
+  virtual void operator () (const char *name, void *device) = 0;
 };
 
 // open dsound.
-int wasapi_open(const char * name);
+int wasapi_open(const char *name);
 
 // close dsound device
 void wasapi_close();
@@ -15,4 +14,4 @@ void wasapi_close();
 void wasapi_set_buffer_time(double time);
 
 // enum device
-void wasapi_enum_device(wasapi_enum_callback & callback);
+void wasapi_enum_device(wasapi_enum_callback &callback);

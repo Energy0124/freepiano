@@ -1,13 +1,11 @@
 #pragma once;
 
-
-struct vsti_enum_callback
-{
-	virtual void operator ()(const char * value) = 0;
+struct vsti_enum_callback {
+  virtual void operator () (const char *value) = 0;
 };
 
 // load plugin
-int vsti_load_plugin(const char * path);
+int vsti_load_plugin(const char *path);
 
 // unload plugin
 void vsti_unload_plugin();
@@ -28,10 +26,10 @@ void vsti_stop_process();
 void vsti_update_config(float samplerate, uint blocksize);
 
 // process
-void vsti_process(float * left, float * right, uint buffer_size);
+void vsti_process(float *left, float *right, uint buffer_size);
 
 // vst enum plugins
-void vsti_enum_plugins(vsti_enum_callback & callback);
+void vsti_enum_plugins(vsti_enum_callback &callback);
 
 // is instrument loaded
 bool vsti_is_instrument_loaded();

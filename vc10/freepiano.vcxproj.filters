@@ -133,6 +133,15 @@
     <None Include="..\res\controllers_en.txt">
       <Filter>res</Filter>
     </None>
+    <None Include="..\res\edit_box.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\logo.png">
+      <Filter>res</Filter>
+    </None>
+    <None Include="..\res\round_corner.png">
+      <Filter>res</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\res\freepiano.rc">

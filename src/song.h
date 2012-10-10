@@ -1,34 +1,32 @@
 #pragma once
 
-#define		SMS_KEY_EVENT			0	
-#define		SMS_KEY_MAP				1	
-#define		SMS_KEY_LABEL			2	
+#define SMS_KEY_EVENT           0
+#define SMS_KEY_MAP             1
+#define SMS_KEY_LABEL           2
 
 // FreePiano 1.0 messages
-#define		SM_SYSTEM				0
-#define		SM_KEY_SIGNATURE		1
-#define		SM_OCTSHIFT				2
-#define		SM_VELOCITY				3
-#define		SM_CHANNEL				4
-#define		SM_VOLUME				5
-#define		SM_PLAY					6
-#define		SM_RECORD				7
-#define		SM_STOP					8
+#define SM_SYSTEM               0
+#define SM_KEY_SIGNATURE        1
+#define SM_OCTSHIFT             2
+#define SM_VELOCITY             3
+#define SM_CHANNEL              4
+#define SM_VOLUME               5
+#define SM_PLAY                 6
+#define SM_RECORD               7
+#define SM_STOP                 8
 
 // FreePiano 1.1 messages
-#define		SM_SETTING_GROUP		9
-#define		SM_SETTING_GROUP_COUNT	10
-#define		SM_AUTO_PEDAL			11
-#define		SM_DELAY_KEYUP			12
+#define SM_SETTING_GROUP        9
+#define SM_SETTING_GROUP_COUNT  10
+#define SM_AUTO_PEDAL           11
+#define SM_DELAY_KEYUP          12
 
-
-struct song_info_t
-{
-	uint version;
-	char title[256];
-	char author[256];
-	char comment[1024];
-	bool write_protected;
+struct song_info_t {
+  uint version;
+  char title[256];
+  char author[256];
+  char comment[1024];
+  bool write_protected;
 };
 
 // send event message
@@ -80,17 +78,17 @@ double song_get_play_speed();
 void song_set_play_speed(double speed);
 
 // open lyt
-int song_open_lyt(const char * filename);
+int song_open_lyt(const char *filename);
 
 // close
 void song_close();
 
 // save song
-int song_save(const char * filename);
+int song_save(const char *filename);
 
 // open song
-int song_open(const char * filename);
+int song_open(const char *filename);
 
 // get song info
-song_info_t * song_get_info();
+song_info_t* song_get_info();
 
