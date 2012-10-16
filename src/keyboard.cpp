@@ -27,6 +27,7 @@ static HANDLE input_thread = NULL;
 // auto generated keyup events
 struct keyup_t {
   byte delay_channel;
+  byte midi_display_key;
   key_bind_t map;
 };
 static std::multimap<byte, keyup_t> key_up_map;
@@ -58,7 +59,7 @@ static void delay_keyup_reset(int id) {
 
   if (delay.timer >= 0) {
     if (delay.map.a) {
-      song_send_event(delay.map.a, delay.map.b, delay.map.c, delay.map.d);
+      song_output_event(delay.map.a, delay.map.b, delay.map.c, delay.map.d);
     }
     delay.timer = -1;
   }
@@ -211,7 +212,7 @@ void keyboard_reset() {
   for (int i = 0; i < ARRAY_COUNT(keyboard_status); i++) {
     if (keyboard_status[i] || keydown_status[i]) {
       // send keyup event
-      keyboard_key_event(i, 0);
+      keyboard_send_event(i, 0);
       keyboard_status[i] = 0;
       keydown_status[i] = 0;
     }
@@ -267,7 +268,7 @@ static inline void modify_midi_event(key_bind_t &map) {
 }
 
 // keyboard event
-void keyboard_key_event(int code, int keydown) {
+void keyboard_send_event(int code, int keydown) {
   // keep state
   if (code < ARRAY_COUNT(keyboard_status))
     keyboard_status[code] = keydown;
@@ -288,25 +289,35 @@ void keyboard_key_event(int code, int keydown) {
       if ((down.a & 0xf0) == 0x90) {
         byte ch = down.a & 0x0f;
 
+        // auto generate note off event
+        keyup_t up;
+
         // reset delay keyup event
         delay_keyup_reset(ch * 128 + down.b);
 
         // translate to real midi event
         modify_midi_event(down);
 
-        // auto generate note off event
-        keyup_t up;
+        // display midi event
+        up.midi_display_key = down.b;
+        if (config_get_midi_display() == MIDI_DISPLAY_INPUT)
+          up.midi_display_key -= config_get_key_signature();
+
+        // display midi event
+        display_midi_key(up.midi_display_key, true);
+
         up.delay_channel = ch;
         up.map.a = 0x80 | (down.a & 0x0f);
         up.map.b = down.b;
         up.map.c = down.c;
         up.map.d = down.d;
         key_up_map.insert(std::pair<byte, keyup_t>(code, up));
+
       }
 
       // send event to song
       if (down.a) {
-        song_send_event(down.a, down.b, down.c, down.d);
+        song_output_event(down.a, down.b, down.c, down.d);
       }
     }
 
@@ -315,7 +326,6 @@ void keyboard_key_event(int code, int keydown) {
     for (int i = 0; i < num_keyup; i++) {
       keyup_t up;
       up.map = temp[i];
-      up.delay_channel = up.map.a & 0x0f;
 
       // translate to real midi event
       modify_midi_event(up.map);
@@ -337,12 +347,15 @@ void keyboard_key_event(int code, int keydown) {
           delay_keyup_add(up.delay_channel * 128 + up.map.b, up.map);
 
           // send event to display to correct midi keyup
-          display_midi_event(up.map.a, up.map.b, up.map.c, up.map.d);
+          if (config_get_midi_display() == MIDI_DISPLAY_OUTPUT) {
+            display_midi_key(up.map.b, false);
+          }
         }
 
         // send keyup event
         else {
-          song_send_event(up.map.a, up.map.b, up.map.c, up.map.d);
+          display_midi_key(up.midi_display_key, false);
+          song_output_event(up.map.a, up.map.b, up.map.c, up.map.d);
         }
       }
 

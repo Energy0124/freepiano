@@ -369,6 +369,7 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
    case WM_INITDIALOG: {
      CheckDlgButton(hWnd, IDC_GUI_ENABLE_RESIZE, config_get_enable_resize_window());
      CheckDlgButton(hWnd, IDC_GUI_ENABLE_HOTKEY, !config_get_enable_hotkey());
+     CheckDlgButton(hWnd, IDC_GUI_DISPLAY_MIDI_OUTPUT, config_get_midi_display() == MIDI_DISPLAY_OUTPUT);
    }
    break;
 
@@ -380,6 +381,11 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 
       case IDC_GUI_ENABLE_HOTKEY:
         config_set_enable_hotkey(!IsDlgButtonChecked(hWnd, IDC_GUI_ENABLE_HOTKEY));
+        break;
+
+      case IDC_GUI_DISPLAY_MIDI_OUTPUT:
+        config_set_midi_display(IsDlgButtonChecked(hWnd, IDC_GUI_DISPLAY_MIDI_OUTPUT) ? 
+          MIDI_DISPLAY_OUTPUT : MIDI_DISPLAY_INPUT);
         break;
      }
      break;

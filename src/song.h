@@ -32,6 +32,9 @@ struct song_info_t {
 // send event message
 void song_send_event(byte a, byte b, byte c, byte d, bool record = false);
 
+// output event
+void song_output_event(byte a, byte b, byte c, byte d);
+
 // start record
 void song_start_record();
 

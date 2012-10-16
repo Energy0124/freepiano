@@ -9,6 +9,9 @@
 #define OUTPUT_TYPE_WASAPI          2
 #define OUTPUT_TYPE_ASIO            3
 
+#define MIDI_DISPLAY_INPUT          0
+#define MIDI_DISPLAY_OUTPUT         1
+
 struct key_bind_t {
   byte a;
   byte b;
@@ -79,18 +82,17 @@ int config_get_instrument_type();
 // get instrument
 const char* config_get_instrument_path();
 
-// set enable resize window
+// get enable resize window
+bool config_get_enable_resize_window();
 void config_set_enable_resize_window(bool enable);
 
 // get enable resize windwo
-bool config_get_enable_resize_window();
-
-// set enable hotkey
+bool config_get_enable_hotkey();
 void config_set_enable_hotkey(bool enable);
 
-// get enable resize windwo
-bool config_get_enable_hotkey();
-
+// get display midi type
+int config_get_midi_display();
+void config_set_midi_display(int value);
 
 // get keymap
 const char* config_get_keymap();

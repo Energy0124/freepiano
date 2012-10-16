@@ -17,7 +17,10 @@ int midi_open_input(const char *name);
 void midi_close_input();
 
 // send event
-void midi_send_event(byte data1, byte data2, byte data3, byte data4);
+void midi_send_event(byte a, byte b, byte c, byte d);
+
+// send event
+void midi_output_event(byte a, byte b, byte c, byte d);
 
 // enum input
 void midi_enum_input(midi_enum_callback &callbcak);

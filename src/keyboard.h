@@ -22,7 +22,7 @@ void keyboard_enum_keymap(keymap_enum_callback &callback);
 void keyboard_reset();
 
 // key event
-void keyboard_key_event(int code, int keydown);
+void keyboard_send_event(int code, int keydown);
 
 // keyboard event
 void keyboard_update(double time_elapsed);

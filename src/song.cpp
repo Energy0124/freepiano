@@ -127,7 +127,7 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record) {
   // special events
   if (a == SM_SYSTEM) {
     switch (b) {
-     case SMS_KEY_EVENT: keyboard_key_event(c, d); break;
+     case SMS_KEY_EVENT: keyboard_send_event(c, d); break;
      case SMS_KEY_MAP:   keyboard_event_map(c, d); break;
      case SMS_KEY_LABEL: keyboard_event_label(c, d); break;
     }
@@ -137,6 +137,15 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record) {
   // midi events
   if (a >= 0x80) {
     midi_send_event(a, b, c, d);
+  } else {
+    song_output_event(a, b, c, d);
+  }
+}
+
+void song_output_event(byte a, byte b, byte c, byte d) {
+  // midi events
+  if (a >= 0x80) {
+    midi_output_event(a, b, c, d);
     return;
   }
 
@@ -280,7 +289,6 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record) {
    }
    break;
   }
-
 }
 
 // -----------------------------------------------------------------------------------------

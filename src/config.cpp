@@ -404,6 +404,7 @@ struct global_setting_t {
 
   uint enable_hotkey;
   uint enable_resize;
+  uint midi_display;
 };
 
 struct setting_t {
@@ -757,10 +758,10 @@ void config_set_setting_group(uint id) {
   for (int ch = 0; ch < 16; ch++) {
     for (int i = 0; i < 127; i++)
       if (config_get_controller(ch, i) < 128)
-        midi_send_event(0xb0 | ch, i, config_get_controller(ch, i), 0);
+        midi_output_event(0xb0 | ch, i, config_get_controller(ch, i), 0);
 
     if (config_get_program(ch) < 128)
-      midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
+      midi_output_event(0xc0 | ch, config_get_program(ch), 0, 0);
   }
 
 }
@@ -1566,6 +1567,10 @@ int config_load(const char *filename) {
           match_line(&s, global.midi_output, sizeof(global.midi_output));
         } else if (match_word(&s, "input")) {
           match_line(&s, global.midi_input, sizeof(global.midi_input));
+        } else if (match_word(&s, "display")) {
+          if (match_word(&s, "output")) {
+            global.midi_display = MIDI_DISPLAY_OUTPUT;
+          }
         }
       }
       // resize window
@@ -1627,13 +1632,16 @@ int config_save(const char *filename) {
     fprintf(fp, "midi output %s\r\n", global.midi_output);
 
   if (global.midi_input[0])
-    fprintf(fp, "midi input %s\n", global.midi_input);
+    fprintf(fp, "midi input %s\r\n", global.midi_input);
+
+  if (global.midi_display)
+    fprintf(fp, "midi display output\r\n");
 
   if (config_get_enable_hotkey())
-    fprintf(fp, "hotkey enable\n");
+    fprintf(fp, "hotkey enable\r\n");
 
   if (config_get_enable_resize_window())
-    fprintf(fp, "resize enable\n");
+    fprintf(fp, "resize enable\r\n");
 
   fclose(fp);
   return 0;
@@ -1764,6 +1772,18 @@ bool config_get_enable_hotkey() {
   return global.enable_hotkey != 0;
 }
 
+int config_get_midi_display() {
+  thread_lock lock(config_lock);
+
+  return global.midi_display;
+}
+
+void config_set_midi_display(int value) {
+  thread_lock lock(config_lock);
+
+  global.midi_display = value;
+  display_midi_key_reset();
+}
 
 // select output
 int config_select_output(int type, const char *device) {

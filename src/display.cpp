@@ -1967,17 +1967,15 @@ void display_keyboard_event(byte code, uint status) {
 }
 
 // display update midi
-void display_midi_event(byte data1, byte data2, byte data3, byte data4) {
-  switch (data1 & 0xf0) {
-   case 0x90:
-     midi_key_states[data2].status = data3;
-     PostMessage(display_hwnd, WM_TIMER, 0, 0);
-     break;
+void display_midi_key(byte code, uint status) {
+  midi_key_states[code & 0x7f].status = status;
+  PostMessage(display_hwnd, WM_TIMER, 0, 0);
+}
 
-   case 0x80:
-     midi_key_states[data2].status = 0;
-     PostMessage(display_hwnd, WM_TIMER, 0, 0);
-     break;
+// reset display midi event
+void display_midi_key_reset() {
+  for (MidiKeyState *key = midi_key_states; key < midi_key_states + sizeof(midi_key_states) / sizeof(midi_key_states[0]); key++) {
+    key->status = 0;
   }
 }
 
@@ -2140,8 +2138,8 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
        return 0;
      }
    }
-     handled = true;
-     break;
+   handled = true;
+   break;
 
    case WM_RBUTTONUP:
      keycode = find_keyboard_key(x, y);
@@ -2151,6 +2149,8 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
        gui_popup_keymenu(keycode, point.x, point.y);
        return 0;
      }
+
+     handled = true;
      break;
 
    case WM_MOUSEMOVE:
@@ -2174,6 +2174,12 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
   if (!handled) {
     keycode = find_keyboard_key(x, y);
     midinote = find_midi_note(x, y, &velocity);
+
+    if (midinote != -1) {
+      midinote = midinote - config_get_key_octshift(0) * 12 - config_get_key_signature();
+      if (midinote < 0) midinote = 0;
+      if (midinote > 127) midinote = 127;
+    }
   }
 
   // update keyboard button
