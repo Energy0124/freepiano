@@ -2176,9 +2176,11 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
     midinote = find_midi_note(x, y, &velocity);
 
     if (midinote != -1) {
-      midinote = midinote - config_get_key_octshift(0) * 12 - config_get_key_signature();
-      if (midinote < 0) midinote = 0;
-      if (midinote > 127) midinote = 127;
+      if (config_get_midi_display() == MIDI_DISPLAY_OUTPUT) {
+        midinote = midinote - config_get_key_octshift(0) * 12 - config_get_key_signature();
+        if (midinote < 0) midinote = 0;
+        if (midinote > 127) midinote = 127;
+      }
     }
   }
 

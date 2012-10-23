@@ -18,11 +18,11 @@ static thread_lock_t midi_output_lock;
 static byte note_states[16][128] = {0};
 
 // auto generated keyup events
-struct keyup_t {
+struct midi_keyup_t {
   byte midi_display_key;
   key_bind_t map;
 };
-static std::multimap<byte, keyup_t> key_up_map;
+static std::multimap<byte, midi_keyup_t> key_up_map;
 
 // open output device
 int midi_open_output(const char *name) {
@@ -259,7 +259,7 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
     }
 
     // auto generate note off event
-    keyup_t up;
+    midi_keyup_t up;
     up.map.a = 0x80 | (a & 0x0f);
     up.map.b = b;
     up.map.c = c;
@@ -270,7 +270,7 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
       up.midi_display_key -= config_get_key_signature();
     }
 
-    key_up_map.insert(std::pair<byte, keyup_t>(code, up));
+    key_up_map.insert(std::pair<byte, midi_keyup_t>(code, up));
 
     display_midi_key(up.midi_display_key, true);
     midi_output_event(a, b, c, d);
@@ -284,7 +284,7 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
 
     auto it = key_up_map.find(code);
     while (it != key_up_map.end() && it->first == code) {
-      keyup_t &up = it->second;
+      midi_keyup_t &up = it->second;
 
       if (up.map.a) {
         display_midi_key(up.midi_display_key, false);
