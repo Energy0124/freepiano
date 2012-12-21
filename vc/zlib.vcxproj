@@ -11,18 +11,20 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{FB73CA17-68AF-4AB7-9DE2-40379B105EEE}</ProjectGuid>
-    <RootNamespace>libfaac</RootNamespace>
+    <ProjectGuid>{8CD7292D-D2FA-46F6-8927-88226C737299}</ProjectGuid>
+    <RootNamespace>zlib</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v110</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -50,7 +52,6 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../3rd/libfaac;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
@@ -61,7 +62,6 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <AdditionalIncludeDirectories>../3rd/libfaac;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
@@ -69,36 +69,29 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\3rd\libfaac\aacquant.c" />
-    <ClCompile Include="..\3rd\libfaac\backpred.c" />
-    <ClCompile Include="..\3rd\libfaac\bitstream.c" />
-    <ClCompile Include="..\3rd\libfaac\channels.c" />
-    <ClCompile Include="..\3rd\libfaac\fft.c" />
-    <ClCompile Include="..\3rd\libfaac\filtbank.c" />
-    <ClCompile Include="..\3rd\libfaac\frame.c" />
-    <ClCompile Include="..\3rd\libfaac\huffman.c" />
-    <ClCompile Include="..\3rd\libfaac\ltp.c" />
-    <ClCompile Include="..\3rd\libfaac\midside.c" />
-    <ClCompile Include="..\3rd\libfaac\psychkni.c" />
-    <ClCompile Include="..\3rd\libfaac\tns.c" />
-    <ClCompile Include="..\3rd\libfaac\util.c" />
+    <ClCompile Include="..\3rd\zlib\adler32.c" />
+    <ClCompile Include="..\3rd\zlib\compress.c" />
+    <ClCompile Include="..\3rd\zlib\crc32.c" />
+    <ClCompile Include="..\3rd\zlib\deflate.c" />
+    <ClCompile Include="..\3rd\zlib\infback.c" />
+    <ClCompile Include="..\3rd\zlib\inffast.c" />
+    <ClCompile Include="..\3rd\zlib\inflate.c" />
+    <ClCompile Include="..\3rd\zlib\inftrees.c" />
+    <ClCompile Include="..\3rd\zlib\trees.c" />
+    <ClCompile Include="..\3rd\zlib\uncompr.c" />
+    <ClCompile Include="..\3rd\zlib\zutil.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\3rd\libfaac\aacquant.h" />
-    <ClInclude Include="..\3rd\libfaac\backpred.h" />
-    <ClInclude Include="..\3rd\libfaac\bitstream.h" />
-    <ClInclude Include="..\3rd\libfaac\channels.h" />
-    <ClInclude Include="..\3rd\libfaac\coder.h" />
-    <ClInclude Include="..\3rd\libfaac\fft.h" />
-    <ClInclude Include="..\3rd\libfaac\filtbank.h" />
-    <ClInclude Include="..\3rd\libfaac\frame.h" />
-    <ClInclude Include="..\3rd\libfaac\huffman.h" />
-    <ClInclude Include="..\3rd\libfaac\hufftab.h" />
-    <ClInclude Include="..\3rd\libfaac\joint.h" />
-    <ClInclude Include="..\3rd\libfaac\ltp.h" />
-    <ClInclude Include="..\3rd\libfaac\psych.h" />
-    <ClInclude Include="..\3rd\libfaac\tns.h" />
-    <ClInclude Include="..\3rd\libfaac\util.h" />
+    <ClInclude Include="..\3rd\zlib\crc32.h" />
+    <ClInclude Include="..\3rd\zlib\deflate.h" />
+    <ClInclude Include="..\3rd\zlib\inffast.h" />
+    <ClInclude Include="..\3rd\zlib\inffixed.h" />
+    <ClInclude Include="..\3rd\zlib\inflate.h" />
+    <ClInclude Include="..\3rd\zlib\inftrees.h" />
+    <ClInclude Include="..\3rd\zlib\trees.h" />
+    <ClInclude Include="..\3rd\zlib\zconf.h" />
+    <ClInclude Include="..\3rd\zlib\zlib.h" />
+    <ClInclude Include="..\3rd\zlib\zutil.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

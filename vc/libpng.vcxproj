@@ -11,18 +11,20 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{8CD7292D-D2FA-46F6-8927-88226C737299}</ProjectGuid>
-    <RootNamespace>zlib</RootNamespace>
+    <ProjectGuid>{3CACBF66-2E82-4937-98A6-084E0DE5F761}</ProjectGuid>
+    <RootNamespace>libpng</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v110</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -50,6 +52,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>../3rd/zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
@@ -60,6 +63,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
+      <AdditionalIncludeDirectories>../3rd/zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WarningLevel>Level3</WarningLevel>
@@ -67,29 +71,25 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\3rd\zlib\adler32.c" />
-    <ClCompile Include="..\3rd\zlib\compress.c" />
-    <ClCompile Include="..\3rd\zlib\crc32.c" />
-    <ClCompile Include="..\3rd\zlib\deflate.c" />
-    <ClCompile Include="..\3rd\zlib\infback.c" />
-    <ClCompile Include="..\3rd\zlib\inffast.c" />
-    <ClCompile Include="..\3rd\zlib\inflate.c" />
-    <ClCompile Include="..\3rd\zlib\inftrees.c" />
-    <ClCompile Include="..\3rd\zlib\trees.c" />
-    <ClCompile Include="..\3rd\zlib\uncompr.c" />
-    <ClCompile Include="..\3rd\zlib\zutil.c" />
+    <ClCompile Include="..\3rd\lpng\png.c" />
+    <ClCompile Include="..\3rd\lpng\pngerror.c" />
+    <ClCompile Include="..\3rd\lpng\pngget.c" />
+    <ClCompile Include="..\3rd\lpng\pngmem.c" />
+    <ClCompile Include="..\3rd\lpng\pngpread.c" />
+    <ClCompile Include="..\3rd\lpng\pngread.c" />
+    <ClCompile Include="..\3rd\lpng\pngrio.c" />
+    <ClCompile Include="..\3rd\lpng\pngrtran.c" />
+    <ClCompile Include="..\3rd\lpng\pngrutil.c" />
+    <ClCompile Include="..\3rd\lpng\pngset.c" />
+    <ClCompile Include="..\3rd\lpng\pngtrans.c" />
+    <ClCompile Include="..\3rd\lpng\pngwio.c" />
+    <ClCompile Include="..\3rd\lpng\pngwrite.c" />
+    <ClCompile Include="..\3rd\lpng\pngwtran.c" />
+    <ClCompile Include="..\3rd\lpng\pngwutil.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\3rd\zlib\crc32.h" />
-    <ClInclude Include="..\3rd\zlib\deflate.h" />
-    <ClInclude Include="..\3rd\zlib\inffast.h" />
-    <ClInclude Include="..\3rd\zlib\inffixed.h" />
-    <ClInclude Include="..\3rd\zlib\inflate.h" />
-    <ClInclude Include="..\3rd\zlib\inftrees.h" />
-    <ClInclude Include="..\3rd\zlib\trees.h" />
-    <ClInclude Include="..\3rd\zlib\zconf.h" />
-    <ClInclude Include="..\3rd\zlib\zlib.h" />
-    <ClInclude Include="..\3rd\zlib\zutil.h" />
+    <ClInclude Include="..\3rd\lpng\png.h" />
+    <ClInclude Include="..\3rd\lpng\pngconf.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

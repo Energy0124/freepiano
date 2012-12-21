@@ -4,5 +4,3 @@ vc/Release
 *.user
 *.opensdf
 *.suo
-*.aps
-nsis/*.exe
