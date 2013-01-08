@@ -552,6 +552,7 @@ int config_bind_get_keyup(byte code, key_bind_t *buff, int size) {
     while (it != end && it->first == code) {
       if (result < size) {
         buff[result] = it->second;
+        ++result;
       }
       ++it;
     }

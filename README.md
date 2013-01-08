@@ -9,7 +9,7 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 ## Features of FreePiano:
 
 * Completely free, you do not need to purchase to use all the features.
-* Using VSTi, you don¡¯t need to install a virtual MIDI device.
+* Using VSTi, you don't need to install a virtual MIDI device.
 * Support a variety of audio output, including DirectSound, WASAPI and ASIO.
 * You can define any key on the keyboard and display functions.
 * Multi sets of keyboard layout can be switched anytime during play.
@@ -37,7 +37,7 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 **2012-04-25  FreePiano 1.3**
 
-* Fixed a bug that volume and output buffer size can¡¯t be saved.
+* Fixed a bug that volume and output buffer size can't be saved.
 * Fixed a bug that unable to read midi controller message.
 * Adds English language support.
 * Adds Chinese key label support.
