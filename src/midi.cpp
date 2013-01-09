@@ -242,6 +242,11 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
   int ch = a & 0x0f;
   byte code = b;
 
+  // BUG fix: some keyboard send note on with zero velocity when key up.
+  if (cmd == 0x90 && c == 0) {
+    cmd = 0x80;
+  }
+
   // note on
   if (cmd == 0x90) {
     // remap channel
