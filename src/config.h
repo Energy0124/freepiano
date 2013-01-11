@@ -46,12 +46,6 @@ int config_select_midi_input(const char *device);
 // get midi input
 const char* config_get_midi_input();
 
-// select midi output
-int config_select_midi_output(const char *device);
-
-// get midi output
-const char* config_get_midi_output();
-
 // select output
 int config_select_output(int type, const char *device);
 

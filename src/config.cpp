@@ -399,7 +399,6 @@ struct global_setting_t {
   uint output_delay;
   char keymap[256];
   char midi_input[256];
-  char midi_output[256];
   uint output_volume;
 
   uint enable_hotkey;
@@ -1500,8 +1499,7 @@ static int config_apply() {
   config_set_output_volume(global.output_volume);
   config_set_output_delay(global.output_delay);
 
-  // open midi output and input
-  config_select_midi_output(global.midi_output);
+  // open midi input
   config_select_midi_input(global.midi_input);
 
   // reset default key setting
@@ -1564,9 +1562,7 @@ int config_load(const char *filename) {
       }
       // midi
       else if (match_word(&s, "midi")) {
-        if (match_word(&s, "output")) {
-          match_line(&s, global.midi_output, sizeof(global.midi_output));
-        } else if (match_word(&s, "input")) {
+        if (match_word(&s, "input")) {
           match_line(&s, global.midi_input, sizeof(global.midi_input));
         } else if (match_word(&s, "display")) {
           if (match_word(&s, "output")) {
@@ -1629,9 +1625,6 @@ int config_save(const char *filename) {
   if (global.keymap[0])
     fprintf(fp, "keyboard map %s\r\n", global.keymap);
 
-  if (global.midi_output[0])
-    fprintf(fp, "midi output %s\r\n", global.midi_output);
-
   if (global.midi_input[0])
     fprintf(fp, "midi input %s\r\n", global.midi_input);
 
@@ -1673,18 +1666,19 @@ int config_select_instrument(int type, const char *name) {
 
   int result = -1;
 
+  // unload previous instrument
+  vsti_unload_plugin();
+  midi_close_output();
+
   if (type == INSTRUMENT_TYPE_MIDI) {
-    vsti_unload_plugin();
-    global.instrument_type = type;
-    strncpy(global.instrument_path, name, sizeof(global.instrument_path));
-    result = 0;
-  } else if (type == INSTRUMENT_TYPE_VSTI) {
-    if (name == NULL || name[0] == '\0') {
-      vsti_unload_plugin();
-      global.instrument_type = INSTRUMENT_TYPE_MIDI;
-      global.instrument_path[0] = 0;
-      result = 0;
-    } else if (PathIsFileSpec(name)) {
+    result = midi_open_output(name);
+    if (result == 0) {
+      global.instrument_type = type;
+      strncpy(global.instrument_path, name, sizeof(global.instrument_path));
+    }
+  }
+  else if (type == INSTRUMENT_TYPE_VSTI) {
+    if (PathIsFileSpec(name)) {
       struct select_instrument_cb : vsti_enum_callback {
         void operator () (const char *value) {
           if (!found) {
@@ -1706,8 +1700,6 @@ int config_select_instrument(int type, const char *name) {
       vsti_enum_plugins(callback);
 
       if (callback.found) {
-        vsti_unload_plugin();
-
         // load plugin
         result = vsti_load_plugin(callback.name);
         if (result == 0) {
@@ -1716,8 +1708,6 @@ int config_select_instrument(int type, const char *name) {
         }
       }
     } else {
-      vsti_unload_plugin();
-
       // load plugin
       result = vsti_load_plugin(name);
       if (result == 0) {
@@ -1728,7 +1718,6 @@ int config_select_instrument(int type, const char *name) {
   }
 
   midi_reset();
-
   return result;
 }
 
@@ -1850,26 +1839,6 @@ int config_select_midi_input(const char *device) {
 const char* config_get_midi_input() {
   thread_lock lock(config_lock);
   return global.midi_input;
-}
-
-// select midi output
-int config_select_midi_output(const char *device) {
-  thread_lock lock(config_lock);
-
-  int result = -1;
-  if (result = midi_open_output(device)) {
-    return result;
-  }
-
-  strncpy(global.midi_output, device, sizeof(global.midi_output));
-  return result;
-}
-
-// get midi output
-const char* config_get_midi_output() {
-  thread_lock lock(config_lock);
-
-  return global.midi_output;
 }
 
 // get output delay

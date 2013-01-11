@@ -66,15 +66,6 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
      if (ListBox_SelectString(input_list, 0, config_get_midi_input()) < 0)
        ListBox_SetCurSel(input_list, 0);
-
-     // build output list
-     ListBox_AddString(output_list, "Microsoft MIDI Mapper");
-
-     callback.listbox = output_list;
-     midi_enum_output(callback);
-
-     if (ListBox_SelectString(output_list, 0, config_get_midi_output()) < 0)
-       ListBox_SetCurSel(output_list, 0);
    }
    break;
 
@@ -101,30 +92,6 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
            config_select_midi_input(buff);
            break;
          }
-        }
-        break;
-
-      case IDC_MIDI_OUTPUT_LIST:
-        switch (HIWORD(wParam)) {
-         case LBN_SELCHANGE: {
-           HWND hwndList = GetDlgItem(hWnd, IDC_MIDI_OUTPUT_LIST);
-
-           // get current select
-           int cursel = ListBox_GetCurSel(hwndList);
-
-           char buff[256];
-           buff[0] = 0;
-
-           if (cursel) {
-             int len = ListBox_GetTextLen(hwndList, cursel);
-
-             if (len < sizeof(buff))
-               ListBox_GetText(hwndList, cursel, buff);
-           }
-
-           config_select_midi_output(buff);
-         }
-         break;
         }
         break;
      }
@@ -565,9 +532,9 @@ static byte preview_key = 0;
 enum MENU_ID {
   MENU_ID_NONE,
   MENU_ID_VST_PLUGIN,
-  MENU_ID_VST_PLUGIN_NONE,
-  MENU_ID_VST_PLUGIN_BROWSE,
-  MENU_ID_VST_PLUGIN_EDITOR,
+  MENU_ID_INSTRUMENT_MIDI,
+  MENU_ID_INSTRUMENT_VSTI_BROWSE,
+  MENU_ID_INSTRUMENT_VSTI_EIDOTR,
   MENU_ID_CONFIG_OPTIONS,
   MENU_ID_KEY_MAP,
   MENU_ID_KEY_MAP_LOAD,
@@ -720,7 +687,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   char buff[256];
 
   switch (id) {
-   case MENU_ID_VST_PLUGIN_BROWSE: {
+   case MENU_ID_INSTRUMENT_VSTI_BROWSE: {
      char temp[260];
      OPENFILENAME ofn;
      memset(&ofn, 0, sizeof(ofn));
@@ -744,16 +711,28 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
    }
    break;
 
-   case MENU_ID_VST_PLUGIN_EDITOR:
+   case MENU_ID_INSTRUMENT_VSTI_EIDOTR:
      vsti_show_editor(!vsti_is_show_editor());
      break;
 
-   case MENU_ID_VST_PLUGIN_NONE:
-     config_select_instrument(INSTRUMENT_TYPE_MIDI, "");
+   case MENU_ID_INSTRUMENT_MIDI:
+     if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION)) {
+       char *type_str = strchr(buff, '\t');
+       if (type_str) *type_str = '\0';
+
+       if (int err = config_select_instrument(INSTRUMENT_TYPE_MIDI, buff)) {
+         char buff[256];
+         lang_format_string(buff, sizeof(buff), IDS_ERR_LOAD_MIDI, err);
+         MessageBoxA(gui_get_window(), buff, APP_NAME, MB_OK);
+       }
+     }
      break;
 
    case MENU_ID_VST_PLUGIN:
      if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION)) {
+       char *type_str = strchr(buff, '\t');
+       if (type_str) *type_str = '\0';
+
        if (int err = config_select_instrument(INSTRUMENT_TYPE_VSTI, buff)) {
          char buff[256];
          lang_format_string(buff, sizeof(buff), IDS_ERR_LOAD_VST, err);
@@ -1080,43 +1059,75 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
   if (uMsg == WM_INITMENUPOPUP) {
     if (menu == menu_instrument) {
-      // remove all menu items.
-      while (int count = GetMenuItemCount(menu))
-        RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
-      struct callback : vsti_enum_callback {
+      // enum midi devices
+      struct enum_midi_callback : midi_enum_callback {
+        void operator () (const char *value) {
+          bool selected = false;
+          char buffer[256];
+          strncpy(buffer, value, sizeof(buffer));
+
+          if (config_get_instrument_type() == INSTRUMENT_TYPE_MIDI &&
+            _stricmp(buffer, config_get_instrument_path()) == 0) {
+              selected = true;
+          }
+
+          strcat_s(buffer, "\tMIDI");
+          AppendMenu(menu_instrument, MF_STRING | (selected ? MF_CHECKED : 0), (UINT_PTR)(MENU_ID_INSTRUMENT_MIDI), buffer);
+        }
+      };
+
+      // enum vsti plugins.
+      struct enum_vsti_callback : vsti_enum_callback {
         void operator () (const char *value) {
           const char *start = PathFindFileName(value);
 
           if (start) {
+            bool selected = false;
             char buffer[256];
             strncpy(buffer, start, sizeof(buffer));
             PathRemoveExtension(buffer);
 
-            if (!found && _stricmp(buffer, config_get_instrument_path()) == 0) {
-              found = true;
-              AppendMenu(menu_instrument, MF_STRING | MF_CHECKED, 0, buffer);
-            } else {
-              AppendMenu(menu_instrument, MF_STRING, (UINT_PTR)(MENU_ID_VST_PLUGIN), buffer);
+            if (!found) {
+              if (config_get_instrument_type() == INSTRUMENT_TYPE_VSTI &&
+                _stricmp(buffer, config_get_instrument_path()) == 0) {
+                found = true;
+                selected = true;
+              }
             }
+
+            strcat_s(buffer, "\tVSTi");
+            AppendMenu(menu_instrument, MF_STRING | (selected ? MF_CHECKED : 0), (UINT_PTR)(MENU_ID_VST_PLUGIN), buffer);
           }
         }
 
         bool found;
       };
 
-      callback cb;
-      cb.found = *config_get_instrument_path() == 0;
+      // remove all menu items.
+      while (int count = GetMenuItemCount(menu))
+        RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
-      AppendMenu(menu_instrument, MF_STRING, (UINT_PTR)MENU_ID_VST_PLUGIN_BROWSE, lang_load_string(IDS_MENU_INSTRUMENT_BROWSE));
-      AppendMenu(menu_instrument, MF_STRING | (vsti_is_show_editor() ? MF_CHECKED : 0), (UINT_PTR)MENU_ID_VST_PLUGIN_EDITOR, lang_load_string(IDS_MENU_INSTRUMENT_GUI));
+      // Load vsti plugin menu
+      AppendMenu(menu_instrument, MF_STRING, (UINT_PTR)MENU_ID_INSTRUMENT_VSTI_BROWSE, lang_load_string(IDS_MENU_INSTRUMENT_BROWSE));
+      AppendMenu(menu_instrument, MF_STRING | (vsti_is_show_editor() ? MF_CHECKED : 0), (UINT_PTR)MENU_ID_INSTRUMENT_VSTI_EIDOTR, lang_load_string(IDS_MENU_INSTRUMENT_GUI));
       AppendMenu(menu_instrument, MF_SEPARATOR, 0, NULL);
-      AppendMenu(menu_instrument, MF_STRING | (cb.found ? MF_CHECKED : 0), (UINT_PTR)MENU_ID_VST_PLUGIN_NONE, lang_load_string(IDS_MENU_INSTRUMENT_MIDI));
 
-      vsti_enum_plugins(cb);
+      // enum midi devices
+      //AppendMenu(menu_instrument, MF_STRING | (false ? MF_CHECKED : 0), (UINT_PTR)MENU_ID_INSTRUMENT_MIDI, lang_load_string(IDS_MENU_INSTRUMENT_MIDI));
 
-      if (!cb.found)
-        AppendMenu(menu_instrument, MF_STRING | MF_CHECKED, 0, config_get_instrument_path());
+      enum_midi_callback midi_cb;
+      midi_enum_output(midi_cb);
+
+      enum_vsti_callback vsti_cb;
+      vsti_cb.found = false;
+      vsti_enum_plugins(vsti_cb);
+
+      if (!vsti_cb.found && config_get_instrument_type() == INSTRUMENT_TYPE_VSTI) {
+        char buff[256];
+        sprintf_s(buff, "%s\tVSTi", config_get_instrument_path());
+        AppendMenu(menu_instrument, MF_STRING | MF_CHECKED, 0, buff);
+      }
     }
     // keyboard map
     else if (menu == menu_keymap) {
