@@ -18,6 +18,12 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 ## Change logs
 
+**2013-00-00  FreePiano 1.5**
+
+* Change keyboard hook method to make anti-virus software happy.
+* Fixed a bug that noteoff not handled for some midi keyboard.
+* Fixed a bug that keyup bind did not work.
+
 **2012-10-16  FreePiano 1.4.1**
 
 * When using MIDI keyboard, you can also use KEY, VELOCITY and OCTSHIFT on the main screen.

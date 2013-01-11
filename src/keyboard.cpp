@@ -32,8 +32,6 @@ struct keyup_t {
 };
 static std::multimap<byte, keyup_t> key_up_map;
 
-// keyboard enable
-static bool enable_keyboard = true;
 
 // keyboard status
 static byte keyboard_status[256] = {0};
@@ -146,7 +144,7 @@ static HHOOK keyboard_hook = NULL;
 static byte keydown_status[256] = {0};
 
 static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
-  if (enable_keyboard && !export_rendering() && nCode == HC_ACTION) {
+  if (nCode == HC_ACTION && !export_rendering()) {
     KBDLLHOOKSTRUCT *p = (KBDLLHOOKSTRUCT *)lParam;
 
     uint extent = p->flags & 1;
@@ -177,9 +175,6 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
 
 // initialize keyboard
 int keyboard_init() {
-  // install keyboard hook
-  keyboard_hook = SetWindowsHookEx(WH_KEYBOARD_LL,  LowLevelKeyboardProc, GetModuleHandle(NULL), 0);
-
   // disable accessibility key
   AllowAccessibilityShortcutKeys(false, true);
 
@@ -194,17 +189,28 @@ void keyboard_shutdown() {
   // enable accessibility key
   AllowAccessibilityShortcutKeys(true, false);
 
-  UnhookWindowsHookEx(keyboard_hook);
-  keyboard_hook = NULL;
+  // disable keyboard hook
+  keyboard_enable(false);
 }
 
 
 // enable or disable keyboard
 void keyboard_enable(bool enable) {
-  enable_keyboard = enable;
+  if (enable) {
+    // install keyboard hook
+    if (keyboard_hook == NULL) {
+      keyboard_hook = SetWindowsHookEx(WH_KEYBOARD_LL,  LowLevelKeyboardProc, GetModuleHandle(NULL), 0);
+    }
+  }
+  else {
+    // uninstall keyboard hook
+    if (keyboard_hook) {
+      UnhookWindowsHookEx(keyboard_hook);
+      keyboard_hook = NULL;
+    }
 
-  if (!enable)
     keyboard_reset();
+  }
 }
 
 // reset keyboard
