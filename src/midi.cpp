@@ -6,9 +6,24 @@
 #include "config.h"
 
 #include <map>
+#include <string>
 
+// midi input devices
+struct midi_in_device_t {
+  bool enable;
+  HMIDIIN device;
+  byte channel_id;
+
+  midi_in_device_t() 
+    : enable(false)
+    , device(NULL)
+    , channel_id(0)
+  {
+  }
+};
+
+static std::map<std::string, midi_in_device_t> midi_inputs;
 static HMIDIOUT midi_out_device = NULL;
-static HMIDIIN midi_in_device = NULL;
 
 // midi thread lock
 static thread_lock_t midi_input_lock;
@@ -70,47 +85,78 @@ static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR d
     byte c = data >> 16;
     byte d = data >> 24;
 
-    song_send_event(a & 0xf0, b, c, d, true);
+    midi_in_device_t *device = (midi_in_device_t*)dwInstance;
+
+    // remap channel
+    if (device->channel_id < 16) {
+      a = a & 0xf0 | (device->channel_id & 0xf);
+    }
+
+    song_send_event(a, b, c, d, true);
   }
 }
 
 // open input device
-int midi_open_input(const char *name) {
+void midi_open_inputs() {
   thread_lock lock(midi_input_lock);
 
-  uint device_id = -1;
-  midi_close_input();
+  // clear flags
+  for (auto it = midi_inputs.begin(); it != midi_inputs.end(); ++it) {
+    it->second.enable = false;
+  }
 
-  if (name) {
-    for (uint i = 0; i < midiInGetNumDevs(); i++) {
-      MIDIINCAPS caps;
+  // enum devices
+  for (uint i = 0; i < midiInGetNumDevs(); i++) {
+    midi_input_config_t config;
+    MIDIINCAPS caps;
 
-      // get device caps
-      if (midiInGetDevCaps(i, &caps, sizeof(caps)))
-        continue;
+    // get device caps
+    if (midiInGetDevCaps(i, &caps, sizeof(caps)))
+      continue;
 
-      if (_stricmp(name, caps.szPname) == 0) {
-        device_id = i;
-        break;
+    config_get_midi_input_config(caps.szPname, &config);
+
+    if (config.enable) {
+      std::string key(caps.szPname);
+      midi_in_device_t &input = midi_inputs[key];
+      input.enable = true;
+      input.channel_id = config.channel;
+
+      if (input.device == NULL) {
+        if (midiInOpen(&input.device, i, (DWORD_PTR)&midi_input_callback, (DWORD_PTR)&input, CALLBACK_FUNCTION)) {
+          input.enable = false;
+          input.device = NULL;
+        }
+        midiInStart(input.device);
       }
     }
   }
 
-  if (midiInOpen(&midi_in_device, device_id, (DWORD_PTR)&midi_input_callback, 0, CALLBACK_FUNCTION))
-    return -1;
+  // close removed devices
+  for (auto it = midi_inputs.begin(); it != midi_inputs.end(); ) {
+    auto prev = it;
+    ++it;
 
-  midiInStart(midi_in_device);
-  return 0;
+    if (!prev->second.enable) {
+      midiInStop(prev->second.device);
+      midiInClose(prev->second.device);
+
+      midi_inputs.erase(prev);
+    }
+  }
+
+  return;
 }
 
 // close input device
-void midi_close_input() {
+void midi_close_inputs() {
   thread_lock lock(midi_input_lock);
 
-  if (midi_in_device) {
-    midiInClose(midi_in_device);
-    midi_in_device = NULL;
+  for (auto it = midi_inputs.begin(); it != midi_inputs.end(); ++it) {
+    midiInStop(it->second.device);
+    midiInClose(it->second.device);
   }
+  midi_inputs.clear();
 }
 
 // enum input
@@ -242,8 +288,8 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
   int ch = a & 0x0f;
   byte code = b;
 
-  // BUG fix: some keyboard send note on with zero velocity when key up.
-  if (cmd == 0x90 && c == 0) {
+  // BUG fix: some keyboard send note on with a small velocity when key up.
+  if (cmd == 0x90 && c < 5) {
     cmd = 0x80;
   }
 

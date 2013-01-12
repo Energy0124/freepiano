@@ -22,6 +22,11 @@ struct key_bind_t {
   key_bind_t(byte a, byte b, byte c, byte d) : a(a), b(b), c(c), d(d) {}
 };
 
+struct midi_input_config_t {
+  bool enable;
+  int channel;
+};
+
 // initialize config
 int config_init();
 
@@ -40,11 +45,12 @@ void config_get_media_path(char *buff, int buff_size, const char *path);
 // get relative path
 void config_get_relative_path(char *buff, int buff_size, const char *path);
 
-// select midi input
-int config_select_midi_input(const char *device);
+// update midi input params
+void config_set_midi_input_config(const char *device, const midi_input_config_t &config);
 
-// get midi input
-const char* config_get_midi_input();
+// get midi input enable.
+bool config_get_midi_input_config(const char *device, midi_input_config_t *config);
+
 
 // select output
 int config_select_output(int type, const char *device);

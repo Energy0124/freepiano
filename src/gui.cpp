@@ -22,6 +22,8 @@
 // enable vistual style.
 #pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
+
+
 static void try_open_song(int err) {
   if (err == 0) {
     gui_show_song_info();
@@ -44,57 +46,183 @@ static HWND setting_tab = NULL;
 static HWND setting_page = NULL;
 
 static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  static HMENU menu_midi_input_channel_popup = NULL;
+
+  struct helpers {
+    static void update_midi_input(HWND list, int id, const char *device) {
+      char buff[256];
+      midi_input_config_t config;
+      config_get_midi_input_config(device, &config);
+
+      ListView_SetItemText(list, id, 1, (LPSTR)lang_load_string(config.enable ? IDS_MIDI_INPUT_LIST_ENABLED : IDS_MIDI_INPUT_LIST_DISABLED));
+
+      sprintf_s(buff, "%d", config.channel);
+      ListView_SetItemText(list, id, 2, (LPSTR)buff);
+    }
+
+    static void refresh_midi_inputs(HWND hWnd) {
+      HWND input_list = GetDlgItem(hWnd, IDC_MIDI_INPUT_LIST);
+
+      struct enum_callback : midi_enum_callback {
+        void operator () (const char *value) {
+          LVITEM lvI = {0};
+
+          lvI.pszText   = (char*)value;
+          lvI.mask      = LVIF_TEXT | LVIF_STATE;
+          lvI.stateMask = 0;
+          lvI.iSubItem  = 0;
+          lvI.state     = 0;
+          lvI.iItem     = index;
+          ListView_InsertItem(list, &lvI);
+
+          update_midi_input(list, index, value);
+          index ++;
+        }
+
+        HWND list;
+        int index;
+      };
+
+      // clear content
+      ListView_DeleteAllItems(input_list);
+
+      // build input list
+      enum_callback callback;
+      callback.list = input_list;
+      callback.index = 0;
+      midi_enum_input(callback);
+
+      /*
+      int selected = ListView_GetNextItem(input_list, -1, LVNI_FOCUSED);
+      ListView_SetItemState(input_list, -1, 0, LVIS_SELECTED); // deselect all items
+      ListView_EnsureVisible(input_list, selected, FALSE);
+      ListView_SetItemState(input_list, selected, LVIS_SELECTED ,LVIS_SELECTED); // select item
+      ListView_SetItemState(input_list, selected, LVIS_FOCUSED ,LVIS_FOCUSED); // optional
+      */
+    }
+  };
+
   switch (uMsg) {
    case WM_INITDIALOG: {
+     LVCOLUMN lvc = {0};
      HWND input_list = GetDlgItem(hWnd, IDC_MIDI_INPUT_LIST);
-     HWND output_list = GetDlgItem(hWnd, IDC_MIDI_OUTPUT_LIST);
 
-     struct enum_callback : midi_enum_callback {
-       void operator () (const char *value) {
-         ListBox_AddString(listbox, value);
-       }
+     lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
+     lvc.fmt = LVCFMT_LEFT;
 
-       HWND listbox;
-     };
+     // Device
+     lvc.pszText = (LPSTR)lang_load_string(IDS_MIDI_INPUT_LIST_DEVICE);
+     lvc.cx = 300;
+     ListView_InsertColumn(input_list, 0, &lvc);
 
-     // build input list
-     ListBox_AddString(input_list, lang_load_string(IDS_SETTING_MIDI_NONE));
+     // Enable.
+     lvc.pszText = (LPSTR)lang_load_string(IDS_MIDI_INPUT_LIST_ENABLE);
+     lvc.cx = 60;
+     lvc.fmt = LVCFMT_CENTER;
+     ListView_InsertColumn(input_list, 2, &lvc);
 
-     enum_callback callback;
-     callback.listbox = input_list;
-     midi_enum_input(callback);
+     // Channel.
+     lvc.pszText = (LPSTR)lang_load_string(IDS_MIDI_INPUT_LIST_CHANNEL);
+     lvc.cx = 60;
+     ListView_InsertColumn(input_list, 2, &lvc);
 
-     if (ListBox_SelectString(input_list, 0, config_get_midi_input()) < 0)
-       ListBox_SetCurSel(input_list, 0);
+     // Set extended style.
+     ListView_SetExtendedListViewStyle(input_list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+
+     helpers::refresh_midi_inputs(hWnd);
+     break;
    }
-   break;
+
+   case WM_DEVICECHANGE: {
+     helpers::refresh_midi_inputs(hWnd);
+     break;
+   }
 
    case WM_COMMAND:
      switch (LOWORD(wParam)) {
-      case IDC_MIDI_INPUT_LIST:
-        switch (HIWORD(wParam)) {
-         case LBN_SELCHANGE: {
-           HWND hwndList = GetDlgItem(hWnd, IDC_MIDI_INPUT_LIST);
+     case IDC_MIDI_INPUT_LIST:
+       break;
+     }
+     break;
 
-           // get current select
-           int cursel = ListBox_GetCurSel(hwndList);
+   case WM_MENUCOMMAND: {
+     DWORD pos = wParam;
+     HMENU menu = (HMENU)lParam;
 
-           char buff[256];
-           buff[0] = 0;
+     if (menu == menu_midi_input_channel_popup) {
+       char buff[256];
 
-           if (cursel) {
-             int len = ListBox_GetTextLen(hwndList, cursel);
+       if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION)) {
+         int channel = atoi(buff);
 
-             if (len < sizeof(buff))
-               ListBox_GetText(hwndList, cursel, buff);
+         HWND list = GetDlgItem(hWnd, IDC_MIDI_INPUT_LIST);
+         int row = ListView_GetNextItem(list, -1, LVNI_FOCUSED);
+
+         buff[0] = 0;
+         ListView_GetItemText(list, row, 0, buff, sizeof(buff));
+
+         midi_input_config_t config;
+         config_get_midi_input_config(buff, &config);
+         config.channel = channel;
+         config_set_midi_input_config(buff, config);
+         midi_open_inputs();
+
+         helpers::update_midi_input(list, row, buff);
+       }
+
+       DestroyMenu(menu_midi_input_channel_popup);
+       menu_midi_input_channel_popup = NULL;
+     }
+   }
+   break;
+
+   case WM_NOTIFY:
+     if (LOWORD(wParam) == IDC_MIDI_INPUT_LIST) {
+       switch (((LPNMHDR)lParam)->code) {
+         case NM_CLICK:
+         case NM_DBLCLK: {
+           LPNMITEMACTIVATE item = (LPNMITEMACTIVATE)lParam;
+           int row = item->iItem;
+           int column = item->iSubItem;
+
+           if (column == 1) {
+             char buff[256] = "";
+             midi_input_config_t config;
+
+             HWND list = ((LPNMHDR)lParam)->hwndFrom;
+             ListView_GetItemText(list, row, 0, buff, sizeof(buff));
+
+             config_get_midi_input_config(buff, &config);
+             config.enable = !config.enable;
+             config_set_midi_input_config(buff, config);
+             midi_open_inputs();
+
+             helpers::update_midi_input(list, row, buff);
            }
 
-           config_select_midi_input(buff);
+           else if (column == 2) {
+             menu_midi_input_channel_popup = CreatePopupMenu();
+
+             MENUINFO menuinfo;
+             menuinfo.cbSize = sizeof(MENUINFO);
+             menuinfo.fMask = MIM_STYLE;
+             menuinfo.dwStyle = MNS_NOTIFYBYPOS;
+             SetMenuInfo(menu_midi_input_channel_popup, &menuinfo);
+
+             for (int i = 0; i < 16; i++) {
+               char buff[256];
+               sprintf_s(buff, "%d", i);
+               AppendMenu(menu_midi_input_channel_popup,  MF_STRING, (UINT_PTR)0, buff);
+             }
+
+             POINT pos;
+             GetCursorPos(&pos);
+             TrackPopupMenuEx(menu_midi_input_channel_popup, TPM_LEFTALIGN, pos.x, pos.y, hWnd, NULL);
+           }
            break;
          }
-        }
-        break;
-     }
+       }
+     };
      break;
   }
 
@@ -442,6 +570,12 @@ static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
      setting_hwnd = NULL;
      setting_page = NULL;
      break;
+
+   case WM_DEVICECHANGE:
+     if(setting_page != NULL) {
+       SendMessage(setting_page, WM_DEVICECHANGE, wParam, lParam);
+     }
+     break;
   }
 
   return 0;
@@ -508,6 +642,9 @@ int gui_show_song_info() {
 // -----------------------------------------------------------------------------------------
 // MAIN MENU
 // -----------------------------------------------------------------------------------------
+static byte selected_key = 0;
+static byte preview_key = 0;
+
 static HMENU menu_main = NULL;
 static HMENU menu_record = NULL;
 static HMENU menu_output = NULL;
@@ -524,9 +661,6 @@ static HMENU menu_play_speed = NULL;
 static HMENU menu_setting_group = NULL;
 static HMENU menu_export = NULL;
 static HMENU menu_setting_group_change = NULL;
-
-static byte selected_key = 0;
-static byte preview_key = 0;
 
 // menu id
 enum MENU_ID {
@@ -564,6 +698,8 @@ enum MENU_ID {
   MENU_ID_SETTING_GROUP_PASTE,
   MENU_ID_SETTING_GROUP_DEFAULT,
   MENU_ID_SETTING_GROUP_CLEAR,
+
+  MENU_ID_MIDI_INPUT_CHANNEL,
 };
 
 // init menu
@@ -635,7 +771,6 @@ static int menu_init() {
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_PASTE, lang_load_string(IDS_MENU_SETTING_GROUP_PASTE));
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_CLEAR, lang_load_string(IDS_MENU_SETTING_GROUP_CLEAR));
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_DEFAULT, lang_load_string(IDS_MENU_SETTING_GROUP_DEFAULT));
-
 
 
   // Popup menu
@@ -1049,7 +1184,6 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
    }
    break;
   }
-  ;
 
   return 0;
 }
@@ -1403,6 +1537,11 @@ static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
          return 0;
        }
      }
+   }
+   break;
+
+   case WM_DEVICECHANGE: {
+     midi_open_inputs();
    }
    break;
   }

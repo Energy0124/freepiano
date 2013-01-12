@@ -11,10 +11,10 @@ int midi_open_output(const char *name);
 void midi_close_output();
 
 // open input device
-int midi_open_input(const char *name);
+void midi_open_inputs();
 
 // close input device
-void midi_close_input();
+void midi_close_inputs();
 
 // send event
 void midi_send_event(byte a, byte b, byte c, byte d);

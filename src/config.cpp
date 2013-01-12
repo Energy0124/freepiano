@@ -16,6 +16,7 @@
 
 #include "../res/resource.h"
 
+#include <string>
 #include <map>
 
 // -----------------------------------------------------------------------------------------
@@ -398,12 +399,27 @@ struct global_setting_t {
   char output_device[256];
   uint output_delay;
   char keymap[256];
-  char midi_input[256];
   uint output_volume;
 
   uint enable_hotkey;
   uint enable_resize;
   uint midi_display;
+
+  std::map<std::string, midi_input_config_t> midi_inputs;
+
+  global_setting_t() {
+    instrument_type = INSTRUMENT_TYPE_MIDI;
+    instrument_path[0] = 0;
+    output_type = OUTPUT_TYPE_AUTO;
+    output_device[0] = 0;
+    output_delay = 10;
+    keymap[0] = 0;
+
+    output_volume = 100;
+    enable_hotkey = true;
+    enable_resize = true;
+    midi_display = MIDI_DISPLAY_INPUT;
+  }
 };
 
 struct setting_t {
@@ -729,11 +745,6 @@ void config_set_auto_pedal(char value) {
 static void config_reset() {
   thread_lock lock(config_lock);
 
-  // reset global settings
-  memset(&global, 0, sizeof(global));
-  global.output_delay = 10;
-  global.output_volume = 100;
-
   // keep only one setting group
   config_set_setting_group_count(1);
 
@@ -922,6 +933,57 @@ static bool match_line(char **str, char *buff, uint size) {
   }
 
   return false;
+}
+
+// match string
+static bool match_string(char **str, char *buf, uint size) {
+  char *s = *str;
+
+  while (*s == ' ' || *s == '\t') s++;
+
+  if (*s != '"') {
+    return false;
+  }
+
+  s++;
+  char *d = buf;
+
+  for (;;) {
+    switch (s[0]) {
+    case '\\':
+      switch (s[1]) {
+      case 'n': *d = '\n'; s++; break;
+      case 'r': *d = '\r'; s++; break;
+      case 't': *d = '\t'; s++; break;
+      case '\"': *d = '\"'; s++; break;
+      case '\0': *d = '\0'; s++; break;
+      }
+      break;
+
+    case '\r':
+    case '\n':
+    case '\0':
+      return false;
+
+    case '\"':
+      *d = '\0';
+      s++;
+
+      if (!match_space(&s) && !match_end(&s))
+        return false;
+
+      *str = s;
+      return true;
+
+    default:
+      *d = s[0];
+    }
+
+    if (++d >= buf + size)
+      return false;
+
+    ++s;
+  }
 }
 
 // match config value
@@ -1499,12 +1561,13 @@ static int config_apply() {
   config_set_output_volume(global.output_volume);
   config_set_output_delay(global.output_delay);
 
-  // open midi input
-  config_select_midi_input(global.midi_input);
-
   // reset default key setting
   if (global.keymap[0] == 0)
     config_default_key_setting();
+
+  // open midi inputs
+  midi_open_inputs();
+
   return 0;
 }
 
@@ -1563,10 +1626,20 @@ int config_load(const char *filename) {
       // midi
       else if (match_word(&s, "midi")) {
         if (match_word(&s, "input")) {
-          match_line(&s, global.midi_input, sizeof(global.midi_input));
+          char buff[256];
+          if (match_string(&s, buff, sizeof(buff))) {
+            midi_input_config_t config;
+            config.enable = true;
+            config.channel = 0;
+            match_number(&s, &config.channel);
+            config_set_midi_input_config(buff, config);
+          }
+
         } else if (match_word(&s, "display")) {
           if (match_word(&s, "output")) {
             global.midi_display = MIDI_DISPLAY_OUTPUT;
+          } else {
+            global.midi_display = MIDI_DISPLAY_INPUT;
           }
         }
       }
@@ -1625,11 +1698,14 @@ int config_save(const char *filename) {
   if (global.keymap[0])
     fprintf(fp, "keyboard map %s\r\n", global.keymap);
 
-  if (global.midi_input[0])
-    fprintf(fp, "midi input %s\r\n", global.midi_input);
-
-  if (global.midi_display)
+  if (global.midi_display == MIDI_DISPLAY_OUTPUT)
     fprintf(fp, "midi display output\r\n");
+
+  for (auto it = global.midi_inputs.begin(); it != global.midi_inputs.end(); ++it) {
+    if (it->second.enable) {
+      fprintf(fp, "midi input \"%s\" %d\r\n", it->first.c_str(), it->second.channel);
+    }
+  }
 
   if (config_get_enable_hotkey())
     fprintf(fp, "hotkey enable\r\n");
@@ -1651,7 +1727,7 @@ int config_init() {
 
 // close config
 void config_shutdown() {
-  midi_close_input();
+  midi_close_inputs();
   midi_close_output();
   vsti_unload_plugin();
   asio_close();
@@ -1821,24 +1897,28 @@ int config_select_output(int type, const char *device) {
 }
 
 
-// select midi input
-int config_select_midi_input(const char *device) {
+void config_set_midi_input_config(const char *device, const midi_input_config_t &config) {
   thread_lock lock(config_lock);
 
-  int result = -1;
-  if (result = midi_open_input(device)) {
-    global.midi_input[0] = 0;
-    return result;
+  if (device[0]) {
+    global.midi_inputs[std::string(device)] = config;
   }
-
-  strncpy(global.midi_input, device, sizeof(global.midi_input));
-  return result;
 }
 
-// get midi input
-const char* config_get_midi_input() {
+bool config_get_midi_input_config(const char *device, midi_input_config_t *config) {
   thread_lock lock(config_lock);
-  return global.midi_input;
+
+  if (device[0]) {
+    auto it = global.midi_inputs.find(std::string(device));
+    if (it != global.midi_inputs.end()) {
+      *config = it->second;
+      return true;
+    }
+  }
+
+  config->enable = false;
+  config->channel = 0;
+  return false;
 }
 
 // get output delay
