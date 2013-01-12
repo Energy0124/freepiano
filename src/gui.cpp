@@ -951,6 +951,10 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
    case MENU_ID_KEY_CONTROL:
      if (lang_text_open(IDR_TEXT_CONTROLLERS)) {
+       config_bind_clear_keydown(selected_key);
+       config_bind_clear_keyup(selected_key);
+       config_bind_set_label(selected_key, NULL);
+
        DWORD id = -1;
        char line[4096];
        while (lang_text_readline(line, sizeof(line))) {
