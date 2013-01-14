@@ -47,6 +47,7 @@ static HWND setting_page = NULL;
 
 static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static HMENU menu_midi_input_channel_popup = NULL;
+  static HMENU menu_midi_input_enable_popup = NULL;
 
   struct helpers {
     static void update_midi_input(HWND list, int id, const char *device) {
@@ -100,6 +101,24 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
       ListView_SetItemState(input_list, selected, LVIS_FOCUSED ,LVIS_FOCUSED); // optional
       */
     }
+
+    static HMENU create_popup_menu() {
+      HMENU menu = CreatePopupMenu();
+
+      MENUINFO menuinfo;
+      menuinfo.cbSize = sizeof(MENUINFO);
+      menuinfo.fMask = MIM_STYLE;
+      menuinfo.dwStyle = MNS_NOTIFYBYPOS;
+      SetMenuInfo(menu, &menuinfo);
+
+      return menu;
+    }
+
+    static void show_popup_menu(HMENU menu, HWND hWnd) {
+      POINT pos;
+      GetCursorPos(&pos);
+      TrackPopupMenuEx(menu, TPM_LEFTALIGN, pos.x, pos.y, hWnd, NULL);
+    }
   };
 
   switch (uMsg) {
@@ -149,30 +168,37 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
      DWORD pos = wParam;
      HMENU menu = (HMENU)lParam;
 
-     if (menu == menu_midi_input_channel_popup) {
-       char buff[256];
+     if (menu == menu_midi_input_channel_popup || menu == menu_midi_input_enable_popup) {
+       HWND list = GetDlgItem(hWnd, IDC_MIDI_INPUT_LIST);
+       int row = ListView_GetNextItem(list, -1, LVNI_FOCUSED);
 
-       if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION)) {
-         int channel = atoi(buff);
+       char device_name[256] = "";
+       ListView_GetItemText(list, row, 0, device_name, sizeof(device_name));
+       midi_input_config_t config;
+       config_get_midi_input_config(device_name, &config);
 
-         HWND list = GetDlgItem(hWnd, IDC_MIDI_INPUT_LIST);
-         int row = ListView_GetNextItem(list, -1, LVNI_FOCUSED);
+       if (menu == menu_midi_input_channel_popup) {
+         char buff[256];
 
-         buff[0] = 0;
-         ListView_GetItemText(list, row, 0, buff, sizeof(buff));
-
-         midi_input_config_t config;
-         config_get_midi_input_config(buff, &config);
-         config.channel = channel;
-         config_set_midi_input_config(buff, config);
-         midi_open_inputs();
-
-         helpers::update_midi_input(list, row, buff);
+         if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION)) {
+           config.channel = atoi(buff);
+         }
+       }
+       else if (menu == menu_midi_input_enable_popup) {
+         config.enable = pos == 0;
        }
 
-       DestroyMenu(menu_midi_input_channel_popup);
-       menu_midi_input_channel_popup = NULL;
+       config_set_midi_input_config(device_name, config);
+       midi_open_inputs();
+
+       helpers::update_midi_input(list, row, device_name);
      }
+
+     DestroyMenu(menu_midi_input_channel_popup);
+     menu_midi_input_channel_popup = NULL;
+
+     DestroyMenu(menu_midi_input_enable_popup);
+     menu_midi_input_enable_popup = NULL;
    }
    break;
 
@@ -186,28 +212,16 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
            int column = item->iSubItem;
 
            if (column == 1) {
-             char buff[256] = "";
-             midi_input_config_t config;
+             menu_midi_input_enable_popup = helpers::create_popup_menu();
 
-             HWND list = ((LPNMHDR)lParam)->hwndFrom;
-             ListView_GetItemText(list, row, 0, buff, sizeof(buff));
+             AppendMenu(menu_midi_input_enable_popup,  MF_STRING, (UINT_PTR)0, lang_load_string(IDS_MIDI_INPUT_LIST_ENABLED));
+             AppendMenu(menu_midi_input_enable_popup,  MF_STRING, (UINT_PTR)0, lang_load_string(IDS_MIDI_INPUT_LIST_DISABLED));
 
-             config_get_midi_input_config(buff, &config);
-             config.enable = !config.enable;
-             config_set_midi_input_config(buff, config);
-             midi_open_inputs();
-
-             helpers::update_midi_input(list, row, buff);
+             helpers::show_popup_menu(menu_midi_input_enable_popup, hWnd);
            }
 
            else if (column == 2) {
-             menu_midi_input_channel_popup = CreatePopupMenu();
-
-             MENUINFO menuinfo;
-             menuinfo.cbSize = sizeof(MENUINFO);
-             menuinfo.fMask = MIM_STYLE;
-             menuinfo.dwStyle = MNS_NOTIFYBYPOS;
-             SetMenuInfo(menu_midi_input_channel_popup, &menuinfo);
+             menu_midi_input_channel_popup = helpers::create_popup_menu();
 
              for (int i = 0; i < 16; i++) {
                char buff[256];
@@ -215,9 +229,7 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
                AppendMenu(menu_midi_input_channel_popup,  MF_STRING, (UINT_PTR)0, buff);
              }
 
-             POINT pos;
-             GetCursorPos(&pos);
-             TrackPopupMenuEx(menu_midi_input_channel_popup, TPM_LEFTALIGN, pos.x, pos.y, hWnd, NULL);
+             helpers::show_popup_menu(menu_midi_input_channel_popup, hWnd);
            }
            break;
          }
@@ -465,6 +477,8 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
      CheckDlgButton(hWnd, IDC_GUI_ENABLE_RESIZE, config_get_enable_resize_window());
      CheckDlgButton(hWnd, IDC_GUI_ENABLE_HOTKEY, !config_get_enable_hotkey());
      CheckDlgButton(hWnd, IDC_GUI_DISPLAY_MIDI_OUTPUT, config_get_midi_display() == MIDI_DISPLAY_OUTPUT);
+     CheckDlgButton(hWnd, IDC_GUI_INSTRUMENT_SHOW_MIDI, config_get_instrument_show_midi());
+     CheckDlgButton(hWnd, IDC_GUI_INSTRUMENT_SHOW_VSTI, config_get_instrument_show_vsti());
    }
    break;
 
@@ -482,6 +496,14 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
         config_set_midi_display(IsDlgButtonChecked(hWnd, IDC_GUI_DISPLAY_MIDI_OUTPUT) ? 
           MIDI_DISPLAY_OUTPUT : MIDI_DISPLAY_INPUT);
         break;
+
+      case IDC_GUI_INSTRUMENT_SHOW_MIDI:
+       config_set_instrument_show_midi(0 != IsDlgButtonChecked(hWnd, IDC_GUI_INSTRUMENT_SHOW_MIDI));
+       break;
+
+      case IDC_GUI_INSTRUMENT_SHOW_VSTI:
+       config_set_instrument_show_vsti(0 != IsDlgButtonChecked(hWnd, IDC_GUI_INSTRUMENT_SHOW_VSTI));
+       break;
      }
      break;
   }
@@ -1205,40 +1227,61 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
           char buffer[256];
           strncpy(buffer, value, sizeof(buffer));
 
-          if (config_get_instrument_type() == INSTRUMENT_TYPE_MIDI &&
-            _stricmp(buffer, config_get_instrument_path()) == 0) {
-              selected = true;
+          if (!found) {
+            if (config_get_instrument_type() == INSTRUMENT_TYPE_MIDI &&
+              _stricmp(buffer, config_get_instrument_path()) == 0) {
+                selected = true;
+                found = true;
+            }
           }
 
           strcat_s(buffer, "\tMIDI");
           AppendMenu(menu_instrument, MF_STRING | (selected ? MF_CHECKED : 0), (UINT_PTR)(MENU_ID_INSTRUMENT_MIDI), buffer);
         }
+
+        enum_midi_callback() {
+          found = false;
+        }
+
+        bool found;
       };
 
       // enum vsti plugins.
       struct enum_vsti_callback : vsti_enum_callback {
         void operator () (const char *value) {
-          const char *start = PathFindFileName(value);
+          bool selected = false;
+          char buffer[256];
 
-          if (start) {
-            bool selected = false;
-            char buffer[256];
-            strncpy(buffer, start, sizeof(buffer));
-            PathRemoveExtension(buffer);
+          if (only_filename) {
+            const char *start = PathFindFileName(value);
+            if (start) {
+              strncpy(buffer, start, sizeof(buffer));
+              PathRemoveExtension(buffer);
+            } else {
+              strcpy_s(buffer, value);
+            }
+          } else {
+            strcpy_s(buffer, value);
+          }
 
-            if (!found) {
-              if (config_get_instrument_type() == INSTRUMENT_TYPE_VSTI &&
-                _stricmp(buffer, config_get_instrument_path()) == 0) {
+          if (!found) {
+            if (config_get_instrument_type() == INSTRUMENT_TYPE_VSTI &&
+              _stricmp(buffer, config_get_instrument_path()) == 0) {
                 found = true;
                 selected = true;
-              }
             }
-
-            strcat_s(buffer, "\tVSTi");
-            AppendMenu(menu_instrument, MF_STRING | (selected ? MF_CHECKED : 0), (UINT_PTR)(MENU_ID_VST_PLUGIN), buffer);
           }
+
+          strcat_s(buffer, "\tVSTi");
+          AppendMenu(menu_instrument, MF_STRING | (selected ? MF_CHECKED : 0), (UINT_PTR)(MENU_ID_VST_PLUGIN), buffer);
         }
 
+        enum_vsti_callback() {
+          only_filename = true;
+          found = false;
+        }
+
+        bool only_filename;
         bool found;
       };
 
@@ -1247,24 +1290,31 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
       // Load vsti plugin menu
-      AppendMenu(menu_instrument, MF_STRING, (UINT_PTR)MENU_ID_INSTRUMENT_VSTI_BROWSE, lang_load_string(IDS_MENU_INSTRUMENT_BROWSE));
-      AppendMenu(menu_instrument, MF_STRING | (vsti_is_show_editor() ? MF_CHECKED : 0), (UINT_PTR)MENU_ID_INSTRUMENT_VSTI_EIDOTR, lang_load_string(IDS_MENU_INSTRUMENT_GUI));
+      AppendMenu(menu_instrument, MF_STRING,
+        (UINT_PTR)MENU_ID_INSTRUMENT_VSTI_BROWSE, lang_load_string(IDS_MENU_INSTRUMENT_BROWSE));
+
+      AppendMenu(menu_instrument, MF_STRING | (vsti_is_show_editor() ? MF_CHECKED : 0),
+        (UINT_PTR)MENU_ID_INSTRUMENT_VSTI_EIDOTR, lang_load_string(IDS_MENU_INSTRUMENT_GUI));
+
       AppendMenu(menu_instrument, MF_SEPARATOR, 0, NULL);
 
-      // enum midi devices
-      //AppendMenu(menu_instrument, MF_STRING | (false ? MF_CHECKED : 0), (UINT_PTR)MENU_ID_INSTRUMENT_MIDI, lang_load_string(IDS_MENU_INSTRUMENT_MIDI));
-
       enum_midi_callback midi_cb;
-      midi_enum_output(midi_cb);
+      if (config_get_instrument_show_midi()) {
+        midi_enum_output(midi_cb);
+      }
+
+      if (!midi_cb.found && config_get_instrument_type() == INSTRUMENT_TYPE_MIDI) {
+        midi_cb(config_get_instrument_path());
+      }
 
       enum_vsti_callback vsti_cb;
-      vsti_cb.found = false;
-      vsti_enum_plugins(vsti_cb);
+      if (config_get_instrument_show_vsti()) {
+        vsti_enum_plugins(vsti_cb);
+      }
 
       if (!vsti_cb.found && config_get_instrument_type() == INSTRUMENT_TYPE_VSTI) {
-        char buff[256];
-        sprintf_s(buff, "%s\tVSTi", config_get_instrument_path());
-        AppendMenu(menu_instrument, MF_STRING | MF_CHECKED, 0, buff);
+        vsti_cb.only_filename = false;
+        vsti_cb(config_get_instrument_path());
       }
     }
     // keyboard map

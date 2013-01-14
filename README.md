@@ -18,9 +18,13 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 ## Change logs
 
-**2013-00-00  FreePiano 1.5**
+**2013-01-14  FreePiano 1.5**
 
+* Multiply MIDI input device and remap of midi input channel is now supported.
+* MIDI output is now as instruments and can be selected in instrument menu.
 * Change keyboard hook method to make anti-virus software happy.
+* MIDI input velocity no longer adjusted by key velocity option.
+* Fixed a bug that preset controllers menu not clear previous key mapping.
 * Fixed a bug that noteoff not handled for some midi keyboard.
 * Fixed a bug that keyup bind did not work.
 

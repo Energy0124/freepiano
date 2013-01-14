@@ -302,12 +302,14 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
     b = clamp_value((int)b + config_get_key_octshift(ch) * 12 + config_get_key_signature(), 0, 127);
 
     // adjust velocity
+    /*
     byte vel = config_get_key_velocity(ch);
     if (vel) {
       c = clamp_value((int)c * 127 / vel, 0, 127);
     } else {
       c = 127;
     }
+    */
 
     // auto generate note off event
     midi_keyup_t up;

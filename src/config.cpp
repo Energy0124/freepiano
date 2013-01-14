@@ -395,6 +395,9 @@ struct key_label_t {
 struct global_setting_t {
   uint instrument_type;
   char instrument_path[256];
+  uint instrument_show_midi;
+  uint instrument_show_vsti;
+
   uint output_type;
   char output_device[256];
   uint output_delay;
@@ -410,6 +413,9 @@ struct global_setting_t {
   global_setting_t() {
     instrument_type = INSTRUMENT_TYPE_MIDI;
     instrument_path[0] = 0;
+    instrument_show_midi = 1;
+    instrument_show_vsti = 1;
+
     output_type = OUTPUT_TYPE_AUTO;
     output_device[0] = 0;
     output_delay = 10;
@@ -1602,6 +1608,10 @@ int config_load(const char *filename) {
           uint showui = 1;
           match_value(&s, NULL, 0, &showui);
           vsti_show_editor(showui != 0);
+        } else if (match_word(&s, "showmidi")) {
+          match_value(&s, NULL, 0, &global.instrument_show_midi);
+        } else if (match_word(&s, "showvsti")) {
+          match_value(&s, NULL, 0, &global.instrument_show_vsti);
         }
       }
       // output
@@ -1682,6 +1692,12 @@ int config_save(const char *filename) {
 
   if (!vsti_is_show_editor())
     fprintf(fp, "instrument showui %d\r\n", vsti_is_show_editor());
+
+  if (!global.instrument_show_midi)
+    fprintf(fp, "instrument showmidi %d\r\n", global.instrument_show_midi);
+
+  if (!global.instrument_show_vsti)
+    fprintf(fp, "instrument showvsti %d\r\n", global.instrument_show_vsti);
 
   if (global.output_type)
     fprintf(fp, "output type %s\r\n", output_type_names[global.output_type]);
@@ -2073,4 +2089,26 @@ const char* config_get_key_name(byte code) {
   static char buff[16];
   _snprintf(buff, sizeof(buff), "%d", code);
   return buff;
+}
+
+// instrument show midi 
+bool config_get_instrument_show_midi() {
+  thread_lock lock(config_lock);
+  return global.instrument_show_midi != 0;
+}
+
+void config_set_instrument_show_midi(bool value) {
+  thread_lock lock(config_lock);
+  global.instrument_show_midi = value;
+}
+
+// instrument show midi 
+bool config_get_instrument_show_vsti() {
+  thread_lock lock(config_lock);
+  return global.instrument_show_vsti != 0;
+}
+
+void config_set_instrument_show_vsti(bool value) {
+  thread_lock lock(config_lock);
+  global.instrument_show_vsti = value;
 }

@@ -51,7 +51,6 @@ void config_set_midi_input_config(const char *device, const midi_input_config_t 
 // get midi input enable.
 bool config_get_midi_input_config(const char *device, midi_input_config_t *config);
 
-
 // select output
 int config_select_output(int type, const char *device);
 
@@ -199,3 +198,11 @@ char config_get_delay_keyup(byte channel);
 
 // get key name
 const char* config_get_key_name(byte code);
+
+// instrument show midi 
+bool config_get_instrument_show_midi();
+void config_set_instrument_show_midi(bool value);
+
+// instrument show midi 
+bool config_get_instrument_show_vsti();
+void config_set_instrument_show_vsti(bool value);
