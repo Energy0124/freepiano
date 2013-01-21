@@ -18,6 +18,9 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 ## Change logs
 
+**2013-01-21  FreePiano 1.5.1**
+* Freepiano 1.5 will not running on windows XP, this path just fixed that.
+
 **2013-01-14  FreePiano 1.5**
 
 * Multiply MIDI input device and remap of midi input channel is now supported.

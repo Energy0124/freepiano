@@ -8,7 +8,7 @@
 !include "MUI2.nsh"
 
 ; The name of the installer
-Name "FreePiano 1.5"
+Name "FreePiano"
 
 ; The file to write
 OutFile "nsis/freepiano_setup.exe"
@@ -68,9 +68,9 @@ Section "FreePiano Ö÷³ÌÐò"
   WriteRegStr HKLM SOFTWARE\FreePiano "Install_Dir" "$INSTDIR"
   
   ; Write the uninstall keys for Windows
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreePiano" "DisplayName" "FreePiano 1.5"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreePiano" "DisplayName" "FreePiano"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreePiano" "DisplayIcon" "$INSTDIR\freepiano.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreePiano" "DisplayVersion" "1.5"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreePiano" "DisplayVersion" "1.5.1"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreePiano" "Publisher" "tiwb.com"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreePiano" "UninstallString" '"$INSTDIR\uninstall.exe"'
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\FreePiano" "NoModify" 1
