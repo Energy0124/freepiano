@@ -30,3 +30,6 @@ void midi_enum_output(midi_enum_callback &callbcak);
 
 // rest midi
 void midi_reset();
+
+// update midi
+void midi_update(double time);

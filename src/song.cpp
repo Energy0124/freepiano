@@ -608,15 +608,14 @@ void song_update(double time_elapsed) {
     }
   }
 
-  // delay keyup
-
-
   // adjust clock
   song_clock += time_elapsed;
 
   // update keyboard
   keyboard_update(time_elapsed);
 
+  // process midi evens
+  midi_update(time_elapsed);
 }
 
 song_info_t* song_get_info() {

@@ -32,6 +32,13 @@ static thread_lock_t midi_output_lock;
 // note state
 static byte note_states[16][128] = {0};
 
+// controller save state
+static struct controller_save_t {
+  double timer;
+  byte value;
+}
+midi_controller_save[16][128] = {0};
+
 // auto generated keyup events
 struct midi_keyup_t {
   byte midi_display_key;
@@ -201,6 +208,9 @@ void midi_reset() {
     if (config_get_program(ch) < 128)
       midi_output_event(0xc0 | ch, config_get_program(ch), 0, 0);
   }
+
+  // clear controller save
+  memset(midi_controller_save, 0, sizeof(midi_controller_save));
 }
 
 // wrap value
@@ -243,10 +253,14 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
       case 1: value = value + (char)c; break;
       case 2: value = value - (char)c; break;
       case 3: value = 127 - value; break;
+      case 4: midi_controller_save[ch][id].timer = 20;
+              midi_controller_save[ch][id].value = value;
+              value = c; break;
      }
 
      value = clamp_value(value, 0, 127);
      config_set_controller(ch, id, value);
+
      c = value;
      d = 0;
    }
@@ -352,5 +366,20 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
   // other events, send directly
   else if (cmd) {
     midi_output_event(a, b, c, d);
+  }
+}
+
+// update midi
+void midi_update(double time) {
+  for (int ch = 0; ch < 16; ch++) {
+    for (int id = 0; id < 128; id++) {
+      if (midi_controller_save[ch][id].timer > 0) {
+        midi_controller_save[ch][id].timer -= time;
+
+        if (midi_controller_save[ch][id].timer <= 0) {
+          midi_output_event(0xb0 | ch, id, midi_controller_save[ch][id].value, 0);
+        }
+      }
+    }
   }
 }

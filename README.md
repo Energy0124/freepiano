@@ -20,6 +20,9 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 **2013-01-28  FreePiano 1.5.2**
 * Fixed a bug that some configuration can not be saved.
+* The length of keyboard map script now has no limit.
+* Adds a 'Press' modifier on Controller command, which can temporary change
+  controller value then change it back after 20ms.
 
 **2013-01-21  FreePiano 1.5.1**
 * Freepiano 1.5 will not running on windows XP, this path just fixed that.
