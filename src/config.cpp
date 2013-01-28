@@ -1523,11 +1523,13 @@ static int config_save_key_settings(char *buff, int buffer_size) {
 }
 
 // save keymap
-int config_save_keymap(char *buff, int buffer_size) {
+char* config_save_keymap() {
   thread_lock lock(config_lock);
+  size_t buffer_size = 4096 * 10;
+  char * buffer = (char*)malloc(buffer_size);
 
-  char *end = buff + buffer_size;
-  char *s = buff;
+  char *s = buffer;
+  char *end = buffer + buffer_size;
 
   // save group count
   s += _snprintf(s, end - s, "GroupCount\t%d\r\n", config_get_setting_group_count());
@@ -1537,20 +1539,33 @@ int config_save_keymap(char *buff, int buffer_size) {
 
   // for each group
   for (uint i = 0; i < config_get_setting_group_count(); i++) {
-    // change group
-    s += _snprintf(s, end - s, "\r\nGroup\t%d\r\n", i);
+    size_t start = s - buffer;
 
-    // change to group i
-    config_set_setting_group(i);
+    for(;;) {
+      // change group
+      s += _snprintf(s, end - s, "\r\nGroup\t%d\r\n", i);
 
-    // save current key settings
-    s += config_save_key_settings(s, end - s);
+      // change to group i
+      config_set_setting_group(i);
+
+      // save current key settings
+      s += config_save_key_settings(s, end - s);
+
+      if (s < end - 4096)
+        break;
+
+      buffer_size += 4096 * 10;
+      buffer = (char*)realloc(buffer, buffer_size);
+      
+      s = buffer + start;
+      end = buffer + buffer_size;
+    }
   }
 
   // restore current setting group
   config_set_setting_group(current_setting);
 
-  return s - buff;
+  return buffer;
 }
 
 static int config_apply() {

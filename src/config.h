@@ -100,7 +100,7 @@ const char* config_get_keymap();
 int config_set_keymap(const char *mapname);
 
 // save keymap
-int config_save_keymap(char *buff, int buffer_size);
+char* config_save_keymap();
 
 // parse keymap
 int config_parse_keymap(const char *command);

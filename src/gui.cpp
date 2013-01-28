@@ -416,11 +416,8 @@ static LRESULT CALLBACK EditSubProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   struct helpers {
     static void update_content(HWND edit) {
-      uint buff_size = 1024 * 1024;
-      char *buff = new char[buff_size];
-
       // save keymap config
-      config_save_keymap(buff, buff_size);
+      char *buff = config_save_keymap();
 
       uint tabstops = 46;
       LockWindowUpdate(edit);
@@ -430,17 +427,17 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
       Edit_Scroll(edit, scroll, 0);
       LockWindowUpdate(NULL);
 
-      delete[] buff;
+      free(buff);
     }
 
     static void apply_content(HWND edit) {
-      uint buff_size = 1024 * 1024;
-      char *buff = new char[buff_size];
+      uint buff_size = Edit_GetTextLength(edit);
+      char *buff = (char*)malloc(buff_size);
 
       Edit_GetText(edit, buff, buff_size);
       config_parse_keymap(buff);
 
-      delete[] buff;
+      free(buff);
     }
   };
 
@@ -1143,8 +1140,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      ofn.lpstrInitialDir = dir;
 
      if (GetSaveFileName(&ofn)) {
-       char buffer[40960];
-       config_save_keymap(buffer, sizeof(buffer));
+       char *buffer = config_save_keymap();
 
        FILE *fp = fopen(temp, "wb");
        if (fp) {
@@ -1153,6 +1149,8 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
          config_set_keymap(temp);
        }
+
+       free(buffer);
      }
    }
    break;
