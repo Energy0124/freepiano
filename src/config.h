@@ -85,7 +85,7 @@ const char* config_get_instrument_path();
 bool config_get_enable_resize_window();
 void config_set_enable_resize_window(bool enable);
 
-// get enable resize windwo
+// get enable resize window
 bool config_get_enable_hotkey();
 void config_set_enable_hotkey(bool enable);
 

@@ -1723,11 +1723,11 @@ int config_save(const char *filename) {
     }
   }
 
-  if (config_get_enable_hotkey())
-    fprintf(fp, "hotkey enable\r\n");
+  if (!config_get_enable_hotkey())
+    fprintf(fp, "hotkey disable\r\n");
 
-  if (config_get_enable_resize_window())
-    fprintf(fp, "resize enable\r\n");
+  if (!config_get_enable_resize_window())
+    fprintf(fp, "resize disable\r\n");
 
   fclose(fp);
   return 0;
