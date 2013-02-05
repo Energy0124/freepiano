@@ -671,11 +671,6 @@ static HMENU menu_instrument = NULL;
 static HMENU menu_config = NULL;
 static HMENU menu_about = NULL;
 static HMENU menu_keymap = NULL;
-static HMENU menu_key_popup = NULL;
-static HMENU menu_key_note = NULL;
-static HMENU menu_key_note_shift = NULL;
-static HMENU menu_key_channel = NULL;
-static HMENU menu_key_control = NULL;
 static HMENU menu_play_speed = NULL;
 static HMENU menu_setting_group = NULL;
 static HMENU menu_export = NULL;
@@ -693,12 +688,6 @@ enum MENU_ID {
   MENU_ID_KEY_MAP_LOAD,
   MENU_ID_KEY_MAP_SAVE,
   MENU_ID_KEY_FIXED_DOH,
-  MENU_ID_KEY_NOTE,
-  MENU_ID_KEY_NOTE_SHIFT,
-  MENU_ID_KEY_NOTE_CHANNEL,
-  MENU_ID_KEY_CONTROL,
-  MENU_ID_KEY_CLEAR,
-  MENU_ID_KEY_CONFIG,
   MENU_ID_HELP_HOMEPAGE,
   MENU_ID_HELP_ONLINE,
   MENU_ID_HELP_ABOUT,
@@ -734,11 +723,6 @@ static int menu_init() {
   menu_config = CreatePopupMenu();
   menu_about = CreatePopupMenu();
   menu_keymap = CreatePopupMenu();
-  menu_key_popup = CreatePopupMenu();
-  menu_key_note = CreatePopupMenu();
-  menu_key_note_shift = CreatePopupMenu();
-  menu_key_channel = CreatePopupMenu();
-  menu_key_control = CreatePopupMenu();
   menu_play_speed = CreatePopupMenu();
   menu_setting_group = CreatePopupMenu();
   menu_export = CreatePopupMenu();
@@ -750,7 +734,6 @@ static int menu_init() {
   menuinfo.dwStyle = MNS_NOTIFYBYPOS;
 
   SetMenuInfo(menu_main, &menuinfo);
-  SetMenuInfo(menu_key_popup, &menuinfo);
 
   // Main menu
   AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_record, lang_load_string(IDS_MENU_FILE));
@@ -792,16 +775,6 @@ static int menu_init() {
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_CLEAR, lang_load_string(IDS_MENU_SETTING_GROUP_CLEAR));
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_DEFAULT, lang_load_string(IDS_MENU_SETTING_GROUP_DEFAULT));
 
-
-  // Popup menu
-  AppendMenu(menu_key_popup,  MF_POPUP, (UINT_PTR)menu_key_note, lang_load_string(IDS_MENU_KEY_NOTE));
-  AppendMenu(menu_key_popup,  MF_POPUP, (UINT_PTR)menu_key_note_shift, lang_load_string(IDS_MENU_KEY_NOTESHIFT));
-  AppendMenu(menu_key_popup,  MF_POPUP, (UINT_PTR)menu_key_channel, lang_load_string(IDS_MENU_KEY_CHANNEL));
-  AppendMenu(menu_key_popup,  MF_POPUP, (UINT_PTR)menu_key_control, lang_load_string(IDS_MENU_KEY_CONTROL));
-  AppendMenu(menu_key_popup,  MF_POPUP, (UINT_PTR)MENU_ID_KEY_CLEAR, lang_load_string(IDS_MENU_KEY_CLEAR));
-  AppendMenu(menu_key_popup,  MF_SEPARATOR, 0, NULL);
-  AppendMenu(menu_key_popup,  MF_STRING, (UINT_PTR)MENU_ID_KEY_CONFIG, lang_load_string(IDS_MENU_KEY_SETTINGS));
-
   return 0;
 }
 
@@ -814,11 +787,6 @@ static void menu_shutdown() {
   DestroyMenu(menu_config);
   DestroyMenu(menu_about);
   DestroyMenu(menu_keymap);
-  DestroyMenu(menu_key_popup);
-  DestroyMenu(menu_key_note);
-  DestroyMenu(menu_key_note_shift);
-  DestroyMenu(menu_key_channel);
-  DestroyMenu(menu_key_control);
   DestroyMenu(menu_play_speed);
   DestroyMenu(menu_setting_group);
   DestroyMenu(menu_export);
@@ -909,99 +877,6 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
        }
      }
      break;
-
-   case MENU_ID_KEY_NOTE: {
-     key_bind_t keydown;
-     config_bind_get_keydown(selected_key, &keydown, 1);
-
-     if ((keydown.a >> 4) == 0x9) {
-       keydown.b = (byte)((keydown.b / 12) * 12 + pos);
-     } else {
-       keydown.a = 0x90;
-       keydown.b = (byte)(60 + pos);
-       keydown.c = 127;
-     }
-
-     config_bind_set_label(selected_key, NULL);
-     config_bind_clear_keydown(selected_key);
-     config_bind_clear_keyup(selected_key);
-     config_bind_add_keydown(selected_key, keydown);
-   }
-   break;
-
-   case MENU_ID_KEY_NOTE_SHIFT: {
-     key_bind_t keydown;
-     config_bind_get_keydown(selected_key, &keydown, 1);
-
-     if ((keydown.a >> 4) == 0x9) {
-       keydown.b = (byte)(12 + pos * 12 + (keydown.b % 12));
-     } else {
-       keydown.a = 0x90;
-       keydown.b = (byte)(12 + pos * 12);
-       keydown.c = 127;
-     }
-
-     config_bind_set_label(selected_key, NULL);
-     config_bind_clear_keydown(selected_key);
-     config_bind_clear_keyup(selected_key);
-     config_bind_add_keydown(selected_key, keydown);
-   }
-   break;
-
-   case MENU_ID_KEY_NOTE_CHANNEL: {
-     key_bind_t keydown;
-     config_bind_get_keydown(selected_key, &keydown, 1);
-
-     switch (keydown.a >> 4) {
-      case 0x9:
-      case 0x8:
-      case 0xa:
-      case 0xb:
-      case 0xc:
-      case 0xd:
-        keydown.a = static_cast<byte>((keydown.a & 0xf0) | (pos & 0x0f));
-        break;
-     }
-
-     config_bind_clear_keydown(selected_key);
-     config_bind_clear_keyup(selected_key);
-     config_bind_add_keydown(selected_key, keydown);
-   }
-   break;
-
-   case MENU_ID_KEY_CONTROL:
-     if (lang_text_open(IDR_TEXT_CONTROLLERS)) {
-       config_bind_clear_keydown(selected_key);
-       config_bind_clear_keyup(selected_key);
-       config_bind_set_label(selected_key, NULL);
-
-       DWORD id = -1;
-       char line[4096];
-       while (lang_text_readline(line, sizeof(line))) {
-         if (line[0] == '#') {
-           if (++id > pos)
-             break;
-         } else if (id == pos) {
-           char temp[4096];
-           _snprintf(temp, sizeof(temp), line, config_get_key_name(selected_key));
-           config_parse_keymap(temp);
-         }
-       }
-       lang_text_close();
-     }
-     break;
-
-   case MENU_ID_KEY_CLEAR: {
-     config_bind_clear_keydown(selected_key);
-     config_bind_clear_keyup(selected_key);
-     config_bind_set_label(selected_key, NULL);
-   }
-   break;
-
-   case MENU_ID_KEY_CONFIG: {
-     settings_show(IDD_SETTING_KEYMAP);
-   }
-   break;
 
    case MENU_ID_HELP_HOMEPAGE:
      ShellExecute(NULL, "open", "http://freepiano.tiwb.com", NULL, NULL, 0);
@@ -1352,73 +1227,6 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
       if (!cb.found)
         AppendMenu(menu, MF_STRING | MF_CHECKED, MENU_ID_KEY_MAP, config_get_keymap());
-    }
-    else if (menu == menu_key_note) {
-      static const char *keys[] = { "1", "#1", "2", "#2", "3", "4", "#4", "5", "#5", "6", "#6", "7" };
-
-      // remove all menu items.
-      while (int count = GetMenuItemCount(menu))
-        RemoveMenu(menu, count - 1, MF_BYPOSITION);
-
-      key_bind_t keydown;
-      config_bind_get_keydown(selected_key, &keydown, 1);
-
-      int selected = -1;
-
-      switch (keydown.a >> 4) {
-       case 0x8: case 0x9: selected = keydown.b % 12;
-      }
-
-      for (int i = 0; i < ARRAY_COUNT(keys); i++) {
-        AppendMenu(menu, MF_STRING | (selected == i ? MF_CHECKED : 0), MENU_ID_KEY_NOTE, keys[i]);
-      }
-    }
-    else if (menu == menu_key_note_shift) {
-      static const char *shifts[] = {"-4", "-3", "-2", "-1", "0", "+1", "+2", "+3", "+4"};
-
-      // remove all menu items.
-      while (int count = GetMenuItemCount(menu))
-        RemoveMenu(menu, count - 1, MF_BYPOSITION);
-
-      key_bind_t keydown;
-      config_bind_get_keydown(selected_key, &keydown, 1);
-
-      int selected = -1;
-
-      switch (keydown.a >> 4) {
-       case 0x8: case 0x9: selected = keydown.b / 12 - 1;
-      }
-
-      for (int i = 0; i < ARRAY_COUNT(shifts); i++)
-        AppendMenu(menu, MF_STRING | (selected == i ? MF_CHECKED : 0), MENU_ID_KEY_NOTE_SHIFT, shifts[i]);
-    }
-    else if (menu == menu_key_channel) {
-      const char * *channels = lang_load_string_array(IDS_MENU_KEY_CHANNELS);
-
-      key_bind_t keydown;
-      config_bind_get_keydown(selected_key, &keydown, 1);
-      int selected = (keydown.a & 0xf);
-
-      // remove all menu items.
-      while (int count = GetMenuItemCount(menu))
-        RemoveMenu(menu, count - 1, MF_BYPOSITION);
-
-      for (int i = 0; channels[i]; i++)
-        AppendMenu(menu, MF_STRING | (selected == i ? MF_CHECKED : 0), MENU_ID_KEY_NOTE_CHANNEL, channels[i]);
-    }
-    else if (menu == menu_key_control) {
-      // remove all menu items.
-      while (int count = GetMenuItemCount(menu))
-        RemoveMenu(menu, count - 1, MF_BYPOSITION);
-
-      if (lang_text_open(IDR_TEXT_CONTROLLERS)) {
-        char line[4096];
-        while (lang_text_readline(line, sizeof(line))) {
-          if (line[0] == '#')
-            AppendMenu(menu, MF_STRING, MENU_ID_KEY_CONTROL, line + 1);
-        }
-        lang_text_close();
-      }
     }
     else if (menu == menu_record) {
       EnableMenuItem(menu, MENU_ID_FILE_SAVE, MF_BYCOMMAND | (song_allow_save() ? MF_ENABLED : MF_DISABLED));
