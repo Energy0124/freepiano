@@ -1440,6 +1440,46 @@ static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t
   return s - buff;
 }
 
+// save key bind
+static int config_save_keybind(int key, char *buff, int buffer_size) {
+  char *end = buff + buffer_size;
+  char *s = buff;
+
+  key_bind_t temp[256];
+  bool first;
+  int count;
+
+  count = config_bind_get_keydown(key, temp, ARRAYSIZE(temp));
+  first = true;
+  for (int i = 0; i < count; i++) {
+    if (temp[i].a) {
+      s += _snprintf(s, end - s, first ? "Keydown" : "Keydown");
+      s += print_keyboard_event(s, end - s, key, temp[i]);
+      s += _snprintf(s, end - s, "\r\n");
+      first = false;
+    }
+  }
+
+  count = config_bind_get_keyup(key, temp, ARRAYSIZE(temp));
+  first = true;
+  for (int i = 0; i < count; i++) {
+    if (temp[i].a) {
+      s += _snprintf(s, end - s, first ? "Keyup" : "Keyup");
+      s += print_keyboard_event(s, end - s, key, temp[i]);
+      s += _snprintf(s, end - s, "\r\n");
+      first = false;
+    }
+  }
+
+  if (*config_bind_get_label(key)) {
+    s += _snprintf(s, end - s, "Label");
+    s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
+    s += _snprintf(s, end - s, "\t%s\r\n", config_bind_get_label(key));
+  }
+
+  return end - s;
+}
+
 // save current key settings
 static int config_save_key_settings(char *buff, int buffer_size) {
   char *end = buff + buffer_size;
@@ -1565,6 +1605,25 @@ char* config_save_keymap() {
 
   // restore current setting group
   config_set_setting_group(current_setting);
+
+  return buffer;
+}
+
+// dump key bind
+char* config_dump_keybind(byte code) {
+  size_t buffer_size = 8192;
+  char * buffer = (char*)malloc(buffer_size);
+  buffer[0] = 0;
+
+  for (;;) {
+    config_save_keybind(code, buffer, buffer_size);
+
+    if (buffer < buffer + buffer_size - 4096)
+      break;
+
+    buffer_size += 4096;
+    buffer = (char*)realloc(buffer, buffer_size);
+  }
 
   return buffer;
 }

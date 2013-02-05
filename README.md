@@ -4,7 +4,7 @@ FreePiano is a virtual MIDI keyboard and a piano for Windows.
 
 You can use freepiano to Play piano with computer keyboard or MIDI keyboard with any vst instrument you like, or output through MIDI, or generate any MIDI message with any key on the keyboard. You can also record your song and export a MP4 movie to share with your friends.
 
-![ScreenShot](http://freepiano.tiwb.com/wp-content/uploads/2011/05/screenshot-1.0-300x134.jpg)
+![ScreenShot](res/screenshot-1.0.jpg)
 
 ## Features of FreePiano:
 
@@ -17,6 +17,11 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 
 ## Change logs
+
+**2013-02-01  FreePiano 1.6**
+* New popup key modify menu, with quick script edit.
+* Fixed a bug that keyboard map script editor still has a length limit.
+
 
 **2013-01-28  FreePiano 1.5.2**
 * Fixed a bug that some configuration can not be saved.

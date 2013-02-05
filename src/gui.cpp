@@ -419,10 +419,8 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
       // save keymap config
       char *buff = config_save_keymap();
 
-      uint tabstops = 46;
       LockWindowUpdate(edit);
       int scroll = GetScrollPos(edit, SB_VERT);
-      Edit_SetTabStops(edit, 1, &tabstops);
       Edit_SetText(edit, buff);
       Edit_Scroll(edit, scroll, 0);
       LockWindowUpdate(NULL);
@@ -444,7 +442,9 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
   switch (uMsg) {
    case WM_INITDIALOG: {
      HWND output_content = GetDlgItem(hWnd, IDC_MAP_CONTENT);
-
+     Edit_LimitText(output_content,-1);
+     uint tabstops = 46;
+     Edit_SetTabStops(output_content, 1, &tabstops);
      helpers::update_content(output_content);
    }
    break;
@@ -692,6 +692,7 @@ enum MENU_ID {
   MENU_ID_KEY_MAP,
   MENU_ID_KEY_MAP_LOAD,
   MENU_ID_KEY_MAP_SAVE,
+  MENU_ID_KEY_FIXED_DOH,
   MENU_ID_KEY_NOTE,
   MENU_ID_KEY_NOTE_SHIFT,
   MENU_ID_KEY_NOTE_CHANNEL,
@@ -1453,11 +1454,265 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return 0;
 }
 
+// key setting proc
+static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  static POINT move_pos;
+
+  struct helpers {
+    static void refresh_controls(HWND hWnd) {
+      key_bind_t keydown;
+      config_bind_get_keydown(selected_key, &keydown, 1);
+
+      bool is_note = (keydown.a & 0xf0) == 0x80 || (keydown.a & 0xf0) == 0x90;
+
+      // notes
+      for (int note = 0; note < 12; note++) {
+        HWND button = GetDlgItem(hWnd, IDC_KEY_SETTING_NOTE_1 + note);
+        BOOL value = is_note && (keydown.b % 12 == note);
+        Button_SetState(button, value);
+      }
+
+      // octave
+      for (int octave = 0; octave < 8; octave++) {
+        HWND button = GetDlgItem(hWnd, IDC_KEY_SETTING_OCTAVE_0 + octave);
+        BOOL value = is_note && (keydown.b / 12 - 1 == octave);
+        Button_SetState(button, value);
+      }
+
+      // channel
+      for (int channel = 0; channel < 2; channel++) {
+        HWND button = GetDlgItem(hWnd, IDC_KEY_SETTING_CHANNEL_0 + channel);
+        BOOL value = is_note && ((keydown.a & 0xf) == channel);
+        Button_SetState(button, value);
+      }
+
+      // script
+      char *buff = config_dump_keybind(selected_key);
+      if (buff) {
+        HWND edit = GetDlgItem(hWnd, IDC_KEY_SCRIPT);
+        uint tabstops = 46;
+        Edit_SetTabStops(edit, 1, &tabstops);
+        Edit_SetText(edit, buff);
+        free(buff);
+      }
+    }
+  };
+
+  switch (uMsg) {
+   case WM_INITDIALOG: {
+     helpers::refresh_controls(hWnd);
+   }
+   break;
+
+   case WM_ACTIVATE:
+     if (WA_INACTIVE == LOWORD(wParam)) {
+       PostMessage(hWnd, WM_CLOSE, 0, 0);
+     }
+     break;
+
+   case WM_LBUTTONDOWN:
+     {
+       RECT rect;
+       GetWindowRect(hWnd, &rect);
+       ::GetCursorPos(&move_pos);
+       move_pos.x -= rect.left;
+       move_pos.y -= rect.top;
+     }
+     ::SetCapture(hWnd);
+     break;
+
+   case WM_LBUTTONUP:
+     ::ReleaseCapture();
+     break;
+
+   case WM_MOUSEMOVE:
+     if (::GetCapture() == hWnd) {
+       POINT pos;
+       ::GetCursorPos(&pos);
+       pos.x -= move_pos.x;
+       pos.y -= move_pos.y;
+       SetWindowPos(hWnd, NULL, pos.x, pos.y, 0, 0, SWP_NOOWNERZORDER | SWP_NOSIZE);
+     }
+     break;
+
+   case WM_COMMAND:
+     wParam = LOWORD(wParam);
+     if (wParam >= IDC_KEY_SETTING_NOTE_1 && wParam <= IDC_KEY_SETTING_NOTE_12) {
+       int note = wParam - IDC_KEY_SETTING_NOTE_1;
+       key_bind_t keydown;
+       config_bind_get_keydown(selected_key, &keydown, 1);
+
+       if ((keydown.a >> 4) == 0x9) {
+         keydown.b = (byte)((keydown.b / 12) * 12 + note);
+       } else {
+         keydown.a = 0x90;
+         keydown.b = (byte)(60 + note);
+         keydown.c = 127;
+       }
+
+       config_bind_set_label(selected_key, NULL);
+       config_bind_clear_keydown(selected_key);
+       config_bind_clear_keyup(selected_key);
+       config_bind_add_keydown(selected_key, keydown);
+       helpers::refresh_controls(hWnd);
+     }
+
+     else if (wParam >= IDC_KEY_SETTING_OCTAVE_0 && wParam <= IDC_KEY_SETTING_OCTAVE_8) {
+       int octave = wParam - IDC_KEY_SETTING_OCTAVE_0;
+       key_bind_t keydown;
+       config_bind_get_keydown(selected_key, &keydown, 1);
+
+       if ((keydown.a >> 4) == 0x9) {
+         keydown.b = (byte)(12 + octave * 12 + (keydown.b % 12));
+       } else {
+         keydown.a = 0x90;
+         keydown.b = (byte)(12 + octave * 12);
+         keydown.c = 127;
+       }
+
+       config_bind_set_label(selected_key, NULL);
+       config_bind_clear_keydown(selected_key);
+       config_bind_clear_keyup(selected_key);
+       config_bind_add_keydown(selected_key, keydown);
+       helpers::refresh_controls(hWnd);
+     }
+
+     else if (wParam >= IDC_KEY_SETTING_CHANNEL_0 && wParam <= IDC_KEY_SETTING_CHANNEL_1) {
+       int channel = wParam - IDC_KEY_SETTING_CHANNEL_0;
+       key_bind_t keydown;
+       config_bind_get_keydown(selected_key, &keydown, 1);
+
+       switch (keydown.a >> 4) {
+       case 0x9: case 0x8: case 0xa: case 0xb: case 0xc: case 0xd:
+         keydown.a = static_cast<byte>((keydown.a & 0xf0) | (channel & 0x0f));
+         break;
+       }
+
+       config_bind_set_label(selected_key, NULL);
+       config_bind_clear_keydown(selected_key);
+       config_bind_clear_keyup(selected_key);
+       config_bind_add_keydown(selected_key, keydown);
+       helpers::refresh_controls(hWnd);
+     }
+
+     else if (wParam == IDC_KEY_SETTING_BUTTON_APPLY) {
+       config_bind_set_label(selected_key, NULL);
+       config_bind_clear_keydown(selected_key);
+       config_bind_clear_keyup(selected_key);
+
+       HWND edit = GetDlgItem(hWnd, IDC_KEY_SCRIPT);
+       uint buff_size = Edit_GetTextLength(edit);
+       char *buff = (char*)malloc(buff_size);
+       Edit_GetText(edit, buff, buff_size);
+       config_parse_keymap(buff);
+       free(buff);
+
+       helpers::refresh_controls(hWnd);
+     }
+
+     else if (wParam == IDC_KEY_SETTING_BUTTON_CLEAR) {
+       config_bind_set_label(selected_key, NULL);
+       config_bind_clear_keydown(selected_key);
+       config_bind_clear_keyup(selected_key);
+       helpers::refresh_controls(hWnd);
+     }
+
+     else if (wParam == IDC_KEY_PRESET) {
+      if (lang_text_open(IDR_TEXT_CONTROLLERS)) {
+        HWND button = GetDlgItem(hWnd, IDC_KEY_PRESET);
+        HMENU menu = CreatePopupMenu();
+        char line[4096];
+        int id = 0;
+        while (lang_text_readline(line, sizeof(line))) {
+          if (line[0] == '#')
+            AppendMenu(menu, MF_STRING, ++id, line + 1);
+        }
+
+        lang_text_close();
+
+        RECT rect;
+        GetClientRect(button, &rect);
+        POINT pos = {rect.right, rect.top};
+        ClientToScreen(button, &pos);
+
+        UINT cmd = TrackPopupMenu(menu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN | TPM_RETURNCMD, pos.x, pos.y, 0, hWnd, NULL);
+        if (cmd) {
+          if (lang_text_open(IDR_TEXT_CONTROLLERS)) {
+            config_bind_clear_keydown(selected_key);
+            config_bind_clear_keyup(selected_key);
+            config_bind_set_label(selected_key, NULL);
+
+            DWORD id = 0;
+            char line[4096];
+            while (lang_text_readline(line, sizeof(line))) {
+              if (line[0] == '#') {
+                if (++id > cmd)
+                  break;
+              } else if (id == cmd) {
+                char temp[4096];
+                _snprintf(temp, sizeof(temp), line, config_get_key_name(selected_key));
+                config_parse_keymap(temp);
+              }
+            }
+            lang_text_close();
+          }
+        }
+       helpers::refresh_controls(hWnd);
+      }
+     }
+     break;
+
+   case WM_CLOSE:
+     EndDialog(hWnd, 0);
+     DestroyWindow(hWnd);
+     break;
+
+   case WM_DESTROY:
+     preview_key = -1;
+     break;
+  }
+  return 0;
+}
+
 // popup key menu
 void gui_popup_keymenu(byte code, int x, int y) {
   preview_key = selected_key = code;
-  TrackPopupMenuEx(menu_key_popup, TPM_LEFTALIGN, x, y, gui_get_window(), NULL);
-  preview_key = -1;
+
+  HWND key_setting_window = CreateDialog(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_KEY_SETTING), NULL, key_setting_proc);
+
+  int x1, y1, x2, y2;
+  display_get_key_rect(code, x1, y1, x2, y2);
+
+  { POINT p = {x1, y1}; ClientToScreen(gui_get_window(), &p); x1 = p.x; y1 = p.y; }
+  { POINT p = {x2, y2}; ClientToScreen(gui_get_window(), &p); x2 = p.x; y2 = p.y; }
+
+  x = x1;
+  y = y2;
+
+  RECT workarea;
+  if (SystemParametersInfo(SPI_GETWORKAREA, 0, &workarea, 0)) {
+    RECT rect;
+    GetWindowRect(key_setting_window, &rect);
+
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+
+    if (x1 + width > workarea.right && 
+        x2 - width >= workarea.left) {
+      x = x2 - width;
+    }
+
+    if (y2 + height > workarea.bottom &&
+        y1 - height >= workarea.top) {
+      y = y1 - height;
+    }
+
+    if (x + width > workarea.right) x = workarea.right - width;
+    if (y + height > workarea.bottom) y = workarea.bottom - height;
+  }
+
+  SetWindowPos(key_setting_window, NULL, x, y, 0, 0, SWP_NOOWNERZORDER | SWP_NOREDRAW | SWP_NOSIZE);
+  ShowWindow(key_setting_window, SW_SHOW);
 }
 
 // -----------------------------------------------------------------------------------------

@@ -1689,7 +1689,7 @@ static gui_control_t* find_control(uint type, uint command) {
 
 static void init_keyboard_controls() {
   int i, j;
-  float x = 10;
+  int x = 10;
 
   for (i = 0; i < ARRAYSIZE(controls); ++i) {
     if (controls[i].type != CTL_GROUP)
@@ -2075,8 +2075,8 @@ void dispatch_command(int command, int action) {
   }
 }
 
-// adjust mouse position
-static void adjust_mouse_position(int &x, int &y) {
+// convert canvas position to client position
+static void client_to_canvas(int &x, int &y) {
   RECT rect;
   GetClientRect(display_hwnd, &rect);
 
@@ -2090,6 +2090,34 @@ static void adjust_mouse_position(int &x, int &y) {
     y -= (display_height - display_get_height()) / 2;
 #endif
   }
+}
+
+// convert client position to canvas position
+static void canvas_to_client(int &x, int &y) {
+  RECT rect;
+  GetClientRect(display_hwnd, &rect);
+
+  if (rect.right > rect.left &&
+      rect.bottom > rect.top) {
+#if SCALE_DISPLAY
+    x = x * (rect.right - rect.left) / display_width;
+    y = y * (rect.bottom - rect.top) / display_height;
+#else
+    x += (display_width - display_get_width()) / 2;
+    y += (display_height - display_get_height()) / 2;
+#endif
+  }
+}
+
+// get key rect
+void display_get_key_rect(int keycode, int &x1, int &y1, int &x2, int &y2) {
+  x1 = keyboard_states[keycode].x1;
+  y1 = keyboard_states[keycode].y1;
+  x2 = keyboard_states[keycode].x2;
+  y2 = keyboard_states[keycode].y2;
+
+  canvas_to_client(x1, y1);
+  canvas_to_client(x2, y2);
 }
 
 // mouse control
@@ -2109,7 +2137,7 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
   POINT point = {x, y};
 
   // adjust mouse position
-  adjust_mouse_position(x, y);
+  client_to_canvas(x, y);
 
 
   switch (msg) {
@@ -2213,7 +2241,7 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
 static void mouse_menu(int x, int y) {
   POINT point = {x, y};
 
-  adjust_mouse_position(x, y);
+  client_to_canvas(x, y);
 
   int keycode = find_keyboard_key(x, y);
 

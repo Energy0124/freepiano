@@ -105,6 +105,8 @@ char* config_save_keymap();
 // parse keymap
 int config_parse_keymap(const char *command);
 
+// dump key bind
+char* config_dump_keybind(byte code);
 
 // clear key binding
 void config_bind_clear_keydown(byte code);

@@ -31,3 +31,6 @@ int display_get_height();
 
 // capture bitmap
 int display_capture_bitmap_I420(unsigned char * *planes, int *strikes);
+
+// get key rect
+void display_get_key_rect(int key, int &x1, int &y1, int &x2, int &y2);
