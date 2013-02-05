@@ -208,3 +208,7 @@ void config_set_instrument_show_midi(bool value);
 // instrument show midi 
 bool config_get_instrument_show_vsti();
 void config_set_instrument_show_vsti(bool value);
+
+// fixed doh
+bool config_get_fixed_doh();
+void config_set_fixed_doh(bool value);

@@ -1156,6 +1156,10 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
    }
    break;
 
+   case MENU_ID_KEY_FIXED_DOH:
+     config_set_fixed_doh(!config_get_fixed_doh());
+     break;
+
    case MENU_ID_SETTING_GROUP_CHANGE:
      if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION))
        song_send_event(SM_SETTING_GROUP, 0, atoi(buff), 0, true);
@@ -1337,6 +1341,7 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       // append action menus
       AppendMenu(menu, MF_STRING, MENU_ID_KEY_MAP_LOAD,   lang_load_string(IDS_MENU_KEYMAP_LOAD));
       AppendMenu(menu, MF_STRING, MENU_ID_KEY_MAP_SAVE,   lang_load_string(IDS_MENU_KEYMAP_SAVE));
+      AppendMenu(menu, MF_STRING | (config_get_fixed_doh() ? MF_CHECKED : 0), MENU_ID_KEY_FIXED_DOH,  lang_load_string(IDS_MENU_KEY_FIXED_DOH));
       AppendMenu(menu, MF_SEPARATOR, 0, NULL);
 
       // enum key maps.

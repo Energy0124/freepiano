@@ -1573,6 +1573,11 @@ static void draw_keyboard() {
         byte ch = map.a & 0x0f;
         int note = map.b + config_get_key_octshift(ch) * 12;
 
+        // fixed-doh
+        if (config_get_fixed_doh()) {
+          note += config_get_key_signature();
+        }
+
         if (note > 12 && note < 120) {
           if (resources[notes].texture) {
             float x3 = round(x1 + (x2 - x1 - 25.f) * 0.5f);

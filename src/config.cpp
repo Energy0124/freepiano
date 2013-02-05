@@ -408,6 +408,7 @@ struct global_setting_t {
   uint enable_hotkey;
   uint enable_resize;
   uint midi_display;
+  uint fixed_doh;
 
   std::map<std::string, midi_input_config_t> midi_inputs;
 
@@ -426,6 +427,7 @@ struct global_setting_t {
     enable_hotkey = true;
     enable_resize = true;
     midi_display = MIDI_DISPLAY_INPUT;
+    fixed_doh = false;
   }
 };
 
@@ -1740,6 +1742,12 @@ int config_load(const char *filename) {
         match_value(&s, boolean_names, ARRAY_COUNT(boolean_names), &enable);
         config_set_enable_hotkey(enable != 0);
       }
+      // doh
+      else if (match_word(&s, "fixed-doh")) {
+        uint enable = 0;
+        match_value(&s, boolean_names, ARRAY_COUNT(boolean_names), &enable);
+        config_set_fixed_doh(enable != 0);
+      }
     }
 
     fclose(fp);
@@ -1803,6 +1811,9 @@ int config_save(const char *filename) {
 
   if (!config_get_enable_resize_window())
     fprintf(fp, "resize disable\r\n");
+
+  if (config_get_fixed_doh())
+    fprintf(fp, "fixed-doh enable\r\n");
 
   fclose(fp);
   return 0;
@@ -2186,4 +2197,16 @@ bool config_get_instrument_show_vsti() {
 void config_set_instrument_show_vsti(bool value) {
   thread_lock lock(config_lock);
   global.instrument_show_vsti = value;
+}
+
+
+// fixed doh
+bool config_get_fixed_doh() {
+  thread_lock lock(config_lock);
+  return global.fixed_doh != 0;
+}
+
+void config_set_fixed_doh(bool value) {
+  thread_lock lock(config_lock);
+  global.fixed_doh = value;
 }
