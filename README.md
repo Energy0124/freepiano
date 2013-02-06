@@ -18,7 +18,7 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 ## Change logs
 
-**2013-02-01  FreePiano 1.6**
+**2013-02-06  FreePiano 1.6**
 * New popup key modify menu, with quick script edit.
 * Adds fixed-doh display mode.
 * Adds keyboard animation, can be changed in gui settings.
