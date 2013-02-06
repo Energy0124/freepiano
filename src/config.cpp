@@ -409,6 +409,7 @@ struct global_setting_t {
   uint enable_resize;
   uint midi_display;
   uint fixed_doh;
+  uint key_fade;
 
   std::map<std::string, midi_input_config_t> midi_inputs;
 
@@ -428,6 +429,8 @@ struct global_setting_t {
     enable_resize = true;
     midi_display = MIDI_DISPLAY_INPUT;
     fixed_doh = false;
+
+    key_fade = 0;
   }
 };
 
@@ -1748,6 +1751,11 @@ int config_load(const char *filename) {
         match_value(&s, boolean_names, ARRAY_COUNT(boolean_names), &enable);
         config_set_fixed_doh(enable != 0);
       }
+      else if (match_word(&s, "key-fade")) {
+        uint value = 0;
+        match_number(&s, &value);
+        config_set_key_fade(value);
+      }
     }
 
     fclose(fp);
@@ -1814,6 +1822,10 @@ int config_save(const char *filename) {
 
   if (config_get_fixed_doh())
     fprintf(fp, "fixed-doh enable\r\n");
+
+  if (config_get_key_fade()) {
+    fprintf(fp, "key-fade %d\r\n", config_get_key_fade());
+  }
 
   fclose(fp);
   return 0;
@@ -2209,4 +2221,13 @@ bool config_get_fixed_doh() {
 void config_set_fixed_doh(bool value) {
   thread_lock lock(config_lock);
   global.fixed_doh = value;
+}
+
+// key fade speed
+int config_get_key_fade() {
+  return global.key_fade;
+}
+
+void config_set_key_fade(int value) {
+  global.key_fade = value;
 }

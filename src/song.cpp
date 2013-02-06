@@ -616,6 +616,9 @@ void song_update(double time_elapsed) {
 
   // process midi evens
   midi_update(time_elapsed);
+
+  // update display
+  display_update(time_elapsed);
 }
 
 song_info_t* song_get_info() {

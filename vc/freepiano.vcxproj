@@ -64,6 +64,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <DisableSpecificWarnings>4244</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <AdditionalDependencies>dsound.lib;winmm.lib;d3d9.lib;imm32.lib;Comctl32.lib;ws2_32.lib;libx264.a;libgcc.a;libmingwex.a;%(AdditionalDependencies)</AdditionalDependencies>
@@ -83,6 +84,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4244</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <AdditionalDependencies>dsound.lib;winmm.lib;d3d9.lib;imm32.lib;Comctl32.lib;ws2_32.lib;libx264.a;libgcc.a;libmingwex.a;%(AdditionalDependencies)</AdditionalDependencies>

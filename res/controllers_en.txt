@@ -30,7 +30,7 @@ keydown %s Group Inc 1
 label %s GP+
 #Previous group
 keydown %s Group Dec 1
-label %s GP+
+label %s GP-
 #Flip sustain pedal
 keydown %s Controller 0 SustainPedal 0 Flip
 label %s SUS

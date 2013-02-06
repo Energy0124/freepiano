@@ -20,6 +20,9 @@ void display_set_image(uint type, const char *name);
 // display render
 void display_render();
 
+// update display
+void display_update(double time);
+
 // display process emssage
 int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 

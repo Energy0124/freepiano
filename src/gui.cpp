@@ -476,6 +476,12 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
      CheckDlgButton(hWnd, IDC_GUI_DISPLAY_MIDI_OUTPUT, config_get_midi_display() == MIDI_DISPLAY_OUTPUT);
      CheckDlgButton(hWnd, IDC_GUI_INSTRUMENT_SHOW_MIDI, config_get_instrument_show_midi());
      CheckDlgButton(hWnd, IDC_GUI_INSTRUMENT_SHOW_VSTI, config_get_instrument_show_vsti());
+
+
+     // key fade slider
+     HWND key_fade = GetDlgItem(hWnd, IDC_SETTINGS_GUI_KEY_ANIMATE);
+     SendMessage(key_fade, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELONG(0, 100));
+     SendMessage(key_fade, TBM_SETPOS,   (WPARAM)TRUE, (LPARAM)config_get_key_fade());
    }
    break;
 
@@ -503,6 +509,17 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
        break;
      }
      break;
+
+   case WM_HSCROLL: {
+     HWND key_animate = GetDlgItem(hWnd, IDC_SETTINGS_GUI_KEY_ANIMATE);
+
+     if (key_animate == (HWND)lParam) {
+       int pos = SendMessage(key_animate, TBM_GETPOS, 0, 0);
+
+       // update output delay
+       config_set_key_fade(pos);
+     }
+   } break;
   }
 
   return 0;

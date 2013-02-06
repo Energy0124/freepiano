@@ -1,45 +1,45 @@
 #播放
 keydown %s Play
-label %s Play
+label %s 播放
 #录制
 keydown %s Record
-label %s Rec
+label %s 录音
 #停止
 keydown %s Stop
-label %s Stop
+label %s 停止
 #曲调+
 keydown %s KeySignature Inc 1
-label %s Key+
+label %s 曲调+
 #曲调-
 keydown %s KeySignature Dec 1
-label %s Key-
+label %s 曲调-
 #左手八度+
 keydown %s Octshift 0 Inc 1
-label %s LO+
+label %s 八度+
 #左手八度-
 keydown %s Octshift 0 Dec 1
-label %s LO-
+label %s 八度-
 #右手八度+
 keydown %s Octshift 1 Inc 1
-label %s RO+
+label %s 八度+
 #右手八度-
 keydown %s Octshift 1 Dec 1
-label %s RO-
+label %s 八度-
 #分组+
 keydown %s Group Inc 1
-label %s GP+
+label %s 分组+
 #分组-
 keydown %s Group Dec 1
-label %s GP+
+label %s 分组-
 #翻转延音踏板
 keydown %s Controller 0 SustainPedal 0 Flip
-label %s SUS
+label %s 踏板
 #音色+
 keydown %s Program 0 1 Inc
-label %s P+
+label %s 音色+
 #音色-
 keydown %s Program 0 1 Dec
-label %s P-
+label %s 音色-
 #音色1（其他音色请修改脚本）
 keydown %s Program 0 1
-label %s P1
+label %s 音色1

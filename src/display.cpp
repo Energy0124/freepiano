@@ -1102,6 +1102,15 @@ static int d3d_device_reset() {
   device->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
   device->SetRenderState(D3DRS_BLENDOP, D3DBLENDOP_ADD);
 
+  // color sources
+  device->SetRenderState(D3DRS_DIFFUSEMATERIALSOURCE, D3DMCS_COLOR1);
+  device->SetTextureStageState(0, D3DTSS_COLORARG1,  D3DTA_DIFFUSE);
+  device->SetTextureStageState(0, D3DTSS_COLORARG2,  D3DTA_TEXTURE);
+  device->SetTextureStageState(0, D3DTSS_COLOROP,    D3DTOP_MODULATE);
+  device->SetTextureStageState(0, D3DTSS_ALPHAARG1,  D3DTA_DIFFUSE);
+  device->SetTextureStageState(0, D3DTSS_ALPHAARG2,  D3DTA_TEXTURE);
+  device->SetTextureStageState(0, D3DTSS_ALPHAOP,    D3DTOP_MODULATE);
+
   // texture states
   float mipmap_bias = -1;
   device->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
@@ -1127,6 +1136,7 @@ struct KeyboardState {
   float x2;
   float y2;
   uint status;
+  float fade;
 };
 
 struct MidiKeyState {
@@ -1136,6 +1146,7 @@ struct MidiKeyState {
   float y2;
   bool black;
   byte status;
+  float fade;
 };
 
 
@@ -1558,10 +1569,17 @@ static void draw_keyboard() {
 
       uint img = map.a ? keyboard_note_down : keyboard_unmapped_down;
 
+      draw_image_border(img + 1, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
+
       // draw key button
-      if (!key->status && (keyboard_states + gui_get_selected_key() != key))
-        img++;
-      draw_image_border(img, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
+      if (key->status || (keyboard_states + gui_get_selected_key() == key)) {
+        key->fade = 1.0f;
+      }
+
+      if (key->fade > 0.005f) {
+        uint color = (uint(255 * key->fade) << 24) | 0xffffff;
+        draw_image_border(img, x1, y1, x2, y2, 6, 6, 6, 6, color);
+      }
 
       // key label
       const char *label = config_bind_get_label(key - keyboard_states);
@@ -1604,8 +1622,15 @@ static void draw_midi_keyboard() {
   for (MidiKeyState *key = midi_key_states; key < midi_key_states + sizeof(midi_key_states) / sizeof(midi_key_states[0]); key++) {
     if (!key->black) {
       if (key->x2 > key->x1) {
-        uint img = key->status ? midi_white_down : midi_white_up;
-        draw_image(img, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
+        draw_image(midi_white_up, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
+
+        if (key->status)
+          key->fade = 1.0f;
+
+        if (key->fade > 0.005f) {
+          uint color = (uint(255 * key->fade) << 24) | 0xffffff;
+          draw_image(midi_white_down, key->x1, key->y1, key->x2, key->y2, color);
+        }
       }
     }
   }
@@ -1613,8 +1638,15 @@ static void draw_midi_keyboard() {
   for (MidiKeyState *key = midi_key_states; key < midi_key_states + sizeof(midi_key_states) / sizeof(midi_key_states[0]); key++) {
     if (key->black) {
       if (key->x2 > key->x1) {
-        uint img = key->status ? midi_black_down : midi_black_up;
-        draw_image(img, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
+        draw_image(midi_black_up, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
+
+        if (key->status)
+          key->fade = 1.0f;
+
+        if (key->fade > 0.005f) {
+          uint color = (uint(255 * key->fade) << 24) | 0xffffff;
+          draw_image(midi_black_down, key->x1, key->y1, key->x2, key->y2, color);
+        }
       }
     }
   }
@@ -1913,6 +1945,33 @@ void display_render() {
     if (D3DERR_DEVICENOTRESET == hr) {
       d3d_device_lost();
       d3d_device_reset();
+    }
+  }
+}
+
+// update display
+void display_update(double time) {
+  time = time / 1000.0;
+  double fade = 0;
+
+  if (config_get_key_fade()) {
+    double fade_speed = 10 * (1 - config_get_key_fade() / 100.0);
+
+    if (fade_speed < 0.1)
+      fade_speed = 0.1;
+
+    fade = pow(0.001, time * fade_speed);
+  }
+
+  for (KeyboardState *key = keyboard_states; key < keyboard_states + 256; key++) {
+    if (key->x2 > key->x1) {
+      key->fade = 0 + fade * (key->fade - 0);
+    }
+  }
+
+  for (MidiKeyState *key = midi_key_states; key < midi_key_states + 127; key++) {
+    if (key->x2 > key->x1) {
+      key->fade = 0 + fade * (key->fade - 0);
     }
   }
 }
