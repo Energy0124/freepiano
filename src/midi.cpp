@@ -32,12 +32,16 @@ static thread_lock_t midi_output_lock;
 // note state
 static byte note_states[16][128] = {0};
 
+
 // controller save state
-static struct controller_save_t {
-  double timer;
-  byte value;
+static struct controller_state_t {
+  double restore_timer;
+  byte   restore_value;
+  bool sync_wait;
+  byte sync_value;
 }
-midi_controller_save[16][128] = {0};
+midi_controller_state[16][128] = {0};
+static bool midi_sync_trigger = false;
 
 // auto generated keyup events
 struct midi_keyup_t {
@@ -210,7 +214,10 @@ void midi_reset() {
   }
 
   // clear controller save
-  memset(midi_controller_save, 0, sizeof(midi_controller_save));
+  memset(midi_controller_state, 0, sizeof(midi_controller_state));
+
+  // clear state
+  midi_sync_trigger = false;
 }
 
 // wrap value
@@ -239,6 +246,7 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
    // NoteOn
    case 0x90: {
      note_states[a & 0xf][b & 0x7f] = 1;
+     midi_sync_trigger = true;
    }
    break;
 
@@ -248,17 +256,31 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
      int id = b & 0x7f;
      int value = config_get_controller(ch, id);
 
-     switch (d) {
+     // midi controller state
+     controller_state_t &state = midi_controller_state[ch][id];
+
+     // action
+     switch (d & 0x0f) {
       case 0: value = c; break;
       case 1: value = value + (char)c; break;
       case 2: value = value - (char)c; break;
       case 3: value = 127 - value; break;
-      case 4: midi_controller_save[ch][id].timer = 20;
-              midi_controller_save[ch][id].value = value;
-              value = c; break;
+      case 4: state.restore_timer = 20;
+              state.restore_value = value;
+              value = c;
+              break;
      }
 
+     // clamp value
      value = clamp_value(value, 0, 127);
+
+     // sync
+     if (d & 0x10) {
+       state.sync_wait = true;
+       state.sync_value = value;
+       return;
+     }
+
      config_set_controller(ch, id, value);
 
      c = value;
@@ -371,15 +393,30 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
 
 // update midi
 void midi_update(double time) {
+  // update controllers
   for (int ch = 0; ch < 16; ch++) {
     for (int id = 0; id < 128; id++) {
-      if (midi_controller_save[ch][id].timer > 0) {
-        midi_controller_save[ch][id].timer -= time;
+      // midi controller state
+      controller_state_t &state = midi_controller_state[ch][id];
 
-        if (midi_controller_save[ch][id].timer <= 0) {
-          midi_output_event(0xb0 | ch, id, midi_controller_save[ch][id].value, 0);
+      // sync controller
+      if (state.sync_wait) {
+        if (midi_sync_trigger) {
+          state.sync_wait = false;
+          midi_output_event(0xb0 | ch, id, state.sync_value, 0);
+        }
+      }
+
+      // restore mode
+      else if (state.restore_timer > 0) {
+        state.restore_timer -= time;
+
+        if (state.restore_timer <= 0) {
+          midi_output_event(0xb0 | ch, id, state.restore_value, 0);
         }
       }
     }
   }
+
+  midi_sync_trigger = false;
 }

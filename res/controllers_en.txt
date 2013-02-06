@@ -34,6 +34,9 @@ label %s GP-
 #Flip sustain pedal
 keydown %s Controller 0 SustainPedal 0 Flip
 label %s SUS
+#Sync sustain pedal
+keydown %s Controller 0 SustainPedal 0 SyncPress
+label %s SUS
 #Next instrument
 keydown %s Program 0 1 Inc
 label %s P+

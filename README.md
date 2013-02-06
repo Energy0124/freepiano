@@ -22,6 +22,8 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 * New popup key modify menu, with quick script edit.
 * Adds fixed-doh display mode.
 * Adds keyboard animation, can be changed in gui settings.
+* Adds a 'Sync' modifier on controller command, combined use with other
+  modifiers. for example 'SyncPress' will do a 'Press' control after playing next note.
 * Fixed a bug that keyboard map script editor still has a length limit.
 
 
@@ -57,7 +59,8 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 * Maximum key groups increased to 255.
 * Current key group is now displayed on main interface.
 * Localization on main interface.
-  'DelayKeyup' command change during playing will affect notes current playing. Acts more like Sustain pedal now.
+* 'DelayKeyup' command change during playing will affect notes current playing.
+  Acts more like Sustain pedal now.
 * Allows more than one command mapped to a single key.
 
 

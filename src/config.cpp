@@ -357,11 +357,16 @@ static name_t controller_names[] = {
 };
 
 static name_t value_action_names[] = {
-  { "Set",            0 },
-  { "Inc",            1 },
-  { "Dec",            2 },
-  { "Flip",           3 },
-  { "Press",          4 },
+  { "Set",            0x00 },
+  { "Inc",            0x01 },
+  { "Dec",            0x02 },
+  { "Flip",           0x03 },
+  { "Press",          0x04 },
+  { "SyncSet",        0x10 },
+  { "SyncInc",        0x11 },
+  { "SyncDec",        0x12 },
+  { "SyncFlip",       0x13 },
+  { "SyncPress",      0x14 },
 };
 
 static name_t instrument_type_names[] = {
