@@ -1284,6 +1284,9 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return 0;
 }
 
+// key setting window handle
+static HWND key_setting_window = NULL;
+
 // key setting proc
 static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static POINT move_pos;
@@ -1330,14 +1333,29 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 
   switch (uMsg) {
    case WM_INITDIALOG: {
+     CheckDlgButton(hWnd, IDC_KEY_SETTING_AUTOCLOSE, TRUE);
      helpers::refresh_controls(hWnd);
    }
    break;
 
    case WM_ACTIVATE:
      if (WA_INACTIVE == LOWORD(wParam)) {
-       PostMessage(hWnd, WM_CLOSE, 0, 0);
+       preview_key = -1;
+       if (IsDlgButtonChecked(hWnd, IDC_KEY_SETTING_AUTOCLOSE))
+         PostMessage(hWnd, WM_CLOSE, 0, 0);
+     } else {
+       helpers::refresh_controls(hWnd);
      }
+     break;
+
+   case WM_CLOSE:
+     EndDialog(hWnd, 0);
+     DestroyWindow(hWnd);
+     break;
+
+   case WM_DESTROY:
+     preview_key = -1;
+     key_setting_window = NULL;
      break;
 
    case WM_LBUTTONDOWN:
@@ -1491,15 +1509,6 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
       }
      }
      break;
-
-   case WM_CLOSE:
-     EndDialog(hWnd, 0);
-     DestroyWindow(hWnd);
-     break;
-
-   case WM_DESTROY:
-     preview_key = -1;
-     break;
   }
   return 0;
 }
@@ -1507,42 +1516,48 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 // popup key menu
 void gui_popup_keymenu(byte code, int x, int y) {
   preview_key = selected_key = code;
+  
+  if (key_setting_window == NULL) {
+    key_setting_window = CreateDialog(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_KEY_SETTING), NULL, key_setting_proc);
 
-  HWND key_setting_window = CreateDialog(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_KEY_SETTING), NULL, key_setting_proc);
+    int x1, y1, x2, y2;
+    display_get_key_rect(code, x1, y1, x2, y2);
 
-  int x1, y1, x2, y2;
-  display_get_key_rect(code, x1, y1, x2, y2);
+    { POINT p = {x1, y1}; ClientToScreen(gui_get_window(), &p); x1 = p.x; y1 = p.y; }
+    { POINT p = {x2, y2}; ClientToScreen(gui_get_window(), &p); x2 = p.x; y2 = p.y; }
 
-  { POINT p = {x1, y1}; ClientToScreen(gui_get_window(), &p); x1 = p.x; y1 = p.y; }
-  { POINT p = {x2, y2}; ClientToScreen(gui_get_window(), &p); x2 = p.x; y2 = p.y; }
+    int border = 6;
+    x = x1 + border;
+    y = y2 + border;
 
-  x = x1;
-  y = y2;
+    RECT workarea;
+    if (SystemParametersInfo(SPI_GETWORKAREA, 0, &workarea, 0)) {
+      RECT rect;
+      GetWindowRect(key_setting_window, &rect);
 
-  RECT workarea;
-  if (SystemParametersInfo(SPI_GETWORKAREA, 0, &workarea, 0)) {
-    RECT rect;
-    GetWindowRect(key_setting_window, &rect);
+      int width = rect.right - rect.left;
+      int height = rect.bottom - rect.top;
 
-    int width = rect.right - rect.left;
-    int height = rect.bottom - rect.top;
-
-    if (x1 + width > workarea.right && 
+      if (x1 + width > workarea.right && 
         x2 - width >= workarea.left) {
-      x = x2 - width;
-    }
+          x = x2 - width - border;
+      }
 
-    if (y2 + height > workarea.bottom &&
+      if (y2 + height > workarea.bottom &&
         y1 - height >= workarea.top) {
-      y = y1 - height;
+          y = y1 - height - border;
+      }
+
+      if (x + width > workarea.right) x = workarea.right - width;
+      if (y + height > workarea.bottom) y = workarea.bottom - height;
     }
 
-    if (x + width > workarea.right) x = workarea.right - width;
-    if (y + height > workarea.bottom) y = workarea.bottom - height;
+    SetWindowPos(key_setting_window, NULL, x , y, 0, 0, SWP_NOOWNERZORDER | SWP_NOREDRAW | SWP_NOSIZE);
   }
 
-  SetWindowPos(key_setting_window, NULL, x, y, 0, 0, SWP_NOOWNERZORDER | SWP_NOREDRAW | SWP_NOSIZE);
   ShowWindow(key_setting_window, SW_SHOW);
+  SetForegroundWindow(key_setting_window);
+  SetActiveWindow(key_setting_window);
 }
 
 // -----------------------------------------------------------------------------------------
