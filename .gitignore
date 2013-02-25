@@ -1,0 +1,8 @@
+vc/Debug
+vc/Release
+*.sdf
+*.user
+*.opensdf
+*.suo
+*.aps
+nsis/*.exe
