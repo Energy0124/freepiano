@@ -429,7 +429,7 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
     }
 
     static void apply_content(HWND edit) {
-      uint buff_size = Edit_GetTextLength(edit);
+      uint buff_size = Edit_GetTextLength(edit) + 1;
       char *buff = (char*)malloc(buff_size);
 
       Edit_GetText(edit, buff, buff_size);
@@ -1449,7 +1449,7 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
        config_bind_clear_keyup(selected_key);
 
        HWND edit = GetDlgItem(hWnd, IDC_KEY_SCRIPT);
-       uint buff_size = Edit_GetTextLength(edit);
+       uint buff_size = Edit_GetTextLength(edit) + 1;
        char *buff = (char*)malloc(buff_size);
        Edit_GetText(edit, buff, buff_size);
        config_parse_keymap(buff);
