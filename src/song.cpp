@@ -434,7 +434,7 @@ void song_start_record() {
 
   // restore current group
   config_set_setting_group(current_group);
-  song_add_event(0, SM_SETTING_GROUP, current_group, 0, 0);
+  song_add_event(0, SM_SETTING_GROUP, 0, current_group, 0);
 
   // pedal
   song_add_event(0, 0xb0, 0x40, config_get_controller(0, 0x40), 0);
