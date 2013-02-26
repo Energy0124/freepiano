@@ -180,6 +180,12 @@ uint config_get_setting_group();
 // set setting group
 void config_set_setting_group(uint id);
 
+// insert setting group
+void config_insert_setting_group(uint pos);
+
+// delete settting group
+void config_delete_setting_group(uint id);
+
 // get setting group count
 uint config_get_setting_group_count();
 

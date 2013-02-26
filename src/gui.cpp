@@ -719,6 +719,7 @@ enum MENU_ID {
   MENU_ID_PLAY_SPEED,
   MENU_ID_SETTING_GROUP_CHANGE,
   MENU_ID_SETTING_GROUP_ADD,
+  MENU_ID_SETTING_GROUP_INSERT,
   MENU_ID_SETTING_GROUP_DEL,
   MENU_ID_SETTING_GROUP_COPY,
   MENU_ID_SETTING_GROUP_PASTE,
@@ -785,6 +786,7 @@ static int menu_init() {
   AppendMenu(menu_setting_group, MF_POPUP, (UINT_PTR)menu_setting_group_change, lang_load_string(IDS_MENU_SETTING_GROUP_CHANGE));
   AppendMenu(menu_setting_group, MF_SEPARATOR, 0, NULL);
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_ADD, lang_load_string(IDS_MENU_SETTING_GROUP_ADD));
+  AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_INSERT, lang_load_string(IDS_MENU_SETTING_GROUP_INSERT));
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_DEL, lang_load_string(IDS_MENU_SETTING_GROUP_DEL));
   AppendMenu(menu_setting_group, MF_SEPARATOR, 0, NULL);
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_COPY, lang_load_string(IDS_MENU_SETTING_GROUP_COPY));
@@ -1062,8 +1064,12 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      config_set_setting_group(config_get_setting_group_count() - 1);
      break;
 
+   case MENU_ID_SETTING_GROUP_INSERT:
+     config_insert_setting_group(config_get_setting_group());
+     break;
+
    case MENU_ID_SETTING_GROUP_DEL:
-     config_set_setting_group_count(config_get_setting_group_count() - 1);
+     config_delete_setting_group(config_get_setting_group());
      break;
 
    case MENU_ID_SETTING_GROUP_COPY:

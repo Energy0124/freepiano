@@ -787,7 +787,41 @@ void config_set_setting_group(uint id) {
     if (config_get_program(ch) < 128)
       midi_output_event(0xc0 | ch, config_get_program(ch), 0, 0);
   }
+}
 
+// delete settting group
+void config_delete_setting_group(uint id) {
+  // move groups
+  for (uint i = id + 1; i < setting_count; ++i) {
+    settings[i - 1] = settings[i];
+  }
+
+  // remove last group
+  config_set_setting_group_count(setting_count - 1);
+
+  // refresh group settings.
+  config_set_setting_group(current_setting);
+}
+
+// insert setting group
+void config_insert_setting_group(uint pos) {
+  if (pos > setting_count)
+    pos = setting_count;
+
+  // increase group count
+  config_set_setting_group_count(setting_count + 1);
+
+  // move groups
+  for (uint i = setting_count - 1; i > pos; --i) {
+    settings[i] = settings[i - 1];
+  }
+
+  // set current setting
+  current_setting = pos;
+
+  // clear key setting
+  config_clear_key_setting();
+  config_set_setting_group(pos);
 }
 
 // get setting group count
