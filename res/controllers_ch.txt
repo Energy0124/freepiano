@@ -46,3 +46,11 @@ label %s 音色-
 #音色1（其他音色请修改脚本）
 keydown %s Program 0 1
 label %s 音色1
+#左手升半音
+Keydown %s Transpose 0 Inc 1
+Keyup %s Transpose 0 Dec 1
+Label	%s #L
+#右手升半音
+Keydown %s Transpose 1 Inc 1
+Keyup %s Transpose 1 Dec 1
+Label	%s #R

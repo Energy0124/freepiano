@@ -335,7 +335,7 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
     a = cmd | config_get_key_channel(ch);
 
     // adjust note
-    b = clamp_value((int)b + config_get_key_octshift(ch) * 12 + config_get_key_signature(), 0, 127);
+    b = clamp_value((int)b + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch) + config_get_key_signature(), 0, 127);
 
     // adjust velocity
     /*

@@ -1458,7 +1458,7 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
        uint buff_size = Edit_GetTextLength(edit) + 1;
        char *buff = (char*)malloc(buff_size);
        Edit_GetText(edit, buff, buff_size);
-       config_parse_keymap(buff);
+       config_parse_keymap(buff, selected_key);
        free(buff);
 
        helpers::refresh_controls(hWnd);

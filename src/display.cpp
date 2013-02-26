@@ -1589,7 +1589,7 @@ static void draw_keyboard() {
       // draw note
       else if ((map.a & 0xF0) == 0x90) {
         byte ch = map.a & 0x0f;
-        int note = map.b + config_get_key_octshift(ch) * 12;
+        int note = map.b + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch);
 
         // fixed-doh
         if (config_get_fixed_doh()) {
@@ -2269,7 +2269,7 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
 
     if (midinote != -1) {
       if (config_get_midi_display() == MIDI_DISPLAY_OUTPUT) {
-        midinote = midinote - config_get_key_octshift(0) * 12 - config_get_key_signature();
+        midinote = midinote - config_get_key_octshift(0) * 12 - config_get_key_transpose(0) - config_get_key_signature();
         if (midinote < 0) midinote = 0;
         if (midinote > 127) midinote = 127;
       }

@@ -46,3 +46,11 @@ label %s P-
 #Select instrument 1 (Modify script for others)
 keydown %s Program 0 1
 label %s P1
+#Sharp on lefthand
+Keydown %s Transpose 0 Inc 1
+Keyup %s Transpose 0 Dec 1
+Label	%s #L
+#Sharp on righthand
+Keydown %s Transpose 1 Inc 1
+Keyup %s Transpose 1 Dec 1
+Label	%s #R

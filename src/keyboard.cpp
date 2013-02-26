@@ -266,7 +266,7 @@ static inline void modify_midi_event(key_bind_t &map) {
     map.a = cmd | config_get_key_channel(ch);
 
     // adjust note
-    map.b = clamp_value((int)map.b + config_get_key_octshift(ch) * 12 + config_get_key_signature());
+    map.b = clamp_value((int)map.b + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch) + config_get_key_signature());
 
     // adjust velocity
     map.c = clamp_value((int)map.c * config_get_key_velocity(ch) / 127);

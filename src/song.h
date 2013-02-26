@@ -21,6 +21,9 @@
 #define SM_AUTO_PEDAL           11
 #define SM_DELAY_KEYUP          12
 
+// FreePiano 1.7 messages
+#define SM_TRANSPOSE            13
+
 struct song_info_t {
   uint version;
   char title[256];

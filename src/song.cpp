@@ -39,7 +39,7 @@ static song_info_t song_info;
 static thread_lock_t song_lock;
 
 // current version
-static uint current_version = 0x01040000;
+static uint current_version = 0x01070000;
 
 // -----------------------------------------------------------------------------------------
 // event parser
@@ -161,6 +161,20 @@ void song_output_event(byte a, byte b, byte c, byte d) {
      }
 
      config_set_key_signature(value);
+   }
+   break;
+
+   case SM_TRANSPOSE: {
+     int ch = b;
+     int value = config_get_key_transpose(ch);
+
+     switch (c) {
+      case 0: value = d; break;
+      case 1: value = clamp_value(value + (char)d, -127, 127); break;
+      case 2: value = clamp_value(value - (char)d, -127, 127); break;
+     }
+
+     config_set_key_transpose(ch, value);
    }
    break;
 
@@ -378,6 +392,9 @@ void song_start_record() {
     for (int ch = 0; ch < 16; ch++) {
       if (config_get_key_octshift(ch))
         song_add_event(0, SM_OCTSHIFT, ch, 0, config_get_key_octshift(ch));
+
+      if (config_get_key_transpose(ch))
+        song_add_event(0, SM_TRANSPOSE, ch, 0, config_get_key_transpose(ch));
 
       if (config_get_key_velocity(ch) != 127)
         song_add_event(0, SM_VELOCITY, ch, 0, config_get_key_velocity(ch));

@@ -103,7 +103,7 @@ int config_set_keymap(const char *mapname);
 char* config_save_keymap();
 
 // parse keymap
-int config_parse_keymap(const char *command);
+int config_parse_keymap(const char *command, byte override_key = 0);
 
 // dump key bind
 char* config_dump_keybind(byte code);
@@ -143,6 +143,12 @@ void config_set_key_signature(char key);
 
 // get key signature
 char config_get_key_signature();
+
+// set key transpose
+void config_set_key_transpose(byte channel, char transpose);
+
+// get key transpose
+char config_get_key_transpose(byte channel);
 
 // set oct shift
 void config_set_key_octshift(byte channel, char shift);

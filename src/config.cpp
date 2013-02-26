@@ -161,6 +161,7 @@ static name_t action_names[] = {
   { "KeyboardVeolcity",   SM_VELOCITY },
   { "Channel",            SM_CHANNEL },
   { "KeyboardChannel",    SM_CHANNEL },
+  { "Transpose",          SM_TRANSPOSE },
   { "Volume",             SM_VOLUME },
   { "Play",               SM_PLAY },
   { "Record",             SM_RECORD },
@@ -445,6 +446,7 @@ struct setting_t {
 
   // key properties
   char key_octshift[16];
+  char key_transpose[16];
   char key_velocity[16];
   char key_channel[16];
   char key_signature;
@@ -466,6 +468,7 @@ struct setting_t {
 
     for (int i = 0; i < 16; i++) {
       key_octshift[i] = 0;
+      key_transpose[i] = 0;
       key_velocity[i] = 127;
       key_channel[i] = 0;
 
@@ -642,7 +645,26 @@ char config_get_key_signature() {
   return settings[current_setting].key_signature;
 }
 
-// set oct shift
+// set transpose
+void config_set_key_transpose(byte channel, char transpose) {
+  thread_lock lock(config_lock);
+
+  if (channel < ARRAY_COUNT(settings[current_setting].key_transpose)) {
+    settings[current_setting].key_transpose[channel] = transpose;
+  }
+}
+
+// get transpose
+char config_get_key_transpose(byte channel) {
+  thread_lock lock(config_lock);
+
+  if (channel < ARRAY_COUNT(settings[current_setting].key_transpose))
+    return settings[current_setting].key_transpose[channel];
+  else
+    return 0;
+}
+
+// set octave shift
 void config_set_key_octshift(byte channel, char shift) {
   thread_lock lock(config_lock);
 
@@ -651,7 +673,7 @@ void config_set_key_octshift(byte channel, char shift) {
   }
 }
 
-// get oct shift
+// get octave shift
 char config_get_key_octshift(byte channel) {
   thread_lock lock(config_lock);
 
@@ -1085,6 +1107,7 @@ static bool match_event(char **str, key_bind_t *e) {
 
        break;
 
+     case SM_TRANSPOSE:
      case SM_OCTSHIFT:
      case SM_VELOCITY:
      case SM_CHANNEL:
@@ -1185,7 +1208,7 @@ static bool match_event(char **str, key_bind_t *e) {
   return true;
 }
 
-static int config_parse_keymap_line(char *s) {
+static int config_parse_keymap_line(char *s, byte override_key = 0) {
   // skip comment
   if (*s == '#')
     return 0;
@@ -1198,6 +1221,10 @@ static int config_parse_keymap_line(char *s) {
     // match key name
     if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
       return -1;
+
+    // override key
+    if (override_key)
+      key = override_key;
 
     // match midi event
     if (match_event(&s, &keydown)) {
@@ -1215,6 +1242,10 @@ static int config_parse_keymap_line(char *s) {
     if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
       return -1;
 
+    // override key
+    if (override_key)
+      key = override_key;
+
     // match midi event
     if (match_event(&s, &keyup)) {
       // set that action
@@ -1231,6 +1262,10 @@ static int config_parse_keymap_line(char *s) {
     if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
       return -1;
 
+    // override key
+    if (override_key)
+      key = override_key;
+
     // text
     match_line(&s, buff, sizeof(buff));
 
@@ -1245,6 +1280,16 @@ static int config_parse_keymap_line(char *s) {
     if (match_number(&s, &channel) &&
         match_number(&s, &value)) {
       config_set_key_octshift(channel, value);
+    }
+  }
+  // transpose
+  else if (match_word(&s, "Transpose")) {
+    uint channel;
+    int value;
+
+    if (match_number(&s, &channel) &&
+        match_number(&s, &value)) {
+      config_set_key_transpose(channel, value);
     }
   }
   // velocity
@@ -1326,7 +1371,7 @@ static int config_parse_keymap_line(char *s) {
   return -1;
 }
 
-int config_parse_keymap(const char *command) {
+int config_parse_keymap(const char *command, byte override_key) {
   thread_lock lock(config_lock);
 
   char line[1024];
@@ -1339,7 +1384,7 @@ int config_parse_keymap(const char *command) {
      case '\n':
        if (line_end > line) {
          *line_end = 0;
-         result = config_parse_keymap_line(line);
+         result = config_parse_keymap_line(line, override_key);
          line_end = line;
        }
 
@@ -1415,6 +1460,7 @@ static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t
        s += print_value(s, end - s, e.c, NULL, 0);
        break;
 
+     case SM_TRANSPOSE:
      case SM_OCTSHIFT:
      case SM_VELOCITY:
      case SM_CHANNEL:
@@ -1532,6 +1578,9 @@ static int config_save_key_settings(char *buff, int buffer_size) {
   for (int ch = 0; ch < 16; ch++) {
     if (config_get_key_octshift(ch) != 0)
       s += _snprintf(s, end - s, "Octshift\t%d\t%d\r\n", ch, config_get_key_octshift(ch));
+
+    if (config_get_key_transpose(ch) != 0)
+      s += _snprintf(s, end - s, "Transpose\t%d\t%d\r\n", ch, config_get_key_transpose(ch));
 
     if (config_get_key_velocity(ch) != 127)
       s += _snprintf(s, end - s, "Velocity\t%d\t%d\r\n", ch, config_get_key_velocity(ch));
