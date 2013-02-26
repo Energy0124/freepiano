@@ -482,6 +482,11 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
      HWND key_fade = GetDlgItem(hWnd, IDC_SETTINGS_GUI_KEY_ANIMATE);
      SendMessage(key_fade, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELONG(0, 100));
      SendMessage(key_fade, TBM_SETPOS,   (WPARAM)TRUE, (LPARAM)config_get_key_fade());
+
+     // gui transparency slider
+     HWND key_trans = GetDlgItem(hWnd, IDC_SETTINGS_GUI_TRANSPARENCY);
+     SendMessage(key_trans, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELONG(0, 255));
+     SendMessage(key_trans, TBM_SETPOS,   (WPARAM)TRUE, (LPARAM)config_get_gui_transparency());
    }
    break;
 
@@ -512,12 +517,19 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 
    case WM_HSCROLL: {
      HWND key_animate = GetDlgItem(hWnd, IDC_SETTINGS_GUI_KEY_ANIMATE);
+     HWND gui_transparency = GetDlgItem(hWnd, IDC_SETTINGS_GUI_TRANSPARENCY);
 
      if (key_animate == (HWND)lParam) {
        int pos = SendMessage(key_animate, TBM_GETPOS, 0, 0);
 
        // update output delay
        config_set_key_fade(pos);
+     }
+     else if (gui_transparency == (HWND)lParam) {
+       int pos = SendMessage(gui_transparency, TBM_GETPOS, 0, 0);
+
+       // update output delay
+       config_set_gui_transparency(pos);
      }
    } break;
   }
@@ -1775,6 +1787,10 @@ int gui_init() {
 
   // disable ime
   ImmAssociateContext(gui_get_window(), NULL);
+
+  // set layered
+  SetWindowLong(mainhwnd, GWL_EXSTYLE, GetWindowLong(mainhwnd, GWL_EXSTYLE) | WS_EX_LAYERED);
+  SetLayeredWindowAttributes(mainhwnd, 0, 255, LWA_ALPHA);
 
   // create timer
   SetTimer(mainhwnd, 0, 1, NULL);

@@ -228,3 +228,7 @@ void config_set_fixed_doh(bool value);
 // key fade speed
 int config_get_key_fade();
 void config_set_key_fade(int value);
+
+// gui transparency
+void config_set_gui_transparency(byte value);
+byte config_get_gui_transparency();

@@ -412,6 +412,7 @@ struct global_setting_t {
   uint midi_display;
   uint fixed_doh;
   uint key_fade;
+  byte gui_transparency;
 
   std::map<std::string, midi_input_config_t> midi_inputs;
 
@@ -426,6 +427,7 @@ struct global_setting_t {
     output_delay = 10;
     keymap[0] = 0;
 
+    gui_transparency = 255;
     output_volume = 100;
     enable_hotkey = true;
     enable_resize = true;
@@ -1840,6 +1842,13 @@ int config_load(const char *filename) {
         match_number(&s, &value);
         config_set_key_fade(value);
       }
+      else if (match_word(&s, "gui-transparency")) {
+        uint value = 0;
+        match_number(&s, &value);
+        if (value > 255)
+          value = 255;
+        config_set_gui_transparency(value);
+      }
     }
 
     fclose(fp);
@@ -1909,6 +1918,10 @@ int config_save(const char *filename) {
 
   if (config_get_key_fade()) {
     fprintf(fp, "key-fade %d\r\n", config_get_key_fade());
+  }
+
+  if (config_get_gui_transparency() != 255) {
+    fprintf(fp, "gui-transparency %d\r\n", config_get_gui_transparency());
   }
 
   fclose(fp);
@@ -2314,4 +2327,13 @@ int config_get_key_fade() {
 
 void config_set_key_fade(int value) {
   global.key_fade = value;
+}
+
+void config_set_gui_transparency(byte value) {
+  global.gui_transparency = value;
+  SetLayeredWindowAttributes(gui_get_window(), 0, global.gui_transparency, LWA_ALPHA);
+}
+
+byte config_get_gui_transparency() {
+  return global.gui_transparency;
 }
