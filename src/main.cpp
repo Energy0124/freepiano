@@ -5,6 +5,7 @@
 #include "gui.h"
 #include "song.h"
 #include "export_mp4.h"
+#include "language.h"
 
 #ifdef _DEBUG
 int main()
@@ -19,30 +20,26 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 		return 1;
 
 	// config init
-	if (config_init())
-	{
-		MessageBox(NULL, "error while initialize config.", APP_NAME, MB_OK);
+	if (config_init()) {
+		MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
 		return 1;
 	}
 
 	// init gui
-	if (gui_init())
-	{
-		MessageBox(NULL, "error while initialize gui.", APP_NAME, MB_OK);
+	if (gui_init()) {
+		MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
 		return 1;
 	}
 
 	// init display
-	if (display_init(gui_get_window()))
-	{
-		MessageBox(NULL, "error while initialize display.", APP_NAME, MB_OK);
+	if (display_init(gui_get_window())) {
+		MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
 		return 1;
 	}
 
 	// intialize keyboard
-	if (keyboard_init())
-	{
-		MessageBox(NULL, "error while initialize direct input.", APP_NAME, MB_OK);
+	if (keyboard_init()) {
+		MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
 		return 1;
 	}
 

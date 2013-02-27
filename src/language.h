@@ -20,3 +20,9 @@ int lang_text_readline(char *buff, size_t size);
 
 // close text
 void lang_text_close();
+
+// set last error
+void lang_set_last_error(const char *format, ...);
+
+// get last error
+const char * lang_get_last_error();

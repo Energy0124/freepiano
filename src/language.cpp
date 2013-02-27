@@ -121,3 +121,21 @@ void lang_text_close() {
   lang_text.end = NULL;
   lang_text.hrc = NULL;
 }
+
+
+// error message
+static char error_message[1024] = "Unknown error.";
+
+// set last error
+void lang_set_last_error(const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  vsprintf_s(error_message, format, args);
+  va_end(args);
+  fputs(error_message, stderr);
+}
+
+// get last error
+const char * lang_get_last_error() {
+  return error_message;
+}

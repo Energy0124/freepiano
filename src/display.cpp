@@ -586,7 +586,7 @@ static int font_initialize() {
   // intialize free type library
   error = FT_Init_FreeType(&font_library);
   if (error) {
-    fprintf(stderr, "an error occurred during font library initialization\n");
+    lang_set_last_error("Failed in font_initialize, FT_Init_FreeType");
     return -1;
   }
 
@@ -611,7 +611,7 @@ static int font_initialize() {
   }
 
   if (font_count == 0) {
-    fprintf(stderr, "an error occurred during font library initialization\n");
+    lang_set_last_error("Failed in font_initialize, no font found.");
     return -1;
   }
 
@@ -1021,8 +1021,10 @@ static int d3d_initialize(HWND hwnd) {
 
   // create direct3d 9 object
   d3d9 = Direct3DCreate9(D3D_SDK_VERSION);
-  if (d3d9 == NULL)
+  if (d3d9 == NULL) {
+    lang_set_last_error("d3d_initialize failed: Direct3DCreate9");
     return E_FAIL;
+  }
 
   // initialize params
   D3DPRESENT_PARAMETERS params;
@@ -1032,14 +1034,21 @@ static int d3d_initialize(HWND hwnd) {
 
   // create device
   if (FAILED(hr = d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &params, &device))) {
-    // try again with software vertex processing
-    if (FAILED(hr = d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device)))
-      goto error;
+    // try mixed vertex processing
+    if (FAILED(hr = d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_MIXED_VERTEXPROCESSING, &params, &device))) {
+      // try software vertex processing
+      if (FAILED(hr = d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device))) {
+        lang_set_last_error("d3d_initialize failed: CreateDevice, hr = %x\n", hr);
+        goto error;
+      }
+    }
   }
 
   // create resource texture
-  if (FAILED(hr = device->CreateTexture(512, 512, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &resource_texture, NULL)))
+  if (FAILED(hr = device->CreateTexture(512, 512, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &resource_texture, NULL))) {
+    lang_set_last_error("d3d_initialize failed: CreateTexture, hr = %x\n", hr);
     goto error;
+  }
 
   // create root texture node
   root_texture_node = new texture_node_t(NULL, 0, 0, 512, 512);
@@ -1982,13 +1991,11 @@ int display_init(HWND hwnd) {
 
   // initialize font
   if (font_initialize()) {
-    fprintf(stderr, "failed to initialize fonts");
     return -1;
   }
 
   // initialize directx 9
   if (d3d_initialize(display_hwnd)) {
-    fprintf(stderr, "failed to initialize d3d");
     return -1;
   }
 
