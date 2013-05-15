@@ -174,6 +174,7 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 		{
 			int ch = data1 & 0x0f;
 			int value = config_get_program(ch);
+      if (value > 127) value = 0;
 
 			switch (data3)
 			{
@@ -181,6 +182,8 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 			case 1:	value = value + (char)data2; break;
 			case 2:	value = value - (char)data2; break;
 			case 3:	value = 127 - value; break;
+			case 10: value = data2 / 10 * 10 + (value % 10); break;
+			case 11: value = value / 10 * 10 + (data2 % 10); break;
 			}
 
 			value = clamp_value(value, 0, 127);
@@ -188,6 +191,8 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 			data2 = value;
 			data3 = 0;
 			data4 = 0;
+
+      printf("Program %d, %d\n", ch, value);
 		}
 		break;
 	}

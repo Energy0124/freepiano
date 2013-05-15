@@ -449,7 +449,7 @@ struct setting_t
 
 // settings
 static global_setting_t global;
-static setting_t settings[10];
+static setting_t settings[16];
 static uint current_setting = 0;
 static uint setting_count = 1;
 

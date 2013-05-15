@@ -1,0 +1,174 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{9FB5C3F5-EF33-4CE7-8264-88FC9A904F11}</ProjectGuid>
+    <RootNamespace>vc8</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v110_xp</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v110_xp</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>11.0.51106.1</_ProjectFileVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>../3rd/lpng;../3rd/zlib;../3rd/freetype2/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_WIN32_WINNT=0x0501;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PrecompiledHeader />
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>dsound.lib;winmm.lib;d3d9.lib;imm32.lib;Comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>../3rd/lpng;../3rd/zlib;../3rd/freetype2/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0501;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PrecompiledHeader />
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>dsound.lib;winmm.lib;d3d9.lib;imm32.lib;Comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\src\asio\asio.cpp" />
+    <ClCompile Include="..\src\asio\asiodrivers.cpp" />
+    <ClCompile Include="..\src\asio\asiolist.cpp" />
+    <ClCompile Include="..\src\config.cpp" />
+    <ClCompile Include="..\src\display.cpp" />
+    <ClCompile Include="..\src\gui.cpp" />
+    <ClCompile Include="..\src\keyboard.cpp" />
+    <ClCompile Include="..\src\main.cpp" />
+    <ClCompile Include="..\src\midi.cpp" />
+    <ClCompile Include="..\src\output_asio.cpp" />
+    <ClCompile Include="..\src\output_dsound.cpp" />
+    <ClCompile Include="..\src\output_wasapi.cpp" />
+    <ClCompile Include="..\src\pch.cpp" />
+    <ClCompile Include="..\src\song.cpp" />
+    <ClCompile Include="..\src\synthesizer_vst.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\src\asio\asio.h" />
+    <ClInclude Include="..\src\asio\asiodrivers.h" />
+    <ClInclude Include="..\src\asio\asiolist.h" />
+    <ClInclude Include="..\src\asio\asiosys.h" />
+    <ClInclude Include="..\src\asio\iasiodrv.h" />
+    <ClInclude Include="..\src\vst\aeffect.h" />
+    <ClInclude Include="..\src\vst\aeffectx.h" />
+    <ClInclude Include="..\src\vst\vstfxstore.h" />
+    <ClInclude Include="..\res\resource.h" />
+    <ClInclude Include="..\src\config.h" />
+    <ClInclude Include="..\src\display.h" />
+    <ClInclude Include="..\src\gui.h" />
+    <ClInclude Include="..\src\keyboard.h" />
+    <ClInclude Include="..\src\midi.h" />
+    <ClInclude Include="..\src\output_asio.h" />
+    <ClInclude Include="..\src\output_dsound.h" />
+    <ClInclude Include="..\src\output_wasapi.h" />
+    <ClInclude Include="..\src\pch.h" />
+    <ClInclude Include="..\src\song.h" />
+    <ClInclude Include="..\src\synthesizer_vst.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\res\background.png" />
+    <Image Include="..\res\check_button_down.png" />
+    <Image Include="..\res\check_button_up.png" />
+    <Image Include="..\res\icon.ico" />
+    <Image Include="..\res\icon_normal.ico" />
+    <Image Include="..\res\icon_small.ico" />
+    <Image Include="..\res\keyboard_note_down.png" />
+    <Image Include="..\res\keyboard_note_up.png" />
+    <Image Include="..\res\keyboard_unmapped_down.png" />
+    <Image Include="..\res\keyboard_unmapped_up.png" />
+    <Image Include="..\res\midi_black_down.png" />
+    <Image Include="..\res\midi_black_up.png" />
+    <Image Include="..\res\midi_white_down.png" />
+    <Image Include="..\res\midi_white_up.png" />
+    <Image Include="..\res\notes.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\res\default_setting.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\res\freepiano.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="freetype.vcxproj">
+      <Project>{78b079bd-9fc7-4b9e-b4a6-96da0f00248b}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="libpng.vcxproj">
+      <Project>{3cacbf66-2e82-4937-98a6-084e0de5f761}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="zlib.vcxproj">
+      <Project>{8cd7292d-d2fa-46f6-8927-88226c737299}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+  <ProjectExtensions>
+    <VisualStudio>
+      <UserProperties RESOURCE_FILE="freepiano.rc" />
+    </VisualStudio>
+  </ProjectExtensions>
+</Project>
