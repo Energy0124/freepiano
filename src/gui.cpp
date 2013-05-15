@@ -338,51 +338,67 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 		"0", "+1", "-1",
 	};
 
+	struct helpers
+	{
+		static void refresh(HWND hWnd)
+		{
+			for (int channel = 0; channel < 2; channel ++)
+			{
+				char buff[256];
+
+				// velocity edit
+				_snprintf(buff, sizeof(buff), "%d", config_get_key_velocity(channel));
+				HWND velocity = GetDlgItem(hWnd, IDC_KEY_VELOCITY1 + channel);
+				SetDlgItemText(hWnd, IDC_KEY_VELOCITY1 + channel, buff);
+				SetWindowSubclass(velocity, EditSubProc, 0, 0);
+
+
+				// velocity slider
+				HWND velocity_slider = GetDlgItem(hWnd, IDC_KEY_VELOCITY_SLIDER1 + channel);
+				SendMessage(velocity_slider, TBM_SETRANGE, (WPARAM) TRUE, (LPARAM) MAKELONG(0, 127));
+				SendMessage(velocity_slider, TBM_SETPOS, (WPARAM) TRUE, (LPARAM) config_get_key_velocity(channel));
+
+				// shift
+				HWND octshift = GetDlgItem(hWnd, IDC_KEY_SHIFT1 + channel);
+				ComboBox_ResetContent(octshift);
+				for (int i = 0; i < ARRAY_COUNT(keyboard_shifts); i++)
+				{
+					ComboBox_AddString(octshift, keyboard_shifts[i]);
+					if (atoi(keyboard_shifts[i]) == config_get_key_octshift(channel))
+						ComboBox_SetCurSel(octshift, i);
+				}
+
+				// channel
+				HWND keychannel = GetDlgItem(hWnd, IDC_KEY_CHANNEL1 + channel);
+				ComboBox_ResetContent(keychannel);
+				for (int i = 0; i < 16; i++)
+				{
+					char buff[256];
+					_snprintf(buff, sizeof(buff), "%d", i);
+					ComboBox_AddString(keychannel, buff);
+					if (i == config_get_key_channel(channel))
+						ComboBox_SetCurSel(keychannel, i);
+				}
+
+				// program
+				HWND program = GetDlgItem(hWnd, IDC_KEY_PROGRAM1 + channel);
+				_snprintf(buff, sizeof(buff), "%d", config_get_program(config_get_key_channel(channel)));
+				SetDlgItemText(hWnd, IDC_KEY_PROGRAM1 + channel, buff);
+				SetWindowSubclass(program, EditSubProc, 0, 0);
+
+				// sustain
+				HWND sustain = GetDlgItem(hWnd, IDC_KEY_SUSTAIN1 + channel);
+				_snprintf(buff, sizeof(buff), "%d", config_get_controller(config_get_key_channel(channel), 64));
+				SetDlgItemText(hWnd, IDC_KEY_SUSTAIN1 + channel, buff);
+				SetWindowSubclass(sustain, EditSubProc, 0, 0);
+			}
+		}
+	};
+
 	switch (uMsg)
 	{
 	case WM_INITDIALOG:
-		for (int channel = 0; channel < 2; channel ++)
-		{
-			char buff[256];
-
-			// velocity edit
-			_snprintf(buff, sizeof(buff), "%d", config_get_key_velocity(channel));
-			HWND edit = GetDlgItem(hWnd, IDC_KEY_VELOCITY1 + channel);
-			SetDlgItemText(hWnd, IDC_KEY_VELOCITY1 + channel, buff);
-
-
-			// velocity slider
-			HWND velocity_slider = GetDlgItem(hWnd, IDC_KEY_VELOCITY_SLIDER1 + channel);
-			SendMessage(velocity_slider, TBM_SETRANGE, (WPARAM) TRUE, (LPARAM) MAKELONG(0, 127));
-			SendMessage(velocity_slider, TBM_SETPOS, (WPARAM) TRUE, (LPARAM) config_get_key_velocity(channel));
-
-			// shift
-			HWND octshift = GetDlgItem(hWnd, IDC_KEY_SHIFT1 + channel);
-			ComboBox_ResetContent(octshift);
-			for (int i = 0; i < ARRAY_COUNT(keyboard_shifts); i++)
-			{
-				ComboBox_AddString(octshift, keyboard_shifts[i]);
-				if (atoi(keyboard_shifts[i]) == config_get_key_octshift(channel))
-					ComboBox_SetCurSel(octshift, i);
-			}
-
-			// channel
-			HWND keychannel = GetDlgItem(hWnd, IDC_KEY_CHANNEL1 + channel);
-			ComboBox_ResetContent(keychannel);
-			for (int i = 0; i < 16; i++)
-			{
-				char buff[256];
-				_snprintf(buff, sizeof(buff), "%d", i);
-				ComboBox_AddString(keychannel, buff);
-				if (i == config_get_key_channel(channel))
-					ComboBox_SetCurSel(keychannel, i);
-			}
-
-			// program
-			_snprintf(buff, sizeof(buff), "%d", config_get_program(config_get_key_channel(channel)));
-			SetDlgItemText(hWnd, IDC_KEY_PROGRAM1 + channel, buff);
-			SetWindowSubclass(GetDlgItem(hWnd, IDC_KEY_PROGRAM1 + channel), EditSubProc, 0, 0);
-		}
+		helpers::refresh(hWnd);
 		break;
 
 	case WM_HSCROLL:
@@ -404,6 +420,10 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 		break;
 
 	case WM_COMMAND:
+		if (LOWORD(wParam) == IDC_KEY_REFRESH) {
+			helpers::refresh(hWnd);
+		}
+
 		for (int channel = 0; channel < 2; channel ++)
 		{
 			if (LOWORD(wParam) == IDC_KEY_VELOCITY1 + channel)
@@ -466,6 +486,7 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 						GetDlgItemText(hWnd, IDC_KEY_CHANNEL1 + channel, temp, sizeof(temp));
 
 						config_set_key_channel(channel, atoi(temp));
+						helpers::refresh(hWnd);
 					}
 					break;
 				}
@@ -495,9 +516,37 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 							if (value > 127) value = 127;
 
 							midi_send_event(0xc0 | config_get_key_channel(channel), value, 0, 0);
+							helpers::refresh(hWnd);
+						}
+					}
+					break;
+				}
+			}
 
-							_snprintf(temp, sizeof(temp), "%d", config_get_program(config_get_key_channel(channel)));
-							SetDlgItemText(hWnd, IDC_KEY_PROGRAM1 + channel, temp);
+			else if (LOWORD(wParam) == IDC_KEY_SUSTAIN1 + channel)
+			{
+				switch (HIWORD(wParam)) 
+				{
+				case EN_SETFOCUS:
+					{
+						PostMessage(GetDlgItem(hWnd, IDC_KEY_SUSTAIN1 + channel), EM_SETSEL, 0, -1);
+						return 1;
+					}
+					break;
+
+				case EN_KILLFOCUS:
+					{
+						char temp[256];
+						GetDlgItemText(hWnd, IDC_KEY_SUSTAIN1 + channel, temp, sizeof(temp));
+
+						int value = 0;
+						if (sscanf(temp, "%d", &value) == 1)
+						{
+							if (value < 0) value = 0;
+							if (value > 127) value = 127;
+
+							midi_send_event(0xb0 | config_get_key_channel(channel), 64, value, 0);
+							helpers::refresh(hWnd);
 						}
 					}
 					break;
