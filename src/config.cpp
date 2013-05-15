@@ -364,6 +364,8 @@ static name_t value_action_names[] =
 	{ "Inc",		1 },
 	{ "Dec",		2 },
 	{ "Flip",		3 },
+	{ "Set10",		10 },
+	{ "Set1",		11 },
 };
 
 static name_t instrument_type_names[] = 

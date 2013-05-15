@@ -377,6 +377,11 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 				if (i == config_get_key_channel(channel))
 					ComboBox_SetCurSel(keychannel, i);
 			}
+
+			// program
+			_snprintf(buff, sizeof(buff), "%d", config_get_program(config_get_key_channel(channel)));
+			SetDlgItemText(hWnd, IDC_KEY_PROGRAM1 + channel, buff);
+			SetWindowSubclass(GetDlgItem(hWnd, IDC_KEY_PROGRAM1 + channel), EditSubProc, 0, 0);
 		}
 		break;
 
@@ -465,6 +470,38 @@ static INT_PTR CALLBACK settings_keyboard_proc(HWND hWnd, UINT uMsg, WPARAM wPar
 					break;
 				}
 				break;
+			}
+
+			else if (LOWORD(wParam) == IDC_KEY_PROGRAM1 + channel)
+			{
+				switch (HIWORD(wParam)) 
+				{
+				case EN_SETFOCUS:
+					{
+						PostMessage(GetDlgItem(hWnd, IDC_KEY_PROGRAM1 + channel), EM_SETSEL, 0, -1);
+						return 1;
+					}
+					break;
+
+				case EN_KILLFOCUS:
+					{
+						char temp[256];
+						GetDlgItemText(hWnd, IDC_KEY_PROGRAM1 + channel, temp, sizeof(temp));
+
+						int value = 0;
+						if (sscanf(temp, "%d", &value) == 1)
+						{
+							if (value < 0) value = 0;
+							if (value > 127) value = 127;
+
+							midi_send_event(0xc0 | config_get_key_channel(channel), value, 0, 0);
+
+							_snprintf(temp, sizeof(temp), "%d", config_get_program(config_get_key_channel(channel)));
+							SetDlgItemText(hWnd, IDC_KEY_PROGRAM1 + channel, temp);
+						}
+					}
+					break;
+				}
 			}
 		}
 		break;
@@ -844,12 +881,12 @@ key_controls[] =
 	{ "分组2",				"GP2",		"Group Set 2" },
 	{ "延音踏板（开）",		"RSP+",		"Controller 0 SustainPedal 127" },
 	{ "延音踏板（关）",		"RSP-",		"Controller 0 SustainPedal 0" },
-	{ "延音踏板（翻转）",	"RSP",		"Controller 0 SustainPedal 0 Flip" },
-	{ "音色+",			"P+",			"Program 0 1 Inc" },
-	{ "音色-",			"P-",			"Program 0 1 Dec" },
-	{ "音色0",			"P0",			"Program 0 0" },
-	{ "音色1",			"P1",			"Program 0 1" },
-	{ "音色2",			"P2",			"Program 0 2" },
+	{ "延音踏板（翻转）",		"RSP",		"Controller 0 SustainPedal 0 Flip" },
+	{ "音色+",				"P+",		"Program 0 1 Inc" },
+	{ "音色-",				"P-",		"Program 0 1 Dec" },
+	{ "音色0",				"P0",		"Program 0 0" },
+	{ "音色1（个位数）",		"P1",		"Program 0 1  Set1" },
+	{ "音色10（十位数）",	"P10",		"Program 0 10 Set10" },
 };
 
 

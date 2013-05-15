@@ -174,7 +174,7 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 		{
 			int ch = data1 & 0x0f;
 			int value = config_get_program(ch);
-      if (value > 127) value = 0;
+			if (value > 127) value = 0;
 
 			switch (data3)
 			{
@@ -192,7 +192,9 @@ void midi_send_event(byte data1, byte data2, byte data3, byte data4)
 			data3 = 0;
 			data4 = 0;
 
-      printf("Program %d, %d\n", ch, value);
+#ifdef _DEBUG
+			printf("Program %d, %d\n", ch, value);
+#endif
 		}
 		break;
 	}
