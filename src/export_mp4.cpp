@@ -5,6 +5,7 @@
 #include "song.h"
 #include "synthesizer_vst.h"
 #include "display.h"
+#include "config.h"
 
 #include "../3rd/mp4v2/mp4.h"
 #include "../3rd/libfaac/faac.h"
@@ -302,9 +303,10 @@ static DWORD __stdcall export_rendering_thread(void *parameter) {
       // call vsti process func
       vsti_process(temp_buffer[0], temp_buffer[1], samples);
 
+      double volume = config_get_output_volume() / 100.0;
       for (int i = 0; i < samples; i++) {
-        input_position[0] = temp_buffer[0][i] * 32767.0;
-        input_position[1] = temp_buffer[1][i] * 32767.0;
+        input_position[0] = temp_buffer[0][i] * 32767.0 * volume;
+        input_position[1] = temp_buffer[1][i] * 32767.0 * volume;
         input_position += 2;
       }
 
@@ -342,7 +344,7 @@ static DWORD __stdcall export_rendering_thread(void *parameter) {
 
           // write samples
           MP4Duration dur = mp4_time_scale / frames_per_sec;
-          if (!MP4WriteSample(file, video_track, nalu, size, dur, 0, pic_out.b_keyframe)) {
+          if (!MP4WriteSample(file, video_track, nalu, size, dur, 0, pic_out.b_keyframe != 0)) {
             show_error("Encode mp4 error.");
             goto done;
           }
