@@ -15,65 +15,65 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 {
   //SetThreadUILanguage(LANG_ENGLISH);
 
-	// initialize com
-	if (FAILED(CoInitialize(NULL)))
-		return 1;
+  // initialize com
+  if (FAILED(CoInitialize(NULL)))
+    return 1;
 
-	// config init
-	if (config_init()) {
-		MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
-		return 1;
-	}
+  // config init
+  if (config_init()) {
+    MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
+    return 1;
+  }
 
-	// init gui
-	if (gui_init()) {
-		MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
-		return 1;
-	}
+  // init gui
+  if (gui_init()) {
+    MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
+    return 1;
+  }
 
-	// init display
-	if (display_init(gui_get_window())) {
-		MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
-		return 1;
-	}
+  // init display
+  if (display_init(gui_get_window())) {
+    MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
+    return 1;
+  }
 
-	// intialize keyboard
-	if (keyboard_init()) {
-		MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
-		return 1;
-	}
+  // intialize keyboard
+  if (keyboard_init()) {
+    MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);
+    return 1;
+  }
 
-	// show gui
-	gui_show();
+  // show gui
+  gui_show();
 
-	// load default config
-	config_load("freepiano.cfg");
+  // load default config
+  config_load("freepiano.cfg");
 
-	// open lyt
-	//song_open_lyt("test3.lyt");
-	//song_open("D:\\src\\freepiano\\trunk\\data\\song\\kiss the rain.fpm");
-	//export_mp4("test.mp4");
+  // open lyt
+  //song_open_lyt("test3.lyt");
+  //song_open("D:\\src\\freepiano\\trunk\\data\\song\\kiss the rain.fpm");
+  //export_mp4("test.mp4");
 
-	MSG msg;
-	while (GetMessage(&msg, NULL, NULL, NULL))
-	{
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-	}
+  MSG msg;
+  while (GetMessage(&msg, NULL, NULL, NULL))
+  {
+    TranslateMessage(&msg);
+    DispatchMessage(&msg);
+  }
 
-	config_save("freepiano.cfg");
+  config_save("freepiano.cfg");
 
-	// shutdown keyboard
-	keyboard_shutdown();
+  // shutdown keyboard
+  keyboard_shutdown();
 
-	// shutdown config
-	config_shutdown();
+  // shutdown config
+  config_shutdown();
 
-	// shutdown display
-	display_shutdown();
+  // shutdown display
+  display_shutdown();
 
-	// shutdown COM
-	CoUninitialize();
+  // shutdown COM
+  CoUninitialize();
 
-	return 0;
+  return 0;
 }
