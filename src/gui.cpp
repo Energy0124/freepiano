@@ -422,6 +422,13 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
   struct helpers
   {
+    static void make_value(char *buff, size_t size, int value) {
+      if (value >=0 && value < 128)
+        _snprintf(buff, size, "%d", value);
+      else
+        _snprintf(buff, size, "-");
+    }
+
     static void refresh(HWND hWnd)
     {
       for (int channel = 0; channel < 2; channel ++)
@@ -464,13 +471,13 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
         // program
         HWND program = GetDlgItem(hWnd, IDC_PLAY_PROGRAM1 + channel);
-        _snprintf(buff, sizeof(buff), "%d", config_get_program(config_get_key_channel(channel)));
+        make_value(buff, sizeof(buff), config_get_program(config_get_key_channel(channel)));
         SetDlgItemText(hWnd, IDC_PLAY_PROGRAM1 + channel, buff);
         SetWindowSubclass(program, EditSubProc, 0, 0);
 
         // sustain
         HWND sustain = GetDlgItem(hWnd, IDC_PLAY_SUSTAIN1 + channel);
-        _snprintf(buff, sizeof(buff), "%d", config_get_controller(config_get_key_channel(channel), 64));
+        make_value(buff, sizeof(buff), config_get_controller(config_get_key_channel(channel), 64));
         SetDlgItemText(hWnd, IDC_PLAY_SUSTAIN1 + channel, buff);
         SetWindowSubclass(sustain, EditSubProc, 0, 0);
       }
@@ -481,6 +488,11 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
   {
   case WM_INITDIALOG:
     helpers::refresh(hWnd);
+    break;
+
+  case WM_ACTIVATE:
+    if (WA_INACTIVE != LOWORD(wParam))
+      helpers::refresh(hWnd);
     break;
 
   case WM_HSCROLL:
@@ -808,6 +820,10 @@ static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
      add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_GUI), IDD_SETTING_GUI);
    }
    break;
+
+   case WM_ACTIVATE:
+     SendMessage(setting_page, WM_ACTIVATE, wParam, lParam);
+     break;
 
    case WM_NOTIFY:
      switch (((LPNMHDR)lParam)->code) {

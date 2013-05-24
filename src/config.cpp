@@ -389,6 +389,29 @@ static name_t boolean_names[] = {
   { "true",           1 },
 };
 
+static name_t channel_names[] = {
+  { "Ch_0",      0 },
+  { "Ch_1",      1 },
+  { "Ch_2",      2 },
+  { "Ch_3",      3 },
+  { "Ch_4",      4 },
+  { "Ch_5",      5 },
+  { "Ch_6",      6 },
+  { "Ch_7",      7 },
+  { "Ch_8",      8 },
+  { "Ch_9",      9 },
+  { "Ch_10",     10 },
+  { "Ch_11",     11 },
+  { "Ch_12",     12 },
+  { "Ch_13",     13 },
+  { "Ch_14",     14 },
+  { "Ch_15",     15 },
+};
+
+static name_t hand_names[] = {
+  { "Ch_L",      0 },
+  { "Ch_R",      1 },
+};
 
 // -----------------------------------------------------------------------------------------
 // configurations
@@ -1114,9 +1137,8 @@ static bool match_event(char **str, key_bind_t *e) {
      case SM_TRANSPOSE:
      case SM_OCTSHIFT:
      case SM_VELOCITY:
-     case SM_CHANNEL:
      case SM_DELAY_KEYUP:
-       if (!match_value(str, 0, NULL, &arg1))
+       if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
          return false;
 
        if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
@@ -1126,6 +1148,16 @@ static bool match_event(char **str, key_bind_t *e) {
          return false;
 
        break;
+
+     case SM_CHANNEL:
+       if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+         return false;
+
+       if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
+         return false;
+
+       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg3))
+         return false;
 
      default:
        match_value(str, NULL, 0, &arg1);
@@ -1140,32 +1172,26 @@ static bool match_event(char **str, key_bind_t *e) {
   }
   // match midi events
   else {
-    // match channel
-    if (!match_number(str, &channel))
-      return false;
-
-    // make action
-    e->a |= (channel & 0xf);
-    e->b = 0;
-    e->c = 0;
-    e->d = 0;
-
     // parse args based on action
-    switch (action >> 4) {
-     case 0x0:
-       break;
+    switch (action) {
+     case 0x80:      // NoteOff
+     case 0x90:      // NoteOn
+     case 0xa0:      // NoteAfterTouch
+       if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &channel))
+         return false;
 
-     case 0x8:      // NoteOff
-     case 0x9:      // NoteOn
-     case 0xa:      // NoteAfterTouch
        if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg1))
          return false;
 
+       e->a = action | (channel & 0xf);
        e->b = arg1 & 0x7f;
        e->c = match_number(str, &arg2) ? arg2 : 127;
        break;
 
-     case 0xb:      // Controller
+     case 0xb0:      // Controller
+       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &channel))
+         return false;
+
        if (!match_value(str, controller_names, ARRAY_COUNT(controller_names), &arg1))
          return false;
 
@@ -1174,38 +1200,58 @@ static bool match_event(char **str, key_bind_t *e) {
 
        match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg3);
 
+       e->a = action | (channel & 0xf);
        e->b = arg1 & 0x7f;
        e->c = arg2 & 0x7f;
        e->d = arg3;
        break;
 
-     case 0xc:      // ProgramChange
+     case 0xc0:      // ProgramChange
+       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &channel))
+         return false;
+
        if (!match_number(str, &arg1))
          return false;
 
        match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2);
 
+       e->a = action | (channel & 0xf);
        e->b = arg1 & 0x7f;
        e->c = arg2;
        break;
 
-     case 0xd:
+     case 0xd0:
+       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &channel))
+         return false;
+
        if (!match_number(str, &arg1))
          return false;
 
+       e->a = action | (channel & 0xf);
        e->b = arg1 & 0x7f;
        break;
 
-     case 0xe:
+     case 0xe0:
+       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &channel))
+         return false;
+
        if (!match_number(str, &arg1))
          return false;
 
+       e->a = action | (channel & 0xf);
        e->b = arg1;
        e->c = arg1 >> 8;
        break;
 
      default:
-       return false;
+       if (action < 0xf0)
+         return false;
+
+       match_number(str, &arg1);
+       match_number(str, &arg2);
+       e->a = action;
+       e->b = arg1;
+       e->c = arg2;
     }
   }
 
@@ -1281,7 +1327,7 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
     uint channel;
     int value;
 
-    if (match_number(&s, &channel) &&
+    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
         match_number(&s, &value)) {
       config_set_key_octshift(channel, value);
     }
@@ -1291,7 +1337,7 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
     uint channel;
     int value;
 
-    if (match_number(&s, &channel) &&
+    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
         match_number(&s, &value)) {
       config_set_key_transpose(channel, value);
     }
@@ -1301,7 +1347,7 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
     uint channel;
     uint value;
 
-    if (match_number(&s, &channel) &&
+    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
         match_number(&s, &value)) {
       config_set_key_velocity(channel, value);
     }
@@ -1311,8 +1357,8 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
     uint channel;
     uint value;
 
-    if (match_number(&s, &channel) &&
-        match_number(&s, &value)) {
+    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
+        match_value(&s, channel_names, ARRAY_COUNT(channel_names), &value)) {
       config_set_key_channel(channel, value);
     }
   } else if (match_word(&s, "KeySignature")) {
@@ -1348,7 +1394,7 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
     uint channel;
     uint value;
 
-    if (match_number(&s, &channel) &&
+    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
         match_number(&s, &value)) {
       config_set_delay_keyup(channel, value);
     }
@@ -1356,7 +1402,7 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
     uint channel;
     uint value;
 
-    if (match_number(&s, &channel) &&
+    if (match_value(&s, channel_names, ARRAY_COUNT(channel_names), &channel) &&
         match_number(&s, &value)) {
       config_set_program(channel, value);
     }
@@ -1365,7 +1411,7 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
     uint id;
     uint value;
 
-    if (match_number(&s, &channel) &&
+    if (match_value(&s, channel_names, ARRAY_COUNT(channel_names), &channel) &&
         match_value(&s, controller_names, ARRAY_COUNT(controller_names), &id) &&
         match_number(&s, &value)) {
       config_set_controller(channel, id, value);
@@ -1436,7 +1482,7 @@ int config_load_keymap(const char *filename) {
   return 0;
 }
 
-static int print_value(char *buff, int buff_size, int value, name_t *names, int name_count, const char *sep = "\t") {
+static int print_value(char *buff, int buff_size, int value, name_t *names = NULL, int name_count = 0, const char *sep = "\t") {
   for (int i = 0; i < name_count; i++) {
     if (names[i].value == value) {
       return _snprintf(buff, buff_size, "%s%s", sep, names[i].name);
@@ -1467,12 +1513,16 @@ static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t
      case SM_TRANSPOSE:
      case SM_OCTSHIFT:
      case SM_VELOCITY:
-     case SM_CHANNEL:
      case SM_DELAY_KEYUP:
-       s += print_value(s, end - s, e.b, NULL, 0);
+       s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
        s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
        s += print_value(s, end - s, e.d, NULL, 0);
        break;
+
+     case SM_CHANNEL:
+       s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
+       s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
+       s += print_value(s, end - s, e.d, channel_names, ARRAY_COUNT(channel_names));
 
      case SM_PLAY:
      case SM_RECORD:
@@ -1489,36 +1539,45 @@ static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t
 
   // Midi messages
   else {
-    s += print_value(s, end - s, e.a & 0xf0, action_names, ARRAY_COUNT(action_names));
-    s += print_value(s, end - s, e.a & 0x0f, NULL, 0);
+    byte action = e.a & 0xf0;
+    byte channel = e.a & 0x0f;
 
-    switch (e.a >> 4) {
-     case 0x8:
-     case 0x9:
+    switch (action) {
+     case 0x80:
+     case 0x90:
+       s += print_value(s, end - s, action, action_names, ARRAY_COUNT(action_names));
+       s += print_value(s, end - s, channel, hand_names, ARRAY_COUNT(hand_names));
        s += print_value(s, end - s, e.b, note_names, ARRAY_COUNT(note_names));
        if (e.c != 127)
          s += print_value(s, end - s, e.c, NULL, 0);
        break;
 
-     case 0xa:
-     case 0xd:
+     case 0xa0:
+     case 0xd0:
+       s += print_value(s, end - s, action, action_names, ARRAY_COUNT(action_names));
+       s += print_value(s, end - s, channel, channel_names, ARRAY_COUNT(channel_names));
        s += print_value(s, end - s, e.b, note_names, ARRAY_COUNT(note_names));
        s += print_value(s, end - s, e.c, NULL, 0);
        break;
 
-     case 0xb:
+     case 0xb0:
+       s += print_value(s, end - s, action, action_names, ARRAY_COUNT(action_names));
+       s += print_value(s, end - s, channel, channel_names, ARRAY_COUNT(channel_names));
        s += print_value(s, end - s, e.b, controller_names, ARRAY_COUNT(controller_names));
        s += print_value(s, end - s, e.c, NULL, 0);
 
        if (e.d) s += print_value(s, end - s, e.d, value_action_names, ARRAY_COUNT(controller_names));
        break;
 
-     case 0xc:
+     case 0xc0:
+       s += print_value(s, end - s, action, action_names, ARRAY_COUNT(action_names));
+       s += print_value(s, end - s, channel, channel_names, ARRAY_COUNT(channel_names));
        s += print_value(s, end - s, e.b, NULL, 0);
        if (e.c) s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(controller_names));
        break;
 
      default:
+       s += print_value(s, end - s, e.a, NULL, 0);
        s += print_value(s, end - s, e.b, NULL, 0);
        s += print_value(s, end - s, e.c, NULL, 0);
        s += print_value(s, end - s, e.d, NULL, 0);
@@ -1567,7 +1626,7 @@ static int config_save_keybind(int key, char *buff, int buffer_size) {
     s += _snprintf(s, end - s, "\t%s\r\n", config_bind_get_label(key));
   }
 
-  return end - s;
+  return s - buff;
 }
 
 // save current key settings
@@ -1580,77 +1639,87 @@ static int config_save_key_settings(char *buff, int buffer_size) {
 
   // save keyboard status
   for (int ch = 0; ch < 16; ch++) {
-    if (config_get_key_octshift(ch) != 0)
-      s += _snprintf(s, end - s, "Octshift\t%d\t%d\r\n", ch, config_get_key_octshift(ch));
+    if (config_get_key_octshift(ch) != 0) {
+      s += _snprintf(s, end - s, "Octshift");
+      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
+      s += print_value(s, end - s, config_get_key_octshift(ch));
+      s += _snprintf(s, end - s, "\r\n");
+    }
+  }
 
-    if (config_get_key_transpose(ch) != 0)
-      s += _snprintf(s, end - s, "Transpose\t%d\t%d\r\n", ch, config_get_key_transpose(ch));
+  // transpose
+  for (int ch = 0; ch < 16; ch++) {
+    if (config_get_key_transpose(ch) != 0) {
+      s += _snprintf(s, end - s, "Transpose");
+      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
+      s += print_value(s, end - s, config_get_key_transpose(ch));
+      s += _snprintf(s, end - s, "\r\n");
+    }
+  }
 
-    if (config_get_key_velocity(ch) != 127)
-      s += _snprintf(s, end - s, "Velocity\t%d\t%d\r\n", ch, config_get_key_velocity(ch));
+  // velocity
+  for (int ch = 0; ch < 16; ch++) {
+    if (config_get_key_velocity(ch) != 127) {
+      s += _snprintf(s, end - s, "Velocity");
+      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
+      s += print_value(s, end - s, config_get_key_velocity(ch));
+      s += _snprintf(s, end - s, "\r\n");
+    }
+  }
 
-    if (config_get_key_channel(ch) != 0)
-      s += _snprintf(s, end - s, "Channel\t%d\t%d\r\n", ch, config_get_key_channel(ch));
+  // delay keyup
+  for (int ch = 0; ch < 16; ch++) {
+    if (config_get_delay_keyup(ch)) {
+      s += _snprintf(s, end - s, "DelayKeyup");
+      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
+      s += print_value(s, end - s, config_get_delay_keyup(ch));
+      s += _snprintf(s, end - s, "\r\n");
+    }
+  }
 
-    // program
-    if (config_get_program(ch) < 128)
-      s += _snprintf(s, end - s, "Program\t%d\t%d\r\n", ch, config_get_program(ch));
+  // channel
+  for (int ch = 0; ch < 16; ch++) {
+    if (config_get_key_channel(ch) != 0) {
+      s += _snprintf(s, end - s, "Channel");
+      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
+      s += print_value(s, end - s, config_get_key_channel(ch), channel_names, ARRAY_COUNT(channel_names));
+      s += _snprintf(s, end - s, "\r\n");
+    }
+  }
 
-    // controller
+  // program
+  for (int ch = 0; ch < 16; ch++) {
+    if (config_get_program(ch) < 128) {
+      s += _snprintf(s, end - s, "Program");
+      s += print_value(s, end - s, ch, channel_names, ARRAY_COUNT(channel_names));
+      s += print_value(s, end - s, config_get_program(ch));
+      s += _snprintf(s, end - s, "\r\n");
+    }
+  }
+
+  // controller
+  for (int ch = 0; ch < 16; ch++) {
     for (int id = 0; id < 127; id++) {
       if (config_get_controller(ch, id) < 128) {
-        s += _snprintf(s, end - s, "Controller\t%d", ch);
+        s += _snprintf(s, end - s, "Controller");
+        s += print_value(s, end - s, ch, channel_names, ARRAY_COUNT(channel_names));
         s += print_value(s, end - s, id, controller_names, ARRAY_COUNT(controller_names));
         s += print_value(s, end - s, config_get_controller(ch, id), NULL, NULL);
         s += _snprintf(s, end - s, "\r\n");
       }
     }
-
-    // delay keyup
-    if (config_get_delay_keyup(ch))
-      s += _snprintf(s, end - s, "DelayKeyup\t%d\t%d\r\n", ch, config_get_delay_keyup(ch));
-
   }
 
   // auto pedal
-  if (config_get_auto_pedal())
-    s += _snprintf(s, end - s, "AutoPedal\t%d\r\n", config_get_auto_pedal());
+  if (config_get_auto_pedal()) {
+    s += _snprintf(s, end - s, "AutoPedal");
+    s += print_value(s, end - s, config_get_auto_pedal());
+    s += _snprintf(s, end - s, "\r\n");
+  }
 
   // save key bindings
   for (int key = 0; key < 256; key++) {
-    key_bind_t temp[256];
-    bool first;
-    int count;
-
-    count = config_bind_get_keydown(key, temp, ARRAYSIZE(temp));
-    first = true;
-    for (int i = 0; i < count; i++) {
-      if (temp[i].a) {
-        s += _snprintf(s, end - s, first ? "Keydown" : "Keydown");
-        s += print_keyboard_event(s, end - s, key, temp[i]);
-        s += _snprintf(s, end - s, "\r\n");
-        first = false;
-      }
-    }
-
-    count = config_bind_get_keyup(key, temp, ARRAYSIZE(temp));
-    first = true;
-    for (int i = 0; i < count; i++) {
-      if (temp[i].a) {
-        s += _snprintf(s, end - s, first ? "Keyup" : "Keyup");
-        s += print_keyboard_event(s, end - s, key, temp[i]);
-        s += _snprintf(s, end - s, "\r\n");
-        first = false;
-      }
-    }
-  }
-
-  for (int key = 0; key < 256; key++) {
-    if (*config_bind_get_label(key)) {
-      s += _snprintf(s, end - s, "Label");
-      s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
-      s += _snprintf(s, end - s, "\t%s\r\n", config_bind_get_label(key));
-    }
+    s += config_save_keybind(key, s, end - s);
   }
 
   return s - buff;
