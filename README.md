@@ -17,7 +17,7 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 
 ## Change logs
-**2013-05-24  FreePiano 1.6.1**
+**2013-05-24  FreePiano 1.7**
 * Play settings page, can change midi output channel and voice.
 * New Set1 and Set10 modifier, can change value by mask 1 or 10.
 * Adds a transpose command which can transpose notes on each channel, 

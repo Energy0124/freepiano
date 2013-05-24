@@ -519,7 +519,7 @@ static thread_lock_t config_lock;
 
 // verison
 static uint map_version = 0;
-static const uint map_current_version = 0x01060100;
+static const uint map_current_version = 0x01070000;
 
 // save current key settings
 static int config_save_key_settings(char *buff, int buffer_size);
@@ -1227,8 +1227,8 @@ static bool match_event(char **str, key_bind_t *e) {
        if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg1))
          return false;
 
-       // version smaller than 1.6.1 needs to convert note names
-       if (map_version < 0x01060100) {
+       // version earlier than 1.7 needs to convert note names
+       if (map_version < 0x01070000) {
          arg1 -= 12;
        }
 
@@ -2491,7 +2491,15 @@ void config_set_key_fade(int value) {
 
 void config_set_gui_transparency(byte value) {
   global.gui_transparency = value;
-  SetLayeredWindowAttributes(gui_get_window(), 0, global.gui_transparency, LWA_ALPHA);
+  HWND hwnd = gui_get_window();
+
+  if (global.gui_transparency == 255) {
+    SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
+  }
+  else {
+    SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | WS_EX_LAYERED);
+    SetLayeredWindowAttributes(hwnd, 0, global.gui_transparency, LWA_ALPHA);
+  }
 }
 
 byte config_get_gui_transparency() {

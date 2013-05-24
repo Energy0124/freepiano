@@ -2103,10 +2103,6 @@ int gui_init() {
   // disable ime
   ImmAssociateContext(gui_get_window(), NULL);
 
-  // set layered
-  SetWindowLong(mainhwnd, GWL_EXSTYLE, GetWindowLong(mainhwnd, GWL_EXSTYLE) | WS_EX_LAYERED);
-  SetLayeredWindowAttributes(mainhwnd, 0, 255, LWA_ALPHA);
-
   // create timer
   SetTimer(mainhwnd, 0, 1, NULL);
 

@@ -2028,13 +2028,11 @@ HWND display_get_hwnd() {
 // display set key down
 void display_keyboard_event(byte code, uint status) {
   keyboard_states[code].status = status;
-  PostMessage(display_hwnd, WM_TIMER, 0, 0);
 }
 
 // display update midi
 void display_midi_key(byte code, uint status) {
   midi_key_states[code & 0x7f].status = status;
-  PostMessage(display_hwnd, WM_TIMER, 0, 0);
 }
 
 // reset display midi event
