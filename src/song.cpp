@@ -39,7 +39,7 @@ static song_info_t song_info;
 static thread_lock_t song_lock;
 
 // current version
-static uint current_version = 0x01070000;
+static uint current_version = 0x01060100;
 
 // -----------------------------------------------------------------------------------------
 // event parser

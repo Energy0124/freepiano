@@ -973,6 +973,7 @@ enum MENU_ID {
   MENU_ID_FILE_PLAY,
   MENU_ID_FILE_STOP,
   MENU_ID_FILE_EXPORT_MP4,
+  MENU_ID_FILE_INFO,
 
   MENU_ID_PLAY_SPEED,
   MENU_ID_SETTING_GROUP_CHANGE,
@@ -1027,6 +1028,8 @@ static int menu_init() {
   AppendMenu(menu_record, MF_STRING, (UINT_PTR)MENU_ID_FILE_RECORD, lang_load_string(IDS_MENU_FILE_RECORD));
   AppendMenu(menu_record, MF_STRING, (UINT_PTR)MENU_ID_FILE_PLAY, lang_load_string(IDS_MENU_FILE_PLAY));
   AppendMenu(menu_record, MF_STRING, (UINT_PTR)MENU_ID_FILE_STOP, lang_load_string(IDS_MENU_FILE_STOP));
+  AppendMenu(menu_record, MF_SEPARATOR, 0, NULL);
+  AppendMenu(menu_record, MF_STRING, (UINT_PTR)MENU_ID_FILE_INFO, lang_load_string(IDS_MENU_FILE_INFO));
 
   AppendMenu(menu_export, MF_STRING, (UINT_PTR)MENU_ID_FILE_EXPORT_MP4, lang_load_string(IDS_MENU_FILE_EXPORT_MP4));
 
@@ -1235,6 +1238,10 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
    case MENU_ID_FILE_STOP:
      song_stop_playback();
      song_stop_record();
+     break;
+
+   case MENU_ID_FILE_INFO:
+     gui_show_song_info();
      break;
 
    case MENU_ID_PLAY_SPEED:
@@ -1716,7 +1723,7 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
        uint buff_size = Edit_GetTextLength(edit) + 1;
        char *buff = (char*)malloc(buff_size);
        Edit_GetText(edit, buff, buff_size);
-       config_parse_keymap(buff, selected_key);
+       config_parse_keymap(buff, selected_key, -1);
        free(buff);
 
        helpers::refresh_controls(hWnd);
@@ -1763,7 +1770,7 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
               } else if (id == cmd) {
                 char temp[4096];
                 _snprintf(temp, sizeof(temp), line, config_get_key_name(selected_key));
-                config_parse_keymap(temp);
+                config_parse_keymap(temp, selected_key, -1);
               }
             }
             lang_text_close();

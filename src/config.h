@@ -103,7 +103,7 @@ int config_set_keymap(const char *mapname);
 char* config_save_keymap();
 
 // parse keymap
-int config_parse_keymap(const char *command, byte override_key = 0);
+int config_parse_keymap(const char *command, byte override_key = 0, uint version = 0);
 
 // dump key bind
 char* config_dump_keybind(byte code);

@@ -1,3 +1,5 @@
+FreePiano 1.6.1
+
 #	keyname	action	channel	note
 key	left	NoteOn	1	c3
 key	down	NoteOn	1	d3

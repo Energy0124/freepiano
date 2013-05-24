@@ -517,6 +517,10 @@ static uint setting_count = 1;
 // song thread lock
 static thread_lock_t config_lock;
 
+// verison
+static uint map_version = 0;
+static const uint map_current_version = 0x01060100;
+
 // save current key settings
 static int config_save_key_settings(char *buff, int buffer_size);
 
@@ -1008,6 +1012,46 @@ static bool match_number(char **str, int *value) {
   return false;
 }
 
+// match version 
+static bool match_version(char **str, int *value) {
+  int version = 0;
+  int tmp = 0;
+  int digit = 3;
+  char *s = *str;
+
+  for (;;) {
+    if (*s >= '0' && *s <= '9') {
+      while (*s >= '0' && *s <= '9')
+        tmp = tmp * 10 + (*s++ - '0');
+
+      // number too large
+      if (tmp > 255) {
+        return false;
+      }
+
+      version |= tmp << (digit * 8);
+
+      // next digit
+      if (*s == '.') {
+        if (--digit < 0) {
+          return false;
+        }
+        s++;
+      } else if (match_space(&s) || match_end(&s)) {
+        *str = s;
+        if (value) *value = version;
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 // match line
 static bool match_line(char **str, char *buff, uint size) {
   char *s = *str;
@@ -1182,6 +1226,11 @@ static bool match_event(char **str, key_bind_t *e) {
 
        if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg1))
          return false;
+
+       // version smaller than 1.6.1 needs to convert note names
+       if (map_version < 0x01060100) {
+         arg1 -= 12;
+       }
 
        e->a = action | (channel & 0xf);
        e->b = arg1 & 0x7f;
@@ -1416,17 +1465,26 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
         match_number(&s, &value)) {
       config_set_controller(channel, id, value);
     }
+  } else if (match_word(&s, "FreePiano")) {
+    int version = 0;
+    if (match_version(&s, &version)) {
+      map_version = version;
+    }
   }
+
+
 
   return -1;
 }
 
-int config_parse_keymap(const char *command, byte override_key) {
+int config_parse_keymap(const char *command, byte override_key, uint version) {
   thread_lock lock(config_lock);
 
   char line[1024];
   char *line_end = line;
   int result = 0;
+
+  map_version = version == -1 ? map_current_version : version;
 
   for (;; ) {
     switch (*command) {
@@ -1452,7 +1510,6 @@ int config_parse_keymap(const char *command, byte override_key) {
   }
 }
 
-
 // load keymap
 int config_load_keymap(const char *filename) {
   thread_lock lock(config_lock);
@@ -1466,6 +1523,9 @@ int config_load_keymap(const char *filename) {
 
   // current group
   int group_id = config_get_setting_group();
+
+  // undefined version
+  map_version = 0;
 
   // clear keyboard binds
   config_clear_key_setting();
@@ -1490,6 +1550,27 @@ static int print_value(char *buff, int buff_size, int value, name_t *names = NUL
   }
 
   return _snprintf(buff, buff_size, "%s%d", sep, value);
+}
+
+static int print_version(char *buff, int buff_size, uint value, const char *sep = "\t") {
+  int digit[4] = {
+    (value >> 24) & 0xff,
+    (value >> 16) & 0xff,
+    (value >> 8) & 0xff,
+    (value >> 0) & 0xff,
+  };
+
+  char *s = buff;
+  char *end = buff + buff_size;
+
+  s += _snprintf(s, end - s, "%s%d.%d", sep, digit[0], digit[1]);
+  for (int i = 2; i < 4; i++) {
+    if (digit[i]) {
+      s += _snprintf(s, end - s, ".%d", digit[i]);
+    }
+  }
+
+  return s - buff;
 }
 
 static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t &e) {
@@ -1733,6 +1814,11 @@ char* config_save_keymap() {
 
   char *s = buffer;
   char *end = buffer + buffer_size;
+
+  // save map version
+  s += _snprintf(s, end - s, "FreePiano");
+  s += print_version(s, end - s, map_current_version, " ");
+  s += _snprintf(s, end - s, "\r\n\r\n");
 
   // save group count
   s += _snprintf(s, end - s, "GroupCount\t%d\r\n", config_get_setting_group_count());
@@ -2339,9 +2425,12 @@ void config_default_key_setting() {
   config_clear_key_setting();
 
   if (lang_text_open(IDR_TEXT_DEFAULT_SETTING)) {
+    map_version = 0;
+
     char line[4096];
     while (lang_text_readline(line, sizeof(line)))
       config_parse_keymap_line(line);
+
     lang_text_close();
   }
 }
