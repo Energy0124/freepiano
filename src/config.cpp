@@ -1015,12 +1015,12 @@ static bool match_number(char **str, int *value) {
 // match version 
 static bool match_version(char **str, int *value) {
   int version = 0;
-  int tmp = 0;
   int digit = 3;
   char *s = *str;
 
   for (;;) {
     if (*s >= '0' && *s <= '9') {
+      int tmp = 0;
       while (*s >= '0' && *s <= '9')
         tmp = tmp * 10 + (*s++ - '0');
 
