@@ -6,3 +6,4 @@ vc/Release
 *.suo
 *.aps
 nsis/*.exe
+data

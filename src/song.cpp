@@ -562,6 +562,8 @@ double song_get_play_speed() {
 // song get play speed
 void song_set_play_speed(double speed) {
   song_play_speed = speed;
+  if (song_play_speed < 0)
+    song_play_speed = 0;
 }
 
 // update

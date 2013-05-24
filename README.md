@@ -17,6 +17,21 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 
 ## Change logs
+**2013-05-24  FreePiano 1.6.1**
+* Play settings page, can change midi output channel and voice.
+* New Set1 and Set10 modifier, can change value by mask 1 or 10.
+* Adds a transpose command which can transpose notes on each channel, 
+  and adds two presets that sharp on left or right hand.
+  Force bindings scripts on popup-menu use selected key,
+  make it easy to copy key scripts without modify key name.
+* Optimized script display, easier to find which param is channel.
+* Change 'increase, decrease' group to 'add, insert, delete' group.
+* Transparency of main window can be changed in GUI settings.
+* Adds playback speed in audio settings page.
+* Fixed a bug that keymap editor will eat the last character.
+* Fixed a bug that freepiano uses C5 as middle C.
+* Fixed a bug that song recorded wrong group when starting group is not 0.
+* Fixed a bug that volume is not used when exporting MP4.
 
 **2013-02-06  FreePiano 1.6**
 * New popup key modify menu, with quick script edit.

@@ -35,3 +35,6 @@ void gui_close_export_progress();
 
 // is exporting
 bool gui_is_exporting();
+
+// set language
+void gui_set_language(int lang);

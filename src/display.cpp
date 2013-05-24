@@ -1759,12 +1759,6 @@ static void init_keyboard_controls() {
 
     x += 2;
   }
-
-  for (i = 0; i < ARRAYSIZE(controls); ++i) {
-    if (controls[i].label) {
-      strncpy(controls[i].text, lang_load_string(controls[i].label), sizeof(controls[i].text));
-    }
-  }
 }
 
 // darw keyboard controls
@@ -1856,7 +1850,7 @@ static void draw_keyboard_controls() {
         break;
 
       case CTL_LABEL:
-        draw_string(ctl.x + ctl.w / 2, ctl.y + ctl.h / 2 + 1, 0xffbdb8b7, ctl.text, 11, 1, 1);
+        draw_string(ctl.x + ctl.w / 2, ctl.y + ctl.h / 2 + 1, 0xffbdb8b7, lang_load_string(ctl.label), 11, 1, 1);
         break;
 
       case CTL_TEXTBOX:

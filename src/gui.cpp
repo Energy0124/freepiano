@@ -38,6 +38,21 @@ static void try_open_song(int err) {
   }
 }
 
+// make control refocus after hit return.
+static LRESULT CALLBACK EditSubProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+  switch (uMsg) {
+   case WM_CHAR:
+     if (wParam == VK_RETURN) {
+       SetFocus(NULL);
+       SetFocus(hWnd);
+       return 0;
+     }
+     break;
+  }
+
+  return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
 // -----------------------------------------------------------------------------------------
 // config window
 // -----------------------------------------------------------------------------------------
@@ -252,6 +267,31 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
     "ASIO",
   };
 
+  struct helpers {
+    static void refresh_play_speed(HWND hWnd, bool update_text = true, bool update_slider = true) {
+      if (update_text) {
+        HWND playback_speed = GetDlgItem(hWnd, IDC_PLAYBACK_SPEED);
+
+        char temp[256];
+        _snprintf(temp, sizeof(temp), "%g", song_get_play_speed());
+        SetDlgItemText(hWnd, IDC_PLAYBACK_SPEED, temp);
+        SetWindowSubclass(playback_speed, EditSubProc, 0, 0);
+      }
+
+      if (update_slider) {
+        HWND playback_speed_slider = GetDlgItem(hWnd, IDC_PLAYBACK_SPEED_SLIDER);
+
+        SendMessage(playback_speed_slider, TBM_SETRANGE,
+          (WPARAM) TRUE,                  // redraw flag
+          (LPARAM) MAKELONG(1, 20));      // min. & max. positions
+
+        SendMessage(playback_speed_slider, TBM_SETPOS,
+          (WPARAM) TRUE,                      // redraw flag
+          (LPARAM) (song_get_play_speed() * 10)); // min. & max. positions
+      }
+    }
+  };
+
   switch (uMsg) {
    case WM_INITDIALOG: {
      HWND output_list = GetDlgItem(hWnd, IDC_OUTPUT_LIST);
@@ -338,41 +378,51 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
      SendMessage(output_volume, TBM_SETPOS,
                  (WPARAM) TRUE,                      // redraw flag
                  (LPARAM) config_get_output_volume()); // min. & max. positions
+
+     // playback speed 
+     helpers::refresh_play_speed(hWnd);
    }
    break;
 
    case WM_COMMAND:
-     switch (LOWORD(wParam)) {
-      case IDC_OUTPUT_LIST:
-        switch (HIWORD(wParam)) {
-         case CBN_SELCHANGE: {
-           int result = 1;
-           char temp[256];
-           GetDlgItemText(hWnd, IDC_OUTPUT_LIST, temp, sizeof(temp));
+     if (LOWORD(wParam) == IDC_OUTPUT_LIST) {
+       if (HIWORD(wParam) == CBN_SELCHANGE) {
+         int result = 1;
+         char temp[256];
+         GetDlgItemText(hWnd, IDC_OUTPUT_LIST, temp, sizeof(temp));
 
-           for (int i = 0; i < ARRAY_COUNT(output_types); i++) {
-             int len = strlen(output_types[i]);
-             if (_strnicmp(output_types[i], temp, len) == 0) {
-               result = config_select_output(i, temp + len + 2);
-               break;
-             }
+         for (int i = 0; i < ARRAY_COUNT(output_types); i++) {
+           int len = strlen(output_types[i]);
+           if (_strnicmp(output_types[i], temp, len) == 0) {
+             result = config_select_output(i, temp + len + 2);
+             break;
            }
-
-           if (result) {
-             config_select_output(OUTPUT_TYPE_AUTO, "");
-             ComboBox_SetCurSel(GetDlgItem(hWnd, IDC_OUTPUT_LIST), 0);
-           }
-
          }
-         break;
-        }
-        break;
+
+         if (result) {
+           config_select_output(OUTPUT_TYPE_AUTO, "");
+           ComboBox_SetCurSel(GetDlgItem(hWnd, IDC_OUTPUT_LIST), 0);
+         }
+       }
+     }
+     else if (LOWORD(wParam) == IDC_PLAYBACK_SPEED) {
+       if (HIWORD(wParam) == EN_SETFOCUS) {
+         PostMessage(GetDlgItem(hWnd, IDC_PLAYBACK_SPEED), EM_SETSEL, 0, -1);
+         return 1;
+       }
+       else if (HIWORD(wParam) == EN_KILLFOCUS) {
+         char temp[256];
+         GetDlgItemText(hWnd, IDC_PLAYBACK_SPEED, temp, sizeof(temp));
+         song_set_play_speed(atof(temp));
+         helpers::refresh_play_speed(hWnd);
+       }
      }
      break;
 
    case WM_HSCROLL: {
      HWND output_delay = GetDlgItem(hWnd, IDC_OUTPUT_DELAY);
      HWND output_volume = GetDlgItem(hWnd, IDC_OUTPUT_VOLUME);
+     HWND playback_speed = GetDlgItem(hWnd, IDC_PLAYBACK_SPEED_SLIDER);
 
      if (output_delay == (HWND)lParam) {
        int pos = SendMessage(output_delay, TBM_GETPOS, 0, 0);
@@ -383,7 +433,8 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
        char temp[256];
        _snprintf(temp, sizeof(temp), output_delay_text_format, config_get_output_delay());
        SetDlgItemText(hWnd, IDC_OUTPUT_DELAY_TEXT, temp);
-     } else if (output_volume == (HWND)lParam) {
+     }
+     else if (output_volume == (HWND)lParam) {
        int pos = SendMessage(output_volume, TBM_GETPOS, 0, 0);
 
        // update output delay
@@ -393,24 +444,16 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
        _snprintf(temp, sizeof(temp), output_volume_text_format, config_get_output_volume());
        SetDlgItemText(hWnd, IDC_OUTPUT_VOLUME_TEXT, temp);
      }
+     else if (playback_speed == (HWND)lParam) {
+       int pos = SendMessage(playback_speed, TBM_GETPOS, 0, 0);
+
+       song_set_play_speed((double)pos / 10);
+       helpers::refresh_play_speed(hWnd);
+     }
    }
   }
 
   return 0;
-}
-
-static LRESULT CALLBACK EditSubProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
-  switch (uMsg) {
-   case WM_CHAR:
-     if (wParam == VK_RETURN) {
-       SetFocus(NULL);
-       SetFocus(hWnd);
-       return 0;
-     }
-     break;
-  }
-
-  return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
 static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -950,6 +993,7 @@ static HMENU menu_play_speed = NULL;
 static HMENU menu_setting_group = NULL;
 static HMENU menu_export = NULL;
 static HMENU menu_setting_group_change = NULL;
+static HMENU menu_language = NULL;
 
 // menu id
 enum MENU_ID {
@@ -986,12 +1030,17 @@ enum MENU_ID {
   MENU_ID_SETTING_GROUP_CLEAR,
 
   MENU_ID_MIDI_INPUT_CHANNEL,
+
+  MENU_ID_LANGUAGE,
+  MENU_ID_LANGUAGE_ENGLISH,
+  MENU_ID_LANGUAGE_CHINESE,
 };
 
 // init menu
 static int menu_init() {
-  // create main menu
-  menu_main = CreateMenu();
+  // delete sub menus
+  while (int count = GetMenuItemCount(menu_main))
+        DeleteMenu(menu_main, count - 1, MF_BYPOSITION);
 
   // create submenus
   menu_output = CreatePopupMenu();
@@ -1004,6 +1053,7 @@ static int menu_init() {
   menu_setting_group = CreatePopupMenu();
   menu_export = CreatePopupMenu();
   menu_setting_group_change = CreatePopupMenu();
+  menu_language = CreatePopupMenu();
 
   MENUINFO menuinfo;
   menuinfo.cbSize = sizeof(MENUINFO);
@@ -1018,6 +1068,7 @@ static int menu_init() {
   AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_keymap, lang_load_string(IDS_MENU_KEYMAP));
   AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_setting_group, lang_load_string(IDS_MENU_KEYGROUP));
   AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_config, lang_load_string(IDS_MENU_CONFIG));
+  AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_language, lang_load_string(IDS_MENU_LANGUAGE));
   AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_about, lang_load_string(IDS_MENU_HELP));
 
   // Record menu
@@ -1054,6 +1105,9 @@ static int menu_init() {
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_PASTE, lang_load_string(IDS_MENU_SETTING_GROUP_PASTE));
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_CLEAR, lang_load_string(IDS_MENU_SETTING_GROUP_CLEAR));
   AppendMenu(menu_setting_group, MF_STRING, MENU_ID_SETTING_GROUP_DEFAULT, lang_load_string(IDS_MENU_SETTING_GROUP_DEFAULT));
+
+  AppendMenu(menu_language, MF_STRING, MENU_ID_LANGUAGE_ENGLISH, lang_load_string(IDS_MENU_LANGUAGE_ENGLISH));
+  AppendMenu(menu_language, MF_STRING, MENU_ID_LANGUAGE_CHINESE, lang_load_string(IDS_MENU_LANGUAGE_CHINESE));
 
   return 0;
 }
@@ -1168,6 +1222,14 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
    case MENU_ID_HELP_ABOUT:
      DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_ABOUT), hwnd, about_dialog_proc);
+     break;
+
+   case MENU_ID_LANGUAGE_ENGLISH:
+     gui_set_language(LANG_ENGLISH);
+     break;
+
+   case MENU_ID_LANGUAGE_CHINESE:
+     gui_set_language(LANG_CHINESE);
      break;
 
    case MENU_ID_FILE_OPEN: {
@@ -1980,9 +2042,6 @@ static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 int gui_init() {
   HINSTANCE hInstance = GetModuleHandle(NULL);
 
-  // test language
-  //SetThreadUILanguage(LANG_ENGLISH);
-
   // register window class
   WNDCLASSEX wc = { sizeof(wc), 0 };
   wc.style = CS_DBLCLKS;
@@ -1998,6 +2057,9 @@ int gui_init() {
   wc.hIconSm = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON_SMALL));
 
   RegisterClassEx(&wc);
+
+  // create main menu
+  menu_main = CreateMenu();
 
   // init menu
   menu_init();
@@ -2134,4 +2196,16 @@ void gui_close_export_progress() {
 // is exporting
 bool gui_is_exporting() {
   return export_hwnd != NULL;
+}
+
+// change language
+void gui_set_language(int lang) {
+  typedef LANGID (WINAPI *FN_SetThreadUILanguage)(LANGID LangId);
+  HMODULE hKernel32 = GetModuleHandle("Kernel32.dll");
+  FN_SetThreadUILanguage pFn = (FN_SetThreadUILanguage)GetProcAddress(hKernel32, "SetThreadUILanguage");
+  if (pFn)
+    (*pFn)(lang);
+  SetThreadLocale(MAKELCID(MAKELANGID(lang, 0), SORT_DEFAULT));
+  menu_init();
+  DrawMenuBar(mainhwnd);
 }
