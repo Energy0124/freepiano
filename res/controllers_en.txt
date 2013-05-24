@@ -31,10 +31,14 @@ label %s GP+
 #Previous group
 keydown %s Group Dec 1
 label %s GP-
-#Flip sustain pedal
+#Sustain pedal (Flip)
+keydown %s Controller 0 SustainPedal 0 Flip
+keyup %s Controller 0 SustainPedal 0 Flip
+label %s SUS
+#Sustain pedal (Keep Flip)
 keydown %s Controller 0 SustainPedal 0 Flip
 label %s SUS
-#Sync sustain pedal
+#Sustain pedal (Sync up)
 keydown %s Controller 0 SustainPedal 0 SyncPress
 label %s SUS
 #Next instrument
@@ -43,9 +47,15 @@ label %s P+
 #Previous instrument
 keydown %s Program 0 1 Dec
 label %s P-
-#Select instrument 1 (Modify script for others)
+#Select instrument 0 (Modify script for others)
 keydown %s Program 0 1
 label %s P1
+#Program 1 (Set by 1)
+keydown %s Program 0 1 Set1
+label %s P1
+#Program 10 (Set by 10)
+keydown %s Program 0 10 Set10
+label %s P10
 #Sharp on lefthand
 Keydown %s Transpose 0 Inc 1
 Keyup %s Transpose 0 Dec 1

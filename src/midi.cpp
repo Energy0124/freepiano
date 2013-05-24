@@ -269,6 +269,8 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
               state.restore_value = value;
               value = c;
               break;
+      case 10: value = c / 10 * 10 + (value % 10); break;
+      case 11: value = value / 10 * 10 + (c % 10); break;
      }
 
      // clamp value
@@ -292,12 +294,15 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
    case 0xc0: {
      int ch = a & 0x0f;
      int value = config_get_program(ch);
+     if (value > 127) value = 0;
 
      switch (c) {
       case 0: value = b; break;
       case 1: value = value + (char)b; break;
       case 2: value = value - (char)b; break;
       case 3: value = 127 - value; break;
+      case 10: value = b / 10 * 10 + (value % 10); break;
+      case 11: value = value / 10 * 10 + (b % 10); break;
      }
 
      value = clamp_value(value, 0, 127);

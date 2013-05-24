@@ -359,6 +359,8 @@ static name_t value_action_names[] = {
   { "Dec",            0x02 },
   { "Flip",           0x03 },
   { "Press",          0x04 },
+  { "Set10",          0x0a },
+  { "Set1",           0x0b },
   { "SyncSet",        0x10 },
   { "SyncInc",        0x11 },
   { "SyncDec",        0x12 },

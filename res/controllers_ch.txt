@@ -31,10 +31,14 @@ label %s 分组+
 #分组-
 keydown %s Group Dec 1
 label %s 分组-
-#翻转延音踏板
+#延音踏板（反转）
+keydown %s Controller 0 SustainPedal 0 Flip
+keyup %s Controller 0 SustainPedal 0 Flip
+label %s 踏板
+#延音踏板（保持反转）
 keydown %s Controller 0 SustainPedal 0 Flip
 label %s 踏板
-#同步延音踏板
+#延音踏板（同步止音）
 keydown %s Controller 0 SustainPedal 0 SyncPress
 label %s 踏板
 #音色+
@@ -43,9 +47,15 @@ label %s 音色+
 #音色-
 keydown %s Program 0 1 Dec
 label %s 音色-
-#音色1（其他音色请修改脚本）
-keydown %s Program 0 1
+#音色0（其他音色请修改脚本）
+keydown %s Program 0 0
 label %s 音色1
+#音色1（修改个位）
+keydown %s Program 0 1 Set1
+label %s P1
+#音色10（修改十位）
+keydown %s Program 0 10 Set10
+label %s P10
 #左手升半音
 Keydown %s Transpose 0 Inc 1
 Keyup %s Transpose 0 Dec 1
@@ -54,3 +64,4 @@ Label	%s #L
 Keydown %s Transpose 1 Inc 1
 Keyup %s Transpose 1 Dec 1
 Label	%s #R
+
