@@ -586,7 +586,7 @@ static int font_initialize() {
   // intialize free type library
   error = FT_Init_FreeType(&font_library);
   if (error) {
-    lang_set_last_error("Failed in font_initialize, FT_Init_FreeType");
+    lang_set_last_error(IDS_ERR_INIT_FONT, "FT_Init_FreeType");
     return -1;
   }
 
@@ -611,7 +611,7 @@ static int font_initialize() {
   }
 
   if (font_count == 0) {
-    lang_set_last_error("Failed in font_initialize, no font found.");
+    lang_set_last_error(IDS_ERR_INIT_FONT, "NO FONT FOUND");
     return -1;
   }
 
@@ -1022,7 +1022,7 @@ static int d3d_initialize(HWND hwnd) {
   // create direct3d 9 object
   d3d9 = Direct3DCreate9(D3D_SDK_VERSION);
   if (d3d9 == NULL) {
-    lang_set_last_error("d3d_initialize failed: Direct3DCreate9");
+    lang_set_last_error(IDS_ERR_INIT_DISPLAY, "Direct3DCreate9", -1);
     return E_FAIL;
   }
 
@@ -1038,7 +1038,7 @@ static int d3d_initialize(HWND hwnd) {
     if (FAILED(hr = d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_MIXED_VERTEXPROCESSING, &params, &device))) {
       // try software vertex processing
       if (FAILED(hr = d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device))) {
-        lang_set_last_error("d3d_initialize failed: CreateDevice, hr = %x\n", hr);
+        lang_set_last_error(IDS_ERR_INIT_DISPLAY, "CreateDevice", hr);
         goto error;
       }
     }
@@ -1046,7 +1046,7 @@ static int d3d_initialize(HWND hwnd) {
 
   // create resource texture
   if (FAILED(hr = device->CreateTexture(512, 512, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &resource_texture, NULL))) {
-    lang_set_last_error("d3d_initialize failed: CreateTexture, hr = %x\n", hr);
+    lang_set_last_error(IDS_ERR_INIT_DISPLAY, "CreateTexture", hr);
     goto error;
   }
 
@@ -1084,16 +1084,22 @@ static int d3d_device_reset() {
   d3d_reset_parameters(params, display_hwnd);
 
   // reset device
-  if (FAILED(hr = device->Reset(&params)))
+  if (FAILED(hr = device->Reset(&params))) {
+    lang_set_last_error(IDS_ERR_INIT_DISPLAY, "DeviceReset", hr);
     return hr;
+  }
 
   // create render texture
   if (FAILED(hr = device->CreateTexture(display_get_width(), display_get_height(), 1, D3DUSAGE_RENDERTARGET,
-                                        D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &render_texture, NULL)))
+                                        D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &render_texture, NULL))) {
+    lang_set_last_error(IDS_ERR_INIT_DISPLAY, "CreateRenderTExture", hr);
     return hr;
+  }
 
-  if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &back_buffer)))
+  if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &back_buffer))) {
+    lang_set_last_error(IDS_ERR_INIT_DISPLAY, "GetBackBuffer", hr);
     return hr;
+  }
 
   // reset render states
   device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
@@ -1994,7 +2000,9 @@ int display_init(HWND hwnd) {
   }
 
   // reset device
-  d3d_device_reset();
+  if (d3d_device_reset()) {
+	  return -1;
+      }
 
   // load default skin
   display_default_skin();

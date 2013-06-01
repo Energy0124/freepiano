@@ -135,6 +135,16 @@ void lang_set_last_error(const char *format, ...) {
   fputs(error_message, stderr);
 }
 
+// set last error
+void lang_set_last_error(uint id, ...) {
+  const char *format = lang_load_string(id);
+  va_list args;
+  va_start(args, id);
+  vsprintf_s(error_message, format, args);
+  va_end(args);
+  fputs(error_message, stderr);
+}
+
 // get last error
 const char * lang_get_last_error() {
   return error_message;

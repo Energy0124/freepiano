@@ -24,5 +24,8 @@ void lang_text_close();
 // set last error
 void lang_set_last_error(const char *format, ...);
 
+// set last error
+void lang_set_last_error(uint id, ...);
+
 // get last error
 const char * lang_get_last_error();
