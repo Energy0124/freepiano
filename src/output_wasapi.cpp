@@ -158,10 +158,15 @@ int wasapi_open(const char *name) {
 
     wasapi_enum_device(callback);
     device = callback.result;
-  } else   {
+  } else {
+    // make a default name
+    name = "Default";
+
     // get default device
-    if (FAILED(hr = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device)))
+    if (FAILED(hr = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device))) {
+      fprintf(stderr, "WASAPI: Failed to get default endpoint. name=%s, hr=%x\n", name, hr);
       goto error;
+    }
   }
 
   // no device
@@ -171,12 +176,16 @@ int wasapi_open(const char *name) {
   }
 
   // activate
-  if (FAILED(hr = device->Activate(IID_IAudioClient, CLSCTX_ALL, NULL, (void * *)&client)))
+  if (FAILED(hr = device->Activate(IID_IAudioClient, CLSCTX_ALL, NULL, (void **)&client))) {
+    fprintf(stderr, "WASAPI: Failed to active audio client. name=%s, hr=%x\n", name, hr);
     goto error;
+  }
 
   // get mix format
-  if (FAILED(hr = client->GetMixFormat(&pwfx)))
+  if (FAILED(hr = client->GetMixFormat(&pwfx))) {
+    fprintf(stderr, "WASAPI: Failed to get mix format. name=%s, hr=%x\n", name, hr);
     goto error;
+  }
 
 
   WAVEFORMATEXTENSIBLE format;
@@ -194,12 +203,16 @@ int wasapi_open(const char *name) {
   format.SubFormat =  KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
 
   // initialize
-  if (FAILED(hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, 0, hnsRequestedDuration, 0, &format.Format, NULL)))
+  if (FAILED(hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, 0, hnsRequestedDuration, 0, &format.Format, NULL))) {
+    fprintf(stderr, "WASAPI: Failed to initialize audio client. name=%s, hr=%x\n", name, hr);
     goto error;
+  }
 
   // get render client
-  if (FAILED(hr = client->GetService(IID_IAudioRenderClient, (void * *)&render_client)))
+  if (FAILED(hr = client->GetService(IID_IAudioRenderClient, (void **)&render_client))) {
+    fprintf(stderr, "WASAPI: Failed to get render client. name=%s, hr=%x\n", name, hr);
     goto error;
+  }
 
   // create input thread
   wasapi_thread = CreateThread(NULL, 0, &wasapi_play_thread, NULL, NULL, NULL);

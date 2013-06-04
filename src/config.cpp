@@ -2221,12 +2221,12 @@ void config_set_midi_display(int value) {
 
 // select output
 int config_select_output(int type, const char *device) {
-  thread_lock lock(config_lock);
-
-  int result = -1;
   asio_close();
   dsound_close();
   wasapi_close();
+
+  int result = -1;
+  thread_lock lock(config_lock);
 
   // open output
   switch (type) {

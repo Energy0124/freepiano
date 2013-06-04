@@ -604,10 +604,17 @@ static int font_initialize() {
     _snprintf(buffer, sizeof(buffer), "%s\\%s", font_path, fonts[i]);
 
     if (PathFileExists(buffer)) {
-      if (0 == FT_New_Face(font_library, buffer, 0, &font_list[font_count]))
+      if (0 == FT_New_Face(font_library, buffer, 0, &font_list[font_count])) {
         if (++font_count == ARRAY_COUNT(font_list))
           break;
+	  }
+	  else {
+		fprintf(stderr, "font load failed: %s\n", buffer);
+	  }
     }
+	else {
+		fprintf(stderr, "font not found: %s\n", buffer);
+	}
   }
 
   if (font_count == 0) {

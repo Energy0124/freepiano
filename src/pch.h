@@ -54,3 +54,16 @@ struct thread_lock {
 
   thread_lock_t &lock;
 };
+
+struct thread_unlock {
+  thread_unlock(thread_lock_t &lock)
+    : lock(lock) {
+    lock.leave();
+  }
+
+  ~thread_unlock() {
+    lock.enter();
+  }
+
+  thread_lock_t &lock;
+};
