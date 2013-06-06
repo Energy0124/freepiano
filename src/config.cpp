@@ -521,68 +521,6 @@ static thread_lock_t config_lock;
 static uint map_version = 0;
 static const uint map_current_version = 0x01070000;
 
-// save current key settings
-static int config_save_key_settings(char *buff, int buffer_size);
-
-// clear keyboard setting
-void config_clear_key_setting() {
-  thread_lock lock(config_lock);
-
-  settings[current_setting].clear();
-}
-
-// copy key setting
-void config_copy_key_setting() {
-  thread_lock lock(config_lock);
-
-  if (OpenClipboard(NULL)) {
-    // temp buffer
-    uint buff_size = 1024 * 1024;
-    char *buff = new char[buff_size];
-
-    // save key settings
-    int size = config_save_key_settings(buff, buff_size);
-
-    if (size > 0) {
-      EmptyClipboard();
-
-      // Allocate a global memory object for the text.
-      HGLOBAL hglbCopy = GlobalAlloc(GMEM_MOVEABLE, (size + 1) * sizeof(char));
-      if (hglbCopy) {
-        char *lptstrCopy = (char *)GlobalLock(hglbCopy);
-        memcpy(lptstrCopy, buff, size);
-        lptstrCopy[size] = 0;
-        GlobalUnlock(hglbCopy);
-        SetClipboardData(CF_TEXT, hglbCopy);
-      }
-    }
-
-    delete[] buff;
-    CloseClipboard();
-  }
-}
-
-// paste key setting
-void config_paste_key_setting() {
-  thread_lock lock(config_lock);
-
-  if (OpenClipboard(NULL)) {
-    if (IsClipboardFormatAvailable(CF_TEXT)) {
-      HGLOBAL hglb = GetClipboardData(CF_TEXT);
-      if (hglb != NULL) {
-        char *lptstr = (char *)GlobalLock(hglb);
-
-        if (lptstr != NULL) {
-          config_clear_key_setting();
-          config_parse_keymap(lptstr);
-          GlobalUnlock(hglb);
-        }
-      }
-    }
-    CloseClipboard();
-  }
-}
-
 
 int config_bind_get_keydown(byte code, key_bind_t *buff, int size) {
   thread_lock lock(config_lock);
@@ -1876,6 +1814,65 @@ char* config_dump_keybind(byte code) {
   return buffer;
 }
 
+// clear keyboard setting
+void config_clear_key_setting() {
+  thread_lock lock(config_lock);
+
+  settings[current_setting].clear();
+}
+
+// copy key setting
+void config_copy_key_setting() {
+  thread_lock lock(config_lock);
+
+  if (OpenClipboard(NULL)) {
+    // temp buffer
+    uint buff_size = 1024 * 1024;
+    char *buff = new char[buff_size];
+
+    // save key settings
+    int size = config_save_key_settings(buff, buff_size);
+
+    if (size > 0) {
+      EmptyClipboard();
+
+      // Allocate a global memory object for the text.
+      HGLOBAL hglbCopy = GlobalAlloc(GMEM_MOVEABLE, (size + 1) * sizeof(char));
+      if (hglbCopy) {
+        char *lptstrCopy = (char *)GlobalLock(hglbCopy);
+        memcpy(lptstrCopy, buff, size);
+        lptstrCopy[size] = 0;
+        GlobalUnlock(hglbCopy);
+        SetClipboardData(CF_TEXT, hglbCopy);
+      }
+    }
+
+    delete[] buff;
+    CloseClipboard();
+  }
+}
+
+// paste key setting
+void config_paste_key_setting() {
+  thread_lock lock(config_lock);
+
+  if (OpenClipboard(NULL)) {
+    if (IsClipboardFormatAvailable(CF_TEXT)) {
+      HGLOBAL hglb = GetClipboardData(CF_TEXT);
+      if (hglb != NULL) {
+        char *lptstr = (char *)GlobalLock(hglb);
+
+        if (lptstr != NULL) {
+          config_clear_key_setting();
+          config_parse_keymap(lptstr, 0, -1);
+          GlobalUnlock(hglb);
+        }
+      }
+    }
+    CloseClipboard();
+  }
+}
+
 static int config_apply() {
   // set keymap
   config_set_keymap(global.keymap);
@@ -2226,7 +2223,6 @@ int config_select_output(int type, const char *device) {
   wasapi_close();
 
   int result = -1;
-  thread_lock lock(config_lock);
 
   // open output
   switch (type) {
@@ -2257,6 +2253,7 @@ int config_select_output(int type, const char *device) {
 
   // success
   if (result == 0) {
+    thread_lock lock(config_lock);
     global.output_type = type;
     strncpy(global.output_device, device, sizeof(global.output_device));
   }
