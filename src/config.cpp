@@ -2106,13 +2106,13 @@ void config_shutdown() {
 
 // select instrument
 int config_select_instrument(int type, const char *name) {
-  thread_lock lock(config_lock);
-
-  int result = -1;
-
   // unload previous instrument
   vsti_unload_plugin();
   midi_close_output();
+
+  // load new instrument
+  int result = -1;
+  thread_lock lock(config_lock);
 
   if (type == INSTRUMENT_TYPE_MIDI) {
     result = midi_open_output(name);
