@@ -2075,7 +2075,7 @@ int config_save(const char *filename) {
   }
 
   if (config_get_gui_transparency() != 255) {
-    fprintf(fp, "gui-transparency %d\r\n", config_get_gui_transparency());
+    //fprintf(fp, "gui-transparency %d\r\n", config_get_gui_transparency());
   }
 
   fclose(fp);
