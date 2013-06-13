@@ -57,6 +57,9 @@ int config_select_output(int type, const char *device);
 // get output type
 int config_get_output_type();
 
+// get current output type
+int config_get_current_output_type();
+
 // get output device
 const char* config_get_output_device();
 

@@ -290,60 +290,72 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
           (LPARAM) (song_get_play_speed() * 10)); // min. & max. positions
       }
     }
+
+    static void refresh_output_devices(HWND hWnd) {
+      HWND output_list = GetDlgItem(hWnd, IDC_OUTPUT_LIST);
+
+      // output device list
+      struct callback : dsound_enum_callback, wasapi_enum_callback, asio_enum_callback {
+        void operator () (const char *value) {
+          char buff[256];
+
+          _snprintf(buff, sizeof(buff), "%s: %s", output_types[type], value);
+          ComboBox_AddString(list, buff);
+          if (config_get_output_type() == type) {
+            if (_stricmp(value, config_get_output_device()) == 0) {
+              ComboBox_SetCurSel(list, ComboBox_GetCount(list) - 1);
+              selected = true;
+            }
+          }
+
+          count++;
+        }
+
+        void operator () (const char *value, void *device) {
+          operator () (value);
+        }
+
+        callback(int type, HWND list)
+          : type(type)
+          , list(list)
+          , selected(false)
+          , count(0) {
+        }
+
+        ~callback() {
+          if (config_get_output_type() == type && !selected) {
+            if (count)
+              ComboBox_SetCurSel(list, ComboBox_GetCount(list) - count);
+          }
+        }
+
+        HWND list;
+        int type;
+        bool selected;
+        int count;
+      };
+
+      // dsound output
+      ComboBox_ResetContent(output_list);
+      ComboBox_SetItemHeight(output_list, 0, 16);
+      if (config_get_output_type() == OUTPUT_TYPE_AUTO) {
+        char buff[256];
+        sprintf_s(buff, "%s: %s", lang_load_string(IDS_SETTING_AUDIO_AUTO), output_types[config_get_current_output_type()]);
+        ComboBox_AddString(output_list, buff);
+      }
+      else {
+        ComboBox_AddString(output_list, lang_load_string(IDS_SETTING_AUDIO_AUTO));
+      }
+      ComboBox_SetCurSel(output_list, 0);
+      dsound_enum_device(callback(OUTPUT_TYPE_DSOUND, output_list));
+      wasapi_enum_device(callback(OUTPUT_TYPE_WASAPI, output_list));
+      asio_enum_device(callback(OUTPUT_TYPE_ASIO, output_list));
+    }
   };
 
   switch (uMsg) {
    case WM_INITDIALOG: {
-     HWND output_list = GetDlgItem(hWnd, IDC_OUTPUT_LIST);
-
-     // output device list
-     struct callback : dsound_enum_callback, wasapi_enum_callback, asio_enum_callback {
-       void operator () (const char *value) {
-         char buff[256];
-
-         _snprintf(buff, sizeof(buff), "%s: %s", output_types[type], value);
-         ComboBox_AddString(list, buff);
-         if (config_get_output_type() == type) {
-           if (_stricmp(value, config_get_output_device()) == 0) {
-             ComboBox_SetCurSel(list, ComboBox_GetCount(list) - 1);
-             selected = true;
-           }
-         }
-
-         count++;
-       }
-
-       void operator () (const char *value, void *device) {
-         operator () (value);
-       }
-
-       callback(int type, HWND list)
-         : type(type)
-         , list(list)
-         , selected(false)
-         , count(0) {
-       }
-
-       ~callback() {
-         if (config_get_output_type() == type && !selected) {
-           if (count)
-             ComboBox_SetCurSel(list, ComboBox_GetCount(list) - count);
-         }
-       }
-
-       HWND list;
-       int type;
-       bool selected;
-       int count;
-     };
-
-     // dsound output
-     ComboBox_SetItemHeight(output_list, 0, 16);
-     ComboBox_AddString(output_list, lang_load_string(IDS_SETTING_AUDIO_AUTO));
-     ComboBox_SetCurSel(output_list, 0);
-     dsound_enum_device(callback(OUTPUT_TYPE_DSOUND, output_list));
-     wasapi_enum_device(callback(OUTPUT_TYPE_WASAPI, output_list));
-     asio_enum_device(callback(OUTPUT_TYPE_ASIO, output_list));
+     helpers::refresh_output_devices(hWnd);
 
      // output delay
      GetDlgItemText(hWnd, IDC_OUTPUT_DELAY_TEXT, output_delay_text_format, sizeof(output_delay_text_format));
@@ -401,8 +413,9 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
 
          if (result) {
            config_select_output(OUTPUT_TYPE_AUTO, "");
-           ComboBox_SetCurSel(GetDlgItem(hWnd, IDC_OUTPUT_LIST), 0);
          }
+
+         helpers::refresh_output_devices(hWnd);
        }
      }
      else if (LOWORD(wParam) == IDC_PLAYBACK_SPEED) {

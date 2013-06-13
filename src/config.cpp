@@ -427,6 +427,7 @@ struct global_setting_t {
   uint instrument_show_vsti;
 
   uint output_type;
+  uint output_type_current;
   char output_device[256];
   uint output_delay;
   char keymap[256];
@@ -448,6 +449,7 @@ struct global_setting_t {
     instrument_show_vsti = 1;
 
     output_type = OUTPUT_TYPE_AUTO;
+    output_type_current = OUTPUT_TYPE_AUTO;
     output_device[0] = 0;
     output_delay = 10;
     keymap[0] = 0;
@@ -2223,19 +2225,23 @@ int config_select_output(int type, const char *device) {
   wasapi_close();
 
   int result = -1;
+  int auto_selected_type = 0;
 
   // open output
   switch (type) {
    case OUTPUT_TYPE_AUTO:
      // try wasapi first
      result = wasapi_open(NULL);
+     auto_selected_type = OUTPUT_TYPE_WASAPI;
 
-     if (result)
+     if (result) {
        result = dsound_open(device);
+       auto_selected_type = OUTPUT_TYPE_DSOUND;
+     }
 
-     if (result == 0)
+     if (result == 0) {
        device = "";
-
+     }
      break;
 
    case OUTPUT_TYPE_DSOUND:
@@ -2255,6 +2261,7 @@ int config_select_output(int type, const char *device) {
   if (result == 0) {
     thread_lock lock(config_lock);
     global.output_type = type;
+    global.output_type_current = auto_selected_type;
     strncpy(global.output_device, device, sizeof(global.output_device));
   }
 
@@ -2328,6 +2335,10 @@ void config_set_output_delay(int delay) {
 int config_get_output_type() {
   thread_lock lock(config_lock);
   return global.output_type;
+}
+
+int config_get_current_output_type() {
+  return global.output_type_current;
 }
 
 // get output device
