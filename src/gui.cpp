@@ -480,10 +480,12 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
   struct helpers
   {
     static void make_value(char *buff, size_t size, int value) {
-      if (value >=0 && value < 128)
+      if (value >= 0 && value < 128) {
         _snprintf(buff, size, "%d", value);
-      else
+      }
+      else {
         _snprintf(buff, size, "-");
+      }
     }
 
     static void refresh(HWND hWnd)
@@ -498,13 +500,18 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
         SetDlgItemText(hWnd, IDC_PLAY_VELOCITY1 + channel, buff);
         SetWindowSubclass(velocity, EditSubProc, 0, 0);
 
-
         // velocity slider
         HWND velocity_slider = GetDlgItem(hWnd, IDC_PLAY_VELOCITY_SLIDER1 + channel);
         SendMessage(velocity_slider, TBM_SETRANGE, (WPARAM) TRUE, (LPARAM) MAKELONG(0, 127));
         SendMessage(velocity_slider, TBM_SETPOS, (WPARAM) TRUE, (LPARAM) config_get_key_velocity(channel));
 
-        // shift
+        // transpose
+        HWND transpose = GetDlgItem(hWnd, IDC_PLAY_TRANSPOSE1 + channel);
+        make_value(buff, sizeof(buff), config_get_key_transpose(channel));
+        SetDlgItemText(hWnd, IDC_PLAY_TRANSPOSE1 + channel, buff);
+        SetWindowSubclass(transpose, EditSubProc, 0, 0);
+
+        // octave
         HWND octshift = GetDlgItem(hWnd, IDC_PLAY_OCTAVE1 + channel);
         ComboBox_ResetContent(octshift);
         for (int i = 0; i < ARRAY_COUNT(keyboard_shifts); i++)
@@ -531,6 +538,18 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
         make_value(buff, sizeof(buff), config_get_program(config_get_key_channel(channel)));
         SetDlgItemText(hWnd, IDC_PLAY_PROGRAM1 + channel, buff);
         SetWindowSubclass(program, EditSubProc, 0, 0);
+
+        // bank msb
+        HWND bank_msb = GetDlgItem(hWnd, IDC_PLAY_BANK1 + channel);
+        make_value(buff, sizeof(buff), config_get_controller(config_get_key_channel(channel), 0));
+        SetDlgItemText(hWnd, IDC_PLAY_BANK1 + channel, buff);
+        SetWindowSubclass(bank_msb, EditSubProc, 0, 0);
+
+        // bank lsb
+        HWND bank_lsb = GetDlgItem(hWnd, IDC_PLAY_BANK3 + channel);
+        make_value(buff, sizeof(buff), config_get_controller(config_get_key_channel(channel), 32));
+        SetDlgItemText(hWnd, IDC_PLAY_BANK3 + channel, buff);
+        SetWindowSubclass(bank_lsb, EditSubProc, 0, 0);
 
         // sustain
         HWND sustain = GetDlgItem(hWnd, IDC_PLAY_SUSTAIN1 + channel);
@@ -582,11 +601,8 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
         switch (HIWORD(wParam)) 
         {
         case EN_SETFOCUS:
-          {
-            PostMessage(GetDlgItem(hWnd, IDC_PLAY_VELOCITY1 + channel), EM_SETSEL, 0, -1);
-            return 1;
-          }
-          break;
+          PostMessage(GetDlgItem(hWnd, IDC_PLAY_VELOCITY1 + channel), EM_SETSEL, 0, -1);
+          return 1;
 
         case EN_KILLFOCUS:
           {
@@ -606,6 +622,34 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
             SendMessage(GetDlgItem(hWnd, IDC_PLAY_VELOCITY_SLIDER1 + channel), TBM_SETPOS, 1, value);
             _snprintf(temp, sizeof(temp), "%d", value);
             SetDlgItemText(hWnd, IDC_PLAY_VELOCITY1 + channel, temp);
+          }
+          break;
+        }
+      }
+
+      else if (LOWORD(wParam) == IDC_PLAY_TRANSPOSE1 + channel)
+      {
+        switch (HIWORD(wParam)) 
+        {
+        case EN_SETFOCUS:
+          PostMessage(GetDlgItem(hWnd, IDC_PLAY_TRANSPOSE1 + channel), EM_SETSEL, 0, -1);
+          return 1;
+
+        case EN_KILLFOCUS:
+          {
+            char temp[256];
+            GetDlgItemText(hWnd, IDC_PLAY_TRANSPOSE1 + channel, temp, sizeof(temp));
+
+            int value = 0;
+            if (sscanf(temp, "%d", &value) == 1) {
+              if (value < -24) value = -24;
+              if (value > 24) value = 24;
+            }
+            config_set_key_transpose(channel, value);
+
+            value = config_get_key_transpose(channel);
+            _snprintf(temp, sizeof(temp), "%d", value);
+            SetDlgItemText(hWnd, IDC_PLAY_TRANSPOSE1 + channel, temp);
           }
           break;
         }
@@ -649,11 +693,8 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
         switch (HIWORD(wParam)) 
         {
         case EN_SETFOCUS:
-          {
-            PostMessage(GetDlgItem(hWnd, IDC_PLAY_PROGRAM1 + channel), EM_SETSEL, 0, -1);
-            return 1;
-          }
-          break;
+          PostMessage(GetDlgItem(hWnd, IDC_PLAY_PROGRAM1 + channel), EM_SETSEL, 0, -1);
+          return 1;
 
         case EN_KILLFOCUS:
           {
@@ -667,8 +708,79 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
               if (value > 127) value = 127;
 
               midi_send_event(0xc0 | config_get_key_channel(channel), value, 0, 0);
-              helpers::refresh(hWnd);
             }
+            else {
+              config_set_program(config_get_key_channel(channel), -1);
+            }
+            helpers::refresh(hWnd);
+          }
+          break;
+        }
+      }
+
+      else if (LOWORD(wParam) == IDC_PLAY_BANK1 + channel)
+      {
+        switch (HIWORD(wParam)) 
+        {
+        case EN_SETFOCUS:
+          PostMessage(GetDlgItem(hWnd, IDC_PLAY_BANK1 + channel), EM_SETSEL, 0, -1);
+          return 1;
+
+        case EN_KILLFOCUS:
+          {
+            char temp[256];
+            GetDlgItemText(hWnd, IDC_PLAY_BANK1 + channel, temp, sizeof(temp));
+
+            int value = 0;
+            byte ch = config_get_key_channel(channel);
+            if (sscanf(temp, "%d", &value) == 1)
+            {
+              if (value < 0) value = 0;
+              if (value > 127) value = 127;
+
+              midi_send_event(0xb0 | ch, 0, value, 0);
+
+              if (config_get_program(ch) < 128)
+                midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
+            }
+            else {
+              config_set_controller(ch, 0, -1);
+            }
+            helpers::refresh(hWnd);
+          }
+          break;
+        }
+      }
+
+      else if (LOWORD(wParam) == IDC_PLAY_BANK3 + channel)
+      {
+        switch (HIWORD(wParam)) 
+        {
+        case EN_SETFOCUS:
+          PostMessage(GetDlgItem(hWnd, IDC_PLAY_BANK3 + channel), EM_SETSEL, 0, -1);
+          return 1;
+
+        case EN_KILLFOCUS:
+          {
+            char temp[256];
+            GetDlgItemText(hWnd, IDC_PLAY_BANK3 + channel, temp, sizeof(temp));
+
+            int value = 0;
+            byte ch = config_get_key_channel(channel);
+            if (sscanf(temp, "%d", &value) == 1)
+            {
+              if (value < 0) value = 0;
+              if (value > 127) value = 127;
+
+              midi_send_event(0xb0 | ch, 32, value, 0);
+
+              if (config_get_program(ch) < 128)
+                midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
+            }
+            else {
+              config_set_controller(ch, 32, -1);
+            }
+            helpers::refresh(hWnd);
           }
           break;
         }
@@ -679,11 +791,8 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
         switch (HIWORD(wParam)) 
         {
         case EN_SETFOCUS:
-          {
-            PostMessage(GetDlgItem(hWnd, IDC_PLAY_SUSTAIN1 + channel), EM_SETSEL, 0, -1);
-            return 1;
-          }
-          break;
+          PostMessage(GetDlgItem(hWnd, IDC_PLAY_SUSTAIN1 + channel), EM_SETSEL, 0, -1);
+          return 1;
 
         case EN_KILLFOCUS:
           {
@@ -697,8 +806,11 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
               if (value > 127) value = 127;
 
               midi_send_event(0xb0 | config_get_key_channel(channel), 64, value, 0);
-              helpers::refresh(hWnd);
             }
+            else {
+              config_set_controller(config_get_key_channel(channel), 64, -1);
+            }
+            helpers::refresh(hWnd);
           }
           break;
         }
@@ -870,11 +982,11 @@ static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
   switch (uMsg) {
    case WM_INITDIALOG: {
      HWND setting_list = GetDlgItem(hWnd, IDC_SETTING_LIST);
+     add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_PLAY), IDD_SETTING_PLAY);
      add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_AUDIO), IDD_SETTING_AUDIO);
      add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_MIDI), IDD_SETTING_MIDI);
-     add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_PLAY), IDD_SETTING_PLAY);
-     add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_KEYMAP), IDD_SETTING_KEYMAP);
      add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_GUI), IDD_SETTING_GUI);
+     add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_KEYMAP), IDD_SETTING_KEYMAP);
    }
    break;
 
@@ -932,7 +1044,7 @@ static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
   return 0;
 }
 
-static void settings_show(int page = IDD_SETTING_AUDIO) {
+static void settings_show(int page = IDD_SETTING_PLAY) {
   HINSTANCE instance = GetModuleHandle(NULL);
 
   if (setting_hwnd == NULL) {
