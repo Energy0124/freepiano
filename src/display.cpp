@@ -23,7 +23,7 @@
 #include "gui.h"
 #include "config.h"
 #include "song.h"
-#include "export_mp4.h"
+#include "export.h"
 #include "../res/resource.h"
 #include "language.h"
 

@@ -15,6 +15,7 @@
 #include "song.h"
 #include "language.h"
 #include "export_mp4.h"
+#include "export_wav.h"
 #include "../res/resource.h"
 
 #pragma comment(lib, "Shlwapi.lib")
@@ -1030,6 +1031,7 @@ enum MENU_ID {
   MENU_ID_FILE_PLAY,
   MENU_ID_FILE_STOP,
   MENU_ID_FILE_EXPORT_MP4,
+  MENU_ID_FILE_EXPORT_WAV,
   MENU_ID_FILE_INFO,
 
   MENU_ID_PLAY_SPEED,
@@ -1096,6 +1098,7 @@ static int menu_init() {
   AppendMenu(menu_record, MF_STRING, (UINT_PTR)MENU_ID_FILE_INFO, lang_load_string(IDS_MENU_FILE_INFO));
 
   AppendMenu(menu_export, MF_STRING, (UINT_PTR)MENU_ID_FILE_EXPORT_MP4, lang_load_string(IDS_MENU_FILE_EXPORT_MP4));
+  AppendMenu(menu_export, MF_STRING, (UINT_PTR)MENU_ID_FILE_EXPORT_WAV, lang_load_string(IDS_MENU_FILE_EXPORT_WAV));
 
   // Config menu
   AppendMenu(menu_config, MF_STRING, (UINT_PTR)MENU_ID_CONFIG_OPTIONS, lang_load_string(IDS_MENU_CONFIG_OPTIONS));
@@ -1447,6 +1450,29 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      if (GetSaveFileName(&ofn)) {
        PathRenameExtension(ofn.lpstrFile, ".mp4");
        export_mp4(ofn.lpstrFile);
+     }
+   }
+   break;
+
+   case MENU_ID_FILE_EXPORT_WAV: {
+     song_stop_playback();
+
+     char temp[260];
+     OPENFILENAME ofn;
+     memset(&ofn, 0, sizeof(ofn));
+     ofn.lStructSize = sizeof(ofn);
+     ofn.hwndOwner = hwnd;
+     ofn.lpstrFile = temp;
+     ofn.lpstrFile[0] = 0;
+     ofn.nMaxFile = sizeof(temp);
+     ofn.lpstrFilter = lang_load_filter_string(IDS_SAVE_FILTER_WAV);
+     ofn.nFilterIndex = 1;
+     ofn.Flags = OFN_PATHMUSTEXIST;
+     ofn.lpstrDefExt = ".wav";
+
+     if (GetSaveFileName(&ofn)) {
+       PathRenameExtension(ofn.lpstrFile, ".wav");
+       export_wav(ofn.lpstrFile);
      }
    }
    break;

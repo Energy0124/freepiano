@@ -10,7 +10,7 @@
 #include "synthesizer_vst.h"
 #include "song.h"
 #include "config.h"
-#include "export_mp4.h"
+#include "export.h"
 
 static IASIO *driver = NULL;
 static int driver_index = -1;

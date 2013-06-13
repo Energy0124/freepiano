@@ -8,7 +8,7 @@
 #include "gui.h"
 #include "song.h"
 #include "config.h"
-#include "export_mp4.h"
+#include "export.h"
 
 // global directsound object
 static LPDIRECTSOUND dsound = NULL;

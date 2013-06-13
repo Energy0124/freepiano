@@ -35,6 +35,8 @@
     <ClCompile Include="..\src\synthesizer_vst.cpp" />
     <ClCompile Include="..\src\language.cpp" />
     <ClCompile Include="..\src\export_mp4.cpp" />
+    <ClCompile Include="..\src\export_wav.cpp" />
+    <ClCompile Include="..\src\export.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\asio\asio.h">
@@ -77,6 +79,8 @@
     <ClInclude Include="..\src\synthesizer_vst.h" />
     <ClInclude Include="..\src\language.h" />
     <ClInclude Include="..\src\export_mp4.h" />
+    <ClInclude Include="..\src\export_wav.h" />
+    <ClInclude Include="..\src\export.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\res\background.png">

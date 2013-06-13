@@ -103,7 +103,9 @@
     <ClCompile Include="..\src\asio\asiolist.cpp" />
     <ClCompile Include="..\src\config.cpp" />
     <ClCompile Include="..\src\display.cpp" />
+    <ClCompile Include="..\src\export.cpp" />
     <ClCompile Include="..\src\export_mp4.cpp" />
+    <ClCompile Include="..\src\export_wav.cpp" />
     <ClCompile Include="..\src\gui.cpp" />
     <ClCompile Include="..\src\keyboard.cpp" />
     <ClCompile Include="..\src\language.cpp" />
@@ -122,7 +124,9 @@
     <ClInclude Include="..\src\asio\asiolist.h" />
     <ClInclude Include="..\src\asio\asiosys.h" />
     <ClInclude Include="..\src\asio\iasiodrv.h" />
+    <ClInclude Include="..\src\export.h" />
     <ClInclude Include="..\src\export_mp4.h" />
+    <ClInclude Include="..\src\export_wav.h" />
     <ClInclude Include="..\src\language.h" />
     <ClInclude Include="..\src\vst\aeffect.h" />
     <ClInclude Include="..\src\vst\aeffectx.h" />

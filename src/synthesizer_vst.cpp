@@ -7,7 +7,7 @@
 #include "synthesizer_vst.h"
 #include "display.h"
 #include "config.h"
-#include "export_mp4.h"
+#include "export.h"
 #include "output_wasapi.h"
 
 // global vst effect instance

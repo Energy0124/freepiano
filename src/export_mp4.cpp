@@ -6,6 +6,7 @@
 #include "synthesizer_vst.h"
 #include "display.h"
 #include "config.h"
+#include "export.h"
 
 #include "../3rd/mp4v2/mp4.h"
 #include "../3rd/libfaac/faac.h"
@@ -14,7 +15,6 @@ extern "C" {
 #include "../3rd/libx264/include/x264.h"
 }
 
-static bool exporting = false;
 static HANDLE export_thread = NULL;
 
 static void show_error(const char *msg) {
@@ -430,7 +430,7 @@ done:
 
 // export mp4
 int export_mp4(const char *filename) {
-  exporting = true;
+  export_start();
 
   // create input thread
   export_thread = CreateThread(NULL, 0, &export_rendering_thread, (void *)filename, NULL, NULL);
@@ -441,11 +441,6 @@ int export_mp4(const char *filename) {
   // wait for thread end.
   //WaitForSingleObject(export_thread, -1);
 
-  exporting = false;
+  export_done();
   return 0;
-}
-
-// export rendering
-bool export_rendering() {
-  return exporting;
 }
