@@ -8,6 +8,7 @@
 #include "display.h"
 #include "config.h"
 #include "export_mp4.h"
+#include "output_wasapi.h"
 
 // global vst effect instance
 static AEffect *effect = NULL;
@@ -75,7 +76,15 @@ static VstIntPtr VSTCALLBACK HostCallback(AEffect *effect, VstInt32 opcode, VstI
      break;
 
    case audioMasterGetSampleRate:
-     result = 44100;
+     switch (config_get_current_output_type()) {
+     case OUTPUT_TYPE_WASAPI:
+       result = wasapi_get_samplerate();
+       break;
+       
+     default:
+       result = 44100;
+       break;
+     }
      break;
 
    case audioMasterGetBlockSize:

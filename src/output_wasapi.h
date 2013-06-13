@@ -15,3 +15,6 @@ void wasapi_set_buffer_time(double time);
 
 // enum device
 void wasapi_enum_device(wasapi_enum_callback &callback);
+
+// get output samplerate
+uint wasapi_get_samplerate();

@@ -28,7 +28,7 @@ static HANDLE wasapi_thread = NULL;
 static WAVEFORMATEX *pwfx = NULL;
 
 // output buffer size
-static uint buffer_size = 441;
+static double buffer_time = 0.01;
 
 // class id and interface id
 static const CLSID CLSID_MMDeviceEnumerator = __uuidof(MMDeviceEnumerator);
@@ -74,6 +74,7 @@ static DWORD __stdcall wasapi_play_thread(void *param) {
 
     // See how much buffer space is available.
     if (SUCCEEDED(hr = client->GetCurrentPadding(&numFramesPadding))) {
+      uint buffer_size = pwfx->nSamplesPerSec * buffer_time;
       if (numFramesPadding <= buffer_size) {
         uint numFramesAvailable = bufferFrameCount - numFramesPadding;
         uint numFramesProcess = 32;
@@ -187,23 +188,26 @@ int wasapi_open(const char *name) {
     goto error;
   }
 
+  bool supported = false;
+  if (pwfx->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+    WAVEFORMATEXTENSIBLE* format = (WAVEFORMATEXTENSIBLE*)pwfx;
+    if (format->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) {\
+      if (pwfx->wBitsPerSample == 32) {
+        supported = true;
+      }
+    }
+    fprintf(stdout, "WASAPI: name=%s, format={%x, %x, %x, %x}, bits=%d, samplerate=%d\n", 
+      name, format->SubFormat.Data1, format->SubFormat.Data2, format->SubFormat.Data3, format->SubFormat.Data4,
+      pwfx->wBitsPerSample, pwfx->nSamplesPerSec);
+  }
 
-  WAVEFORMATEXTENSIBLE format;
-  format.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE);
-  format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-  format.Format.nChannels = 2;
-  format.Format.nSamplesPerSec = 44100;
-  format.Format.wBitsPerSample = 32;
-  format.Format.nBlockAlign = (format.Format.nChannels * format.Format.wBitsPerSample) / 8;
-  format.Format.nAvgBytesPerSec = format.Format.nBlockAlign * format.Format.nSamplesPerSec;
-  format.dwChannelMask = 3;
-  format.Samples.wReserved = 32;
-  format.Samples.wSamplesPerBlock = 32;
-  format.Samples.wValidBitsPerSample = 32;
-  format.SubFormat =  KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+  if (!supported) {
+    fprintf(stderr, "WASAPI: current mix format is not supported. name=%s\n", name);
+    goto error;
+  }
 
   // initialize
-  if (FAILED(hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, 0, hnsRequestedDuration, 0, &format.Format, NULL))) {
+  if (FAILED(hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, 0, hnsRequestedDuration, 0, pwfx, NULL))) {
     fprintf(stderr, "WASAPI: Failed to initialize audio client. name=%s, hr=%x\n", name, hr);
     goto error;
   }
@@ -241,20 +245,27 @@ void wasapi_close() {
     CloseHandle(thread);
   }
 
-  CoTaskMemFree(pwfx);
+  if (pwfx) {
+    CoTaskMemFree(pwfx);
+    pwfx = NULL;
+  }
   SAFE_RELEASE(render_client);
   SAFE_RELEASE(client);
-  pwfx = NULL;
 }
 
 // set buffer size
 void wasapi_set_buffer_time(double time) {
   if (time > 0) {
-    buffer_size = (uint)(44.1 * time);
-
-    if (buffer_size < 32) buffer_size = 32;
-    if (buffer_size > 4096) buffer_size = 4096;
+    buffer_time = time * 0.001;
   }
+}
+
+// get output samplerate
+uint wasapi_get_samplerate() {
+  if (pwfx) {
+    return pwfx->nSamplesPerSec;
+  }
+  return 44100;
 }
 
 // enum device
