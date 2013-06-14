@@ -335,7 +335,7 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
 
   // debug print
 #ifdef _DEBUG
-  fprintf(stdout, "MIDI OUT: %04x %02x %02x %02x %02x\n", GetTickCount(), a, b, c, d);
+  //fprintf(stdout, "MIDI OUT: %04x %02x %02x %02x %02x\n", GetTickCount(), a, b, c, d);
 #endif
 
   // send midi event to vst plugin

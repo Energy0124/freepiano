@@ -1,5 +1,4 @@
 #include "pch.h"
-#include <dinput.h>
 
 #include "keyboard.h"
 #include "vst/aeffectx.h"
@@ -10,20 +9,6 @@
 
 #include <map>
 
-// buffer size
-
-#define DINPUT_BUFFER_SIZE  32
-
-// directinput8 device
-static LPDIRECTINPUT8 directinput = NULL;
-
-// directinput8 keyboard
-static LPDIRECTINPUTDEVICE8 keyboard = NULL;
-
-// directinput notify event
-static HANDLE input_event = NULL;
-static HANDLE input_thread = NULL;
-
 // auto generated keyup events
 struct keyup_t {
   byte delay_channel;
@@ -31,9 +16,11 @@ struct keyup_t {
 };
 static std::multimap<byte, keyup_t> key_up_map;
 
-
 // keyboard status
 static byte keyboard_status[256] = {0};
+
+// keyboard lock
+static thread_lock_t keyboard_lock;
 
 // -----------------------------------------------------------------------------------------
 // delay keyup
@@ -174,6 +161,8 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
 
 // initialize keyboard
 int keyboard_init() {
+  thread_lock lock(keyboard_lock);
+
   // disable accessibility key
   AllowAccessibilityShortcutKeys(false, true);
 
@@ -185,6 +174,8 @@ int keyboard_init() {
 
 // shutdown keyboard system
 void keyboard_shutdown() {
+  thread_lock lock(keyboard_lock);
+
   // enable accessibility key
   AllowAccessibilityShortcutKeys(true, false);
 
@@ -195,6 +186,8 @@ void keyboard_shutdown() {
 
 // enable or disable keyboard
 void keyboard_enable(bool enable) {
+  thread_lock lock(keyboard_lock);
+
   if (enable) {
     // install keyboard hook
     if (keyboard_hook == NULL) {
@@ -274,6 +267,8 @@ static inline void modify_midi_event(key_bind_t &map) {
 
 // keyboard event
 void keyboard_send_event(int code, int keydown) {
+  thread_lock lock(keyboard_lock);
+
   // keep state
   if (code < ARRAY_COUNT(keyboard_status))
     keyboard_status[code] = keydown;
@@ -354,6 +349,8 @@ void keyboard_send_event(int code, int keydown) {
 
 // keyboard event
 void keyboard_update(double time_elapsed) {
+  thread_lock lock(keyboard_lock);
+
   delay_keyup_update(time_elapsed);
 }
 // get keyboard status
