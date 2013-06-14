@@ -698,7 +698,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
         case EN_VALUE_VALID:
           if (value < 0) value = 0;
           if (value > 127) value = 127;
-          midi_send_event(0xc0 | config_get_key_channel(channel), value, 0, 0);
+          song_send_event(0xc0 | config_get_key_channel(channel), value, 0, 0);
           refresh = true;
           break;
 
@@ -718,10 +718,10 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
           if (value < 0) value = 0;
           if (value > 127) value = 127;
 
-          midi_send_event(0xb0 | ch, 0, value, 0);
+          song_send_event(0xb0 | ch, 0, value, 0);
 
           if (config_get_program(ch) < 128)
-            midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
+            song_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
 
           refresh = true;
           break;
@@ -742,10 +742,10 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
           if (value < 0) value = 0;
           if (value > 127) value = 127;
 
-          midi_send_event(0xb0 | ch, 32, value, 0);
+          song_send_event(0xb0 | ch, 32, value, 0);
 
           if (config_get_program(ch) < 128)
-            midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
+            song_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
 
           refresh = true;
           break;
@@ -763,7 +763,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
         case EN_VALUE_VALID:
           if (value < 0) value = 0;
           if (value > 127) value = 127;
-          midi_send_event(0xb0 | config_get_key_channel(channel), 64, value, 0);
+          song_send_event(0xb0 | config_get_key_channel(channel), 64, value, 0);
           refresh = true;
           break;
 
@@ -844,7 +844,7 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
    case WM_INITDIALOG: {
      CheckDlgButton(hWnd, IDC_GUI_ENABLE_RESIZE, config_get_enable_resize_window());
      CheckDlgButton(hWnd, IDC_GUI_ENABLE_HOTKEY, !config_get_enable_hotkey());
-     CheckDlgButton(hWnd, IDC_GUI_DISPLAY_MIDI_OUTPUT, config_get_midi_display() == MIDI_DISPLAY_OUTPUT);
+     CheckDlgButton(hWnd, IDC_GUI_DISPLAY_MIDI_TRANSPOSE, config_get_midi_transpose());
      CheckDlgButton(hWnd, IDC_GUI_INSTRUMENT_SHOW_MIDI, config_get_instrument_show_midi());
      CheckDlgButton(hWnd, IDC_GUI_INSTRUMENT_SHOW_VSTI, config_get_instrument_show_vsti());
 
@@ -871,9 +871,8 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
         config_set_enable_hotkey(!IsDlgButtonChecked(hWnd, IDC_GUI_ENABLE_HOTKEY));
         break;
 
-      case IDC_GUI_DISPLAY_MIDI_OUTPUT:
-        config_set_midi_display(IsDlgButtonChecked(hWnd, IDC_GUI_DISPLAY_MIDI_OUTPUT) ? 
-          MIDI_DISPLAY_OUTPUT : MIDI_DISPLAY_INPUT);
+      case IDC_GUI_DISPLAY_MIDI_TRANSPOSE:
+        config_set_midi_transpose(IsDlgButtonChecked(hWnd, IDC_GUI_DISPLAY_MIDI_TRANSPOSE) != 0);
         break;
 
       case IDC_GUI_INSTRUMENT_SHOW_MIDI:

@@ -447,7 +447,7 @@ struct global_setting_t {
 
   uint enable_hotkey;
   uint enable_resize;
-  uint midi_display;
+  uint midi_transpose;
   uint fixed_doh;
   uint key_fade;
   byte gui_transparency;
@@ -470,7 +470,7 @@ struct global_setting_t {
     output_volume = 100;
     enable_hotkey = true;
     enable_resize = true;
-    midi_display = MIDI_DISPLAY_INPUT;
+    midi_transpose = false;
     fixed_doh = false;
 
     key_fade = 0;
@@ -787,10 +787,10 @@ void config_set_setting_group(uint id) {
   for (int ch = 0; ch < 16; ch++) {
     for (int i = 0; i < 127; i++)
       if (config_get_controller(ch, i) < 128)
-        midi_output_event(0xb0 | ch, i, config_get_controller(ch, i), 0);
+        song_output_event(0xb0 | ch, i, config_get_controller(ch, i), 0);
 
     if (config_get_program(ch) < 128)
-      midi_output_event(0xc0 | ch, config_get_program(ch), 0, 0);
+      song_output_event(0xc0 | ch, config_get_program(ch), 0, 0);
   }
 }
 
@@ -1979,12 +1979,8 @@ int config_load(const char *filename) {
             config_set_midi_input_config(buff, config);
           }
 
-        } else if (match_word(&s, "display")) {
-          if (match_word(&s, "output")) {
-            global.midi_display = MIDI_DISPLAY_OUTPUT;
-          } else {
-            global.midi_display = MIDI_DISPLAY_INPUT;
-          }
+        } else if (match_word(&s, "transpose")) {
+          match_value(&s, NULL, 0, &global.midi_transpose);
         }
       }
       // resize window
@@ -2066,8 +2062,8 @@ int config_save(const char *filename) {
   if (global.keymap[0])
     fprintf(fp, "keyboard map %s\r\n", global.keymap);
 
-  if (global.midi_display == MIDI_DISPLAY_OUTPUT)
-    fprintf(fp, "midi display output\r\n");
+  if (global.midi_transpose)
+    fprintf(fp, "midi transpose %d\r\n", global.midi_transpose);
 
   for (auto it = global.midi_inputs.begin(); it != global.midi_inputs.end(); ++it) {
     if (it->second.enable) {
@@ -2217,17 +2213,16 @@ bool config_get_enable_hotkey() {
   return global.enable_hotkey != 0;
 }
 
-int config_get_midi_display() {
+bool config_get_midi_transpose() {
   thread_lock lock(config_lock);
 
-  return global.midi_display;
+  return global.midi_transpose != 0;
 }
 
-void config_set_midi_display(int value) {
+void config_set_midi_transpose(bool value) {
   thread_lock lock(config_lock);
 
-  global.midi_display = value;
-  display_midi_key_reset();
+  global.midi_transpose = value;
 }
 
 // select output

@@ -134,12 +134,7 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record) {
     return;
   }
 
-  // midi events
-  if (a >= 0x80) {
-    midi_send_event(a, b, c, d);
-  } else {
-    song_output_event(a, b, c, d);
-  }
+  song_output_event(a, b, c, d);
 }
 
 void song_output_event(byte a, byte b, byte c, byte d) {
@@ -547,7 +542,6 @@ int song_get_time() {
   return (int)song_timer;
 }
 
-
 // get clock
 double song_get_clock() {
   thread_lock lock(song_lock);
@@ -635,9 +629,6 @@ void song_update(double time_elapsed) {
 
   // process midi evens
   midi_update(time_elapsed);
-
-  // update display
-  display_update(time_elapsed);
 }
 
 song_info_t* song_get_info() {

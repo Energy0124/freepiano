@@ -26,3 +26,6 @@ void keyboard_send_event(int code, int keydown);
 
 // keyboard event
 void keyboard_update(double time_elapsed);
+
+// get keyboard status
+byte keyboard_get_status(byte code);

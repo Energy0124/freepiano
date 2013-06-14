@@ -7,21 +7,11 @@ int display_init(HWND hwnd);
 // terminate display
 int display_shutdown();
 
-// send keyboard event to display system
-void display_keyboard_event(byte code, uint status);
-
-// send midi event to display system
-void display_midi_key(byte code, uint status);
-void display_midi_key_reset();
-
 // display set image
 void display_set_image(uint type, const char *name);
 
 // display render
 void display_render();
-
-// update display
-void display_update(double time);
 
 // display process emssage
 int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

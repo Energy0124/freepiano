@@ -40,6 +40,12 @@ static HWND display_hwnd = NULL;
 
 static int display_width = 0;
 static int display_height = 0;
+static bool display_dirty = true;
+
+// refresh display
+static void inline display_refresh() {
+  display_dirty = true;
+}
 
 // get display width
 int display_get_width() { return 752; }
@@ -1149,6 +1155,8 @@ static int d3d_device_reset() {
   // set vertex declaration
   device->SetFVF(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1);
 
+  // refresh display
+  display_refresh();
   return 0;
 }
 
@@ -1157,8 +1165,12 @@ struct KeyboardState {
   float y1;
   float x2;
   float y2;
-  uint status;
   float fade;
+
+  uint active_color;
+  uint img;
+  char label[32];
+  int  note;
 };
 
 struct MidiKeyState {
@@ -1167,8 +1179,9 @@ struct MidiKeyState {
   float x2;
   float y2;
   bool black;
-  byte status;
   float fade;
+
+  uint  active_color;
 };
 
 
@@ -1459,6 +1472,10 @@ static void draw_sprite(float x1, float y1, float x2, float y2, float u1, float 
 
 // draw image
 static void draw_image(uint resource_id, float x1, float x2, float y1, float y2, uint color) {
+  // transparent
+  if ((color & 0xff000000) == 0)
+    return;
+
   if (resource_id < resource_count) {
     LPDIRECT3DTEXTURE9 texture = resources[resource_id].texture;
     if (texture) {
@@ -1575,68 +1592,119 @@ static void draw_image_border(uint resource_id, float x1, float x2, float y1, fl
 }
 
 
-// draw keyboard
-static void draw_keyboard() {
+static void update_keyboard(double fade) {
   for (KeyboardState *key = keyboard_states; key < keyboard_states + 256; key++) {
     if (key->x2 > key->x1) {
+
+      // active status
+      if (keyboard_get_status(key - keyboard_states) || (keyboard_states + gui_get_selected_key() == key))
+        key->fade = 1.0f;
+      else
+        key->fade = 0 + fade * (key->fade - 0);
+
+      // active color
+      uint color = (uint(255 * key->fade) << 24) | 0xffffff;
+      if (color != key->active_color) {
+        key->active_color = color;
+        display_refresh();
+      }
+
       key_bind_t map;
 
       // get keyboard map
       config_bind_get_keydown(key - keyboard_states, &map, 1);
 
-      float x1 = key->x1;
-      float y1 = key->y1;
-      float x2 = key->x2;
-      float y2 = key->y2;
-
       uint img = map.a ? keyboard_note_down : keyboard_unmapped_down;
-
-      draw_image_border(img + 1, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
-
-      // draw key button
-      if (key->status || (keyboard_states + gui_get_selected_key() == key)) {
-        key->fade = 1.0f;
-      }
-
-      if (key->fade > 0.005f) {
-        uint color = (uint(255 * key->fade) << 24) | 0xffffff;
-        draw_image_border(img, x1, y1, x2, y2, 6, 6, 6, 6, color);
+      if (img != key->img) {
+        key->img = img;
+        display_refresh();
       }
 
       // key label
       const char *label = config_bind_get_label(key - keyboard_states);
-      if (label[0]) {
-        draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, label, 10, 1, 1);
+      if (strcmp(label, key->label)) {
+        strcpy_s(key->label, label);
+        display_refresh();
       }
-      // draw note
-      else if ((map.a & 0xF0) == 0x90) {
+
+      // key note
+      int note = -1;
+      if ((map.a & 0xF0) == 0x90) {
         byte ch = map.a & 0x0f;
-        int note = map.b + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch);
+        note = map.b + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch);
 
         // fixed-doh
         if (config_get_fixed_doh()) {
           note += config_get_key_signature();
         }
+      }
 
-        if (note > 12 && note < 120) {
-          if (resources[notes].texture) {
-            float x3 = round(x1 + (x2 - x1 - 25.f) * 0.5f);
-            float x4 = x3 + 25.f;
-            float y3 = round(y1 + (y2 - y1 - 25.f) * 0.5f);
-            float y4 = y3 + 25.f;
-            float u3 = ((note - 12) % 12) * 25.f;
-            float v3 = ((note - 12) / 12) * 25.f;
-            float u4 = u3 + 25.f;
-            float v4 = v3 + 25.f;
+      if (note != key->note) {
+        key->note = note;
+        display_refresh();
+      }
+    }
+  }
+}
 
-            set_texture(resources[notes].texture);
-            draw_sprite(x3, y3, x4, y4, u3, v3, u4, v4, 0xffffffff);
-          }
+// draw keyboard
+static void draw_keyboard() {
+  for (KeyboardState *key = keyboard_states; key < keyboard_states + 256; key++) {
+    if (key->x2 > key->x1) {
+      float x1 = key->x1;
+      float y1 = key->y1;
+      float x2 = key->x2;
+      float y2 = key->y2;
+
+      draw_image_border(key->img + 1, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
+      draw_image_border(key->img, x1, y1, x2, y2, 6, 6, 6, 6, key->active_color);
+
+      // key label
+      if (key->label[0]) {
+        draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, key->label, 10, 1, 1);
+      }
+      // draw note
+      else if (key->note > 12 && key->note < 120) {
+        if (resources[notes].texture) {
+          float x3 = round(x1 + (x2 - x1 - 25.f) * 0.5f);
+          float x4 = x3 + 25.f;
+          float y3 = round(y1 + (y2 - y1 - 25.f) * 0.5f);
+          float y4 = y3 + 25.f;
+          float u3 = ((key->note - 12) % 12) * 25.f;
+          float v3 = ((key->note - 12) / 12) * 25.f;
+          float u4 = u3 + 25.f;
+          float v4 = v3 + 25.f;
+
+          set_texture(resources[notes].texture);
+          draw_sprite(x3, y3, x4, y4, u3, v3, u4, v4, 0xffffffff);
         }
       }
     }
   }
+}
 
+static void update_midi_keyboard(double fade) {
+  for (MidiKeyState *key = midi_key_states; key < midi_key_states + 127; key++) {
+    if (key->x2 > key->x1) {
+      byte note = key - midi_key_states;
+
+      if (config_get_midi_transpose()) {
+        note += config_get_key_signature();
+      }
+
+      if (midi_get_note_status(config_get_key_channel(0), note) ||
+          midi_get_note_status(config_get_key_channel(1), note))
+        key->fade = 1.0f;
+      else
+        key->fade = 0 + fade * (key->fade - 0);
+
+      uint color = (uint(255 * key->fade) << 24) | 0xffffff;
+      if (color != key->active_color) {
+        key->active_color = color;
+        display_refresh();
+      }
+    }
+  }
 }
 
 // draw midi keyboard
@@ -1645,14 +1713,7 @@ static void draw_midi_keyboard() {
     if (!key->black) {
       if (key->x2 > key->x1) {
         draw_image(midi_white_up, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
-
-        if (key->status)
-          key->fade = 1.0f;
-
-        if (key->fade > 0.005f) {
-          uint color = (uint(255 * key->fade) << 24) | 0xffffff;
-          draw_image(midi_white_down, key->x1, key->y1, key->x2, key->y2, color);
-        }
+        draw_image(midi_white_down, key->x1, key->y1, key->x2, key->y2, key->active_color);
       }
     }
   }
@@ -1661,14 +1722,7 @@ static void draw_midi_keyboard() {
     if (key->black) {
       if (key->x2 > key->x1) {
         draw_image(midi_black_up, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
-
-        if (key->status)
-          key->fade = 1.0f;
-
-        if (key->fade > 0.005f) {
-          uint color = (uint(255 * key->fade) << 24) | 0xffffff;
-          draw_image(midi_black_down, key->x1, key->y1, key->x2, key->y2, color);
-        }
+        draw_image(midi_black_down, key->x1, key->y1, key->x2, key->y2, key->active_color);
       }
     }
   }
@@ -1746,6 +1800,32 @@ static gui_control_t* find_control(uint type, uint command) {
   return NULL;
 }
 
+static void control_set_text(gui_control_t *ctl, const char *format, ...) {
+  char buff[sizeof(ctl->text)];
+
+  va_list args;
+  va_start(args, format);
+  vsprintf_s(buff, format, args);
+  va_end(args);
+
+  if (strcmp(buff, ctl->text)) {
+    strcpy_s(ctl->text, buff);
+    display_refresh();
+  }
+}
+
+static void control_set_image(gui_control_t *ctl, uint image, uint color) {
+  if (ctl->image != image) {
+    ctl->image = image;
+    display_refresh();
+  }
+
+  if (ctl->color != color) {
+    ctl->color = color;
+    display_refresh();
+  }
+}
+
 static void init_keyboard_controls() {
   int i, j;
   int x = 10;
@@ -1774,8 +1854,8 @@ static void init_keyboard_controls() {
   }
 }
 
-// darw keyboard controls
-static void draw_keyboard_controls() {
+// update keyboard controls
+static void update_keyboard_controls() {
   gui_control_t *ctl;
 
   // sustain pedal
@@ -1784,62 +1864,58 @@ static void draw_keyboard_controls() {
     ctl = find_control(CTL_TEXTBOX, CMD_SUSTAIN);
 
     if (sustain < 128)
-      _snprintf(ctl->text, sizeof(ctl->text), "%d", config_get_controller(0, 0x40));
+      control_set_text(ctl, "%d", config_get_controller(0, 0x40));
     else
-      strcpy(ctl->text, "-");
+      control_set_text(ctl, "-");
   }
 
   // group
   ctl = find_control(CTL_TEXTBOX, CMD_GROUP);
-  _snprintf(ctl->text, sizeof(ctl->text), "%d", config_get_setting_group());
+  control_set_text(ctl, "%d", config_get_setting_group());
 
   // midi key
   ctl = find_control(CTL_TEXTBOX, CMD_MIDI_KEY);
   switch (config_get_key_signature()) {
-   case 0:     strcpy(ctl->text, "C(0)"); break;
-   case 1:     strcpy(ctl->text, "bD(+1)"); break;
-   case 2:     strcpy(ctl->text, "D(+2)"); break;
-   case 3:     strcpy(ctl->text, "bE(+3)"); break;
-   case 4:     strcpy(ctl->text, "E(+4)"); break;
-   case 5:     strcpy(ctl->text, "F(+5)"); break;
-   case 6:     strcpy(ctl->text, "#F(+6)"); break;
-   case 7:     strcpy(ctl->text, "G(+7)"); break;
-   case -4:    strcpy(ctl->text, "bA(-4)"); break;
-   case -3:    strcpy(ctl->text, "A(-3)"); break;
-   case -2:    strcpy(ctl->text, "bB(-2)"); break;
-   case -1:    strcpy(ctl->text, "B(-1)"); break;
-   default:    _snprintf(ctl->text, sizeof(ctl->text), "%d", config_get_key_signature()); break;
+   case 0:     control_set_text(ctl, "C(0)"); break;
+   case 1:     control_set_text(ctl, "bD(+1)"); break;
+   case 2:     control_set_text(ctl, "D(+2)"); break;
+   case 3:     control_set_text(ctl, "bE(+3)"); break;
+   case 4:     control_set_text(ctl, "E(+4)"); break;
+   case 5:     control_set_text(ctl, "F(+5)"); break;
+   case 6:     control_set_text(ctl, "#F(+6)"); break;
+   case 7:     control_set_text(ctl, "G(+7)"); break;
+   case -4:    control_set_text(ctl, "bA(-4)"); break;
+   case -3:    control_set_text(ctl, "A(-3)"); break;
+   case -2:    control_set_text(ctl, "bB(-2)"); break;
+   case -1:    control_set_text(ctl, "B(-1)"); break;
+   default:    control_set_text(ctl, "%d", config_get_key_signature()); break;
   }
 
   // record
   ctl = find_control(CTL_BUTTON, CMD_RECORD);
   if (song_is_recording()) {
-    ctl->image = check_button_down;
-    ctl->color = 0xffd23b36;
+    control_set_image(ctl, check_button_down, 0xffd23b36);
   } else {
-    ctl->image = check_button_down;
-    ctl->color = 0xff4d3b36;
+    control_set_image(ctl, check_button_up, 0xff4d3b36);
   }
 
   // timer
   ctl = find_control(CTL_TEXTBOX, CMD_TIME);
-  _snprintf(ctl->text, sizeof(ctl->text), "%d:%02d", song_get_time() / 1000 / 60, song_get_time() / 1000 % 60);
+  control_set_text(ctl, "%d:%02d", song_get_time() / 1000 / 60, song_get_time() / 1000 % 60);
 
   // play
   ctl = find_control(CTL_BUTTON, CMD_PLAY);
   if (song_is_playing()) {
-    ctl->image = check_button_down;
-    ctl->color = 0xff53ce36;
+    control_set_image(ctl, check_button_down, 0xff53ce36);
   } else {
-    ctl->image = check_button_up;
-    ctl->color = 0xff4d5c37;
+    control_set_image(ctl, check_button_up, 0xff4d5c37);
   }
 
   // velocity
   ctl = find_control(CTL_TEXTBOX, CMD_VELOCITY_LEFT);
-  _snprintf(ctl->text, sizeof(ctl->text), "%d", config_get_key_velocity(0));
+  control_set_text(ctl, "%d", config_get_key_velocity(0));
   ctl = find_control(CTL_TEXTBOX, CMD_VELOCITY_RIGHT);
-  _snprintf(ctl->text, sizeof(ctl->text), "%d", config_get_key_velocity(1));
+  control_set_text(ctl, "%d", config_get_key_velocity(1));
 
   // octshift
   {
@@ -1847,12 +1923,15 @@ static void draw_keyboard_controls() {
     int s2 = config_get_key_octshift(1);
 
     ctl = find_control(CTL_TEXTBOX, CMD_OCTSHIFT_LEFT);
-    _snprintf(ctl->text, sizeof(ctl->text), "%s%d", s1 > 0 ? "+" : s1 < 0 ? "-" : "", abs(s1));
+    control_set_text(ctl, "%s%d", s1 > 0 ? "+" : s1 < 0 ? "-" : "", abs(s1));
 
     ctl = find_control(CTL_TEXTBOX, CMD_OCTSHIFT_RIGHT);
-    _snprintf(ctl->text, sizeof(ctl->text), "%s%d", s2 > 0 ? "+" : s2 < 0 ? "-" : "", abs(s2));
+    control_set_text(ctl, "%s%d", s2 > 0 ? "+" : s2 < 0 ? "-" : "", abs(s2));
   }
+}
 
+// darw keyboard controls
+static void draw_keyboard_controls() {
   // draw controls
   for (int i = 0; i < ARRAY_COUNT(controls); i++) {
     gui_control_t &ctl = controls[i];
@@ -1902,8 +1981,15 @@ static void setup_matrix(float x, float y, float width, float height) {
   device->SetTransform(D3DTS_VIEW, &view);
 }
 
+static int fps_frames = 0;
+
+static void display_update_fps() {
+}
+
 // draw
 static void display_draw() {
+  static DWORD frames = 0;
+
   // begin scene
   if (SUCCEEDED(device->BeginScene())) {
     float width = (float)display_get_width();
@@ -1944,50 +2030,80 @@ static void display_draw() {
     }
 #endif
     device->EndScene();
-  }
-}
-
-// draw main window
-void display_render() {
-  if (device == NULL)
-    return;
-
-  display_draw();
-
-  HRESULT hr = device->Present(NULL, NULL, NULL, NULL);
-  if (hr == D3DERR_DEVICELOST) {
-    hr = device->TestCooperativeLevel();
-
-    if (D3DERR_DEVICENOTRESET == hr) {
-      d3d_device_lost();
-      d3d_device_reset();
-    }
+    ++fps_frames;
   }
 }
 
 // update display
-void display_update(double time) {
-  time = time / 1000.0;
-  double fade = 0;
+static void display_update() {
+  // update timer
+  static double old_time = 0;
+  double new_time = song_get_clock();
+  if (old_time > new_time)
+    old_time = new_time;
 
+  // calculate fade
+  double fade = 0;
   if (config_get_key_fade()) {
     double fade_speed = 10 * (1 - config_get_key_fade() / 100.0);
 
     if (fade_speed < 0.1)
       fade_speed = 0.1;
 
-    fade = pow(0.001, time * fade_speed);
+    fade = pow(0.001, (new_time - old_time) / 1000 * fade_speed);
   }
 
-  for (KeyboardState *key = keyboard_states; key < keyboard_states + 256; key++) {
-    if (key->x2 > key->x1) {
-      key->fade = 0 + fade * (key->fade - 0);
+  // update keyboard
+  update_keyboard(fade);
+
+  // update midi keyboard
+  update_midi_keyboard(fade);
+
+  // update keyboard controls
+  update_keyboard_controls();
+
+  // remember time
+  old_time = new_time;
+
+  // update fps
+  if (1) {
+    static DWORD last_time = 0;
+    static DWORD FPS = 0;
+
+    DWORD time = GetTickCount();
+    if (time - last_time > 1000) {
+      FPS = fps_frames;
+      fps_frames = 0;
+      last_time = time;
+
+#ifdef _DEBUG
+      char buff[256];
+      sprintf_s(buff, APP_NAME" FPS: %d\n", FPS);
+      SetWindowText(gui_get_window(), buff);
+#endif
     }
   }
+}
 
-  for (MidiKeyState *key = midi_key_states; key < midi_key_states + 127; key++) {
-    if (key->x2 > key->x1) {
-      key->fade = 0 + fade * (key->fade - 0);
+// draw main window
+void display_render() {
+  display_update();
+
+  if (device == NULL)
+    return;
+
+  if (display_dirty) {
+    display_dirty = false;
+    display_draw();
+
+    HRESULT hr = device->Present(NULL, NULL, NULL, NULL);
+    if (hr == D3DERR_DEVICELOST) {
+      hr = device->TestCooperativeLevel();
+
+      if (D3DERR_DEVICENOTRESET == hr) {
+        d3d_device_lost();
+        d3d_device_reset();
+      }
     }
   }
 }
@@ -2038,23 +2154,6 @@ int display_shutdown() {
 // get display window handle
 HWND display_get_hwnd() {
   return display_hwnd;
-}
-
-// display set key down
-void display_keyboard_event(byte code, uint status) {
-  keyboard_states[code].status = status;
-}
-
-// display update midi
-void display_midi_key(byte code, uint status) {
-  midi_key_states[code & 0x7f].status = status;
-}
-
-// reset display midi event
-void display_midi_key_reset() {
-  for (MidiKeyState *key = midi_key_states; key < midi_key_states + sizeof(midi_key_states) / sizeof(midi_key_states[0]); key++) {
-    key->status = 0;
-  }
 }
 
 // find keyboard key
@@ -2282,8 +2381,8 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
     midinote = find_midi_note(x, y, &velocity);
 
     if (midinote != -1) {
-      if (config_get_midi_display() == MIDI_DISPLAY_OUTPUT) {
-        midinote = midinote - config_get_key_octshift(0) * 12 - config_get_key_transpose(0) - config_get_key_signature();
+      if (config_get_midi_transpose()) {
+        midinote = midinote + config_get_key_signature();
         if (midinote < 0) midinote = 0;
         if (midinote > 127) midinote = 127;
       }
@@ -2428,6 +2527,7 @@ int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
    case WM_USER + 10: {
      unsigned char * *planes = (unsigned char * *)wParam;
      int *strikes = (int *)lParam;
+     display_update();
      display_draw();
      return capture_bitmap_I420(planes, strikes);
    }

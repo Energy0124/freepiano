@@ -33,3 +33,6 @@ void midi_reset();
 
 // update midi
 void midi_update(double time);
+
+// get key status
+byte midi_get_note_status(byte ch, byte note);

@@ -50,6 +50,11 @@ struct midi_keyup_t {
 };
 static std::multimap<byte, midi_keyup_t> key_up_map;
 
+// get key status
+byte midi_get_note_status(byte ch, byte note) {
+    return note_states[ch & 0x0f][note & 0x7f];
+}
+
 // open output device
 int midi_open_output(const char *name) {
   thread_lock lock(midi_output_lock);
@@ -106,10 +111,15 @@ static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR d
 
     // remap channel
     if (device->remap >= 1 && device->remap <= 16) {
+      byte op = a & 0xf0;
       byte ch = config_get_key_channel(device->remap - 1);
 
-      a = (a & 0xf0) | ch;
-      b = clamp_value((int)b + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch) + config_get_key_signature());
+      a = op | ch;
+
+      if (op == 0x80 || op == 0x90) {
+        if (config_get_midi_transpose())
+          b = clamp_value((int)b + config_get_key_signature());
+      }
     }
 
     song_send_event(a, b, c, d, true);
@@ -323,6 +333,11 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
    break;
   }
 
+  // debug print
+#ifdef _DEBUG
+  fprintf(stdout, "MIDI OUT: %04x %02x %02x %02x %02x\n", GetTickCount(), a, b, c, d);
+#endif
+
   // send midi event to vst plugin
   if (vsti_is_instrument_loaded()) {
     vsti_send_midi_event(a, b, c, d);
@@ -351,16 +366,6 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
     // adjust note
     b = clamp_value((int)b + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch) + config_get_key_signature(), 0, 127);
 
-    // adjust velocity
-    /*
-    byte vel = config_get_key_velocity(ch);
-    if (vel) {
-      c = clamp_value((int)c * 127 / vel, 0, 127);
-    } else {
-      c = 127;
-    }
-    */
-
     // auto generate note off event
     midi_keyup_t up;
     up.map.a = 0x80 | (a & 0x0f);
@@ -369,28 +374,21 @@ void midi_send_event(byte a, byte b, byte c, byte d) {
     up.map.d = d;
     up.midi_display_key = b;
 
-    if (config_get_midi_display() == MIDI_DISPLAY_INPUT) {
+    if (config_get_midi_transpose()) {
       up.midi_display_key -= config_get_key_signature();
     }
 
     key_up_map.insert(std::pair<byte, midi_keyup_t>(code, up));
-
-    display_midi_key(up.midi_display_key, true);
     midi_output_event(a, b, c, d);
   }
 
   // note off
   else if (cmd == 0x80) {
-    // display
-    if (config_get_midi_display() == MIDI_DISPLAY_INPUT)
-      display_midi_key(b, false);
-
     auto it = key_up_map.find(code);
     while (it != key_up_map.end() && it->first == code) {
       midi_keyup_t &up = it->second;
 
       if (up.map.a) {
-        display_midi_key(up.midi_display_key, false);
         midi_output_event(up.map.a, up.map.b, c, 0);
       }
 

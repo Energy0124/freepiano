@@ -9,9 +9,6 @@
 #define OUTPUT_TYPE_WASAPI          2
 #define OUTPUT_TYPE_ASIO            3
 
-#define MIDI_DISPLAY_INPUT          0
-#define MIDI_DISPLAY_OUTPUT         1
-
 #define MIDI_REMAP_ORIGIN           0
 #define MIDI_REMAP_LEFT             1
 #define MIDI_REMAP_RIGHT            2
@@ -97,8 +94,8 @@ bool config_get_enable_hotkey();
 void config_set_enable_hotkey(bool enable);
 
 // get display midi type
-int config_get_midi_display();
-void config_set_midi_display(int value);
+bool config_get_midi_transpose();
+void config_set_midi_transpose(bool value);
 
 // get keymap
 const char* config_get_keymap();

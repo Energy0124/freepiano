@@ -27,7 +27,6 @@ static HANDLE input_thread = NULL;
 // auto generated keyup events
 struct keyup_t {
   byte delay_channel;
-  byte midi_display_key;
   key_bind_t map;
 };
 static std::multimap<byte, keyup_t> key_up_map;
@@ -279,9 +278,6 @@ void keyboard_send_event(int code, int keydown) {
   if (code < ARRAY_COUNT(keyboard_status))
     keyboard_status[code] = keydown;
 
-  // send keyboard event to display
-  display_keyboard_event(code, keydown);
-
   // keydown event
   if (keydown) {
     key_bind_t temp[256];
@@ -304,21 +300,12 @@ void keyboard_send_event(int code, int keydown) {
         // translate to real midi event
         modify_midi_event(down);
 
-        // display midi event
-        up.midi_display_key = down.b;
-        if (config_get_midi_display() == MIDI_DISPLAY_INPUT)
-          up.midi_display_key -= config_get_key_signature();
-
-        // display midi event
-        display_midi_key(up.midi_display_key, true);
-
         up.delay_channel = ch;
         up.map.a = 0x80 | (down.a & 0x0f);
         up.map.b = down.b;
         up.map.c = down.c;
         up.map.d = down.d;
         key_up_map.insert(std::pair<byte, keyup_t>(code, up));
-
       }
 
       // send event to song
@@ -351,16 +338,10 @@ void keyboard_send_event(int code, int keydown) {
         if ((up.map.a & 0xf0) == 0x80 && config_get_delay_keyup(up.delay_channel)) {
           // add event to delay keyup queue.
           delay_keyup_add(up.delay_channel * 128 + up.map.b, up.map);
-
-          // send event to display to correct midi keyup
-          if (config_get_midi_display() == MIDI_DISPLAY_OUTPUT) {
-            display_midi_key(up.map.b, false);
-          }
         }
 
         // send keyup event
         else {
-          display_midi_key(up.midi_display_key, false);
           song_output_event(up.map.a, up.map.b, up.map.c, up.map.d);
         }
       }
@@ -374,4 +355,8 @@ void keyboard_send_event(int code, int keydown) {
 // keyboard event
 void keyboard_update(double time_elapsed) {
   delay_keyup_update(time_elapsed);
+}
+// get keyboard status
+byte keyboard_get_status(byte code) {
+  return keyboard_status[code];
 }
