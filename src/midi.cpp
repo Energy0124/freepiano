@@ -12,12 +12,12 @@
 struct midi_in_device_t {
   bool enable;
   HMIDIIN device;
-  byte channel_id;
+  int remap;
 
   midi_in_device_t() 
     : enable(false)
     , device(NULL)
-    , channel_id(0)
+    , remap(0)
   {
   }
 };
@@ -88,6 +88,12 @@ void midi_close_output() {
   }
 }
 
+static inline byte clamp_value(int data, byte min = 0, byte max = 127) {
+  if (data < min) return min;
+  if (data > max) return max;
+  return data;
+}
+
 static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2) {
   if (wMsg == MIM_DATA) {
     uint data = (uint)dwParam1;
@@ -99,8 +105,11 @@ static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR d
     midi_in_device_t *device = (midi_in_device_t*)dwInstance;
 
     // remap channel
-    if (device->channel_id < 16) {
-      a = a & 0xf0 | (device->channel_id & 0xf);
+    if (device->remap >= 1 && device->remap <= 16) {
+      byte ch = config_get_key_channel(device->remap - 1);
+
+      a = (a & 0xf0) | ch;
+      b = clamp_value((int)b + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch) + config_get_key_signature());
     }
 
     song_send_event(a, b, c, d, true);
@@ -131,7 +140,7 @@ void midi_open_inputs() {
       std::string key(caps.szPname);
       midi_in_device_t &input = midi_inputs[key];
       input.enable = true;
-      input.channel_id = config.channel;
+      input.remap = config.remap;
 
       if (input.device == NULL) {
         if (midiInOpen(&input.device, i, (DWORD_PTR)&midi_input_callback, (DWORD_PTR)&input, CALLBACK_FUNCTION)) {

@@ -1974,8 +1974,8 @@ int config_load(const char *filename) {
           if (match_string(&s, buff, sizeof(buff))) {
             midi_input_config_t config;
             config.enable = true;
-            config.channel = 0;
-            match_number(&s, &config.channel);
+            config.remap = 0;
+            match_number(&s, &config.remap);
             config_set_midi_input_config(buff, config);
           }
 
@@ -2071,7 +2071,7 @@ int config_save(const char *filename) {
 
   for (auto it = global.midi_inputs.begin(); it != global.midi_inputs.end(); ++it) {
     if (it->second.enable) {
-      fprintf(fp, "midi input \"%s\" %d\r\n", it->first.c_str(), it->second.channel);
+      fprintf(fp, "midi input \"%s\" %d\r\n", it->first.c_str(), it->second.remap);
     }
   }
 
@@ -2301,7 +2301,7 @@ bool config_get_midi_input_config(const char *device, midi_input_config_t *confi
   }
 
   config->enable = false;
-  config->channel = 0;
+  config->remap = 0;
   return false;
 }
 

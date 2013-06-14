@@ -94,6 +94,16 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
   static HMENU menu_midi_input_channel_popup = NULL;
   static HMENU menu_midi_input_enable_popup = NULL;
 
+  static struct channel_remap {
+    int remap;
+    int name;
+  }
+  remaps[] = {
+    { MIDI_REMAP_ORIGIN,    IDS_MIDI_INPUT_LIST_REMAP_ORIGIN },
+    { MIDI_REMAP_LEFT,      IDS_MIDI_INPUT_LIST_REMAP_LEFT },
+    { MIDI_REMAP_RIGHT,     IDS_MIDI_INPUT_LIST_REMAP_RIGHT },
+  };
+
   struct helpers {
     static void update_midi_input(HWND list, int id, const char *device) {
       char buff[256];
@@ -102,7 +112,12 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       ListView_SetItemText(list, id, 1, (LPSTR)lang_load_string(config.enable ? IDS_MIDI_INPUT_LIST_ENABLED : IDS_MIDI_INPUT_LIST_DISABLED));
 
-      sprintf_s(buff, "%d", config.channel);
+      if (config.remap >= 0 && config.remap < ARRAYSIZE(remaps)) {
+        strcpy_s(buff, lang_load_string(remaps[config.remap].name));
+      }
+      else {
+        sprintf_s(buff, "%d", config.remap);
+      }
       ListView_SetItemText(list, id, 2, (LPSTR)buff);
     }
 
@@ -138,13 +153,14 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
       callback.index = 0;
       midi_enum_input(callback);
 
-      /*
-      int selected = ListView_GetNextItem(input_list, -1, LVNI_FOCUSED);
-      ListView_SetItemState(input_list, -1, 0, LVIS_SELECTED); // deselect all items
-      ListView_EnsureVisible(input_list, selected, FALSE);
-      ListView_SetItemState(input_list, selected, LVIS_SELECTED ,LVIS_SELECTED); // select item
-      ListView_SetItemState(input_list, selected, LVIS_FOCUSED ,LVIS_FOCUSED); // optional
-      */
+      bool keep_selected = false;
+      if (keep_selected) {
+        int selected = ListView_GetNextItem(input_list, -1, LVNI_FOCUSED);
+        ListView_SetItemState(input_list, -1, 0, LVIS_SELECTED); // deselect all items
+        ListView_EnsureVisible(input_list, selected, FALSE);
+        ListView_SetItemState(input_list, selected, LVIS_SELECTED ,LVIS_SELECTED); // select item
+        ListView_SetItemState(input_list, selected, LVIS_FOCUSED ,LVIS_FOCUSED); // optional
+      }
     }
 
     static HMENU create_popup_menu() {
@@ -186,7 +202,7 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
      ListView_InsertColumn(input_list, 2, &lvc);
 
      // Channel.
-     lvc.pszText = (LPSTR)lang_load_string(IDS_MIDI_INPUT_LIST_CHANNEL);
+     lvc.pszText = (LPSTR)lang_load_string(IDS_MIDI_INPUT_LIST_REMAP);
      lvc.cx = 60;
      ListView_InsertColumn(input_list, 2, &lvc);
 
@@ -223,10 +239,8 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
        config_get_midi_input_config(device_name, &config);
 
        if (menu == menu_midi_input_channel_popup) {
-         char buff[256];
-
-         if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION)) {
-           config.channel = atoi(buff);
+         if (pos >= 0 && pos < ARRAYSIZE(remaps)) {
+           config.remap = remaps[pos].remap;
          }
        }
        else if (menu == menu_midi_input_enable_popup) {
@@ -268,10 +282,8 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
            else if (column == 2) {
              menu_midi_input_channel_popup = helpers::create_popup_menu();
 
-             for (int i = 0; i < 16; i++) {
-               char buff[256];
-               sprintf_s(buff, "%d", i);
-               AppendMenu(menu_midi_input_channel_popup,  MF_STRING, (UINT_PTR)0, buff);
+             for (int i = 0; i < ARRAYSIZE(remaps); i++) {
+               AppendMenu(menu_midi_input_channel_popup,  MF_STRING, (UINT_PTR)0, lang_load_string(remaps[i].name));
              }
 
              helpers::show_popup_menu(menu_midi_input_channel_popup, hWnd);

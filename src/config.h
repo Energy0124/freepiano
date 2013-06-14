@@ -12,6 +12,10 @@
 #define MIDI_DISPLAY_INPUT          0
 #define MIDI_DISPLAY_OUTPUT         1
 
+#define MIDI_REMAP_ORIGIN           0
+#define MIDI_REMAP_LEFT             1
+#define MIDI_REMAP_RIGHT            2
+
 struct key_bind_t {
   byte a;
   byte b;
@@ -24,7 +28,7 @@ struct key_bind_t {
 
 struct midi_input_config_t {
   bool enable;
-  int channel;
+  int remap;
 };
 
 // initialize config
