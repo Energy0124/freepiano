@@ -39,7 +39,10 @@ static void try_open_song(int err) {
   }
 }
 
-// make control refocus after hit return.
+// Numeric edit control
+#define EN_VALUE_VALID      0xFE01
+#define EN_VALUE_INVALID    0xFE02
+
 static LRESULT CALLBACK EditSubProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
   switch (uMsg) {
    case WM_CHAR:
@@ -47,6 +50,32 @@ static LRESULT CALLBACK EditSubProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
        SetFocus(NULL);
        SetFocus(hWnd);
        return 0;
+     }
+     break;
+
+   case WM_SETFOCUS:
+     PostMessage(hWnd, EM_SETSEL, 0, -1);
+     break;
+
+   case WM_KILLFOCUS:
+     {
+       HWND parent = GetParent(hWnd);
+       WORD id = GetDlgCtrlID(hWnd);
+
+       if (parent && id) {
+         int value = 0;
+         char temp[256];
+
+         GetWindowText(hWnd, temp, sizeof(temp));
+         if (sscanf(temp, "%d", &value) == 1)
+         {
+           PostMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_VALID), (LPARAM)value);
+         }
+         else
+         {
+           PostMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_INVALID), 0);
+         }
+       }
      }
      break;
   }
@@ -420,11 +449,7 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
        }
      }
      else if (LOWORD(wParam) == IDC_PLAYBACK_SPEED) {
-       if (HIWORD(wParam) == EN_SETFOCUS) {
-         PostMessage(GetDlgItem(hWnd, IDC_PLAYBACK_SPEED), EM_SETSEL, 0, -1);
-         return 1;
-       }
-       else if (HIWORD(wParam) == EN_KILLFOCUS) {
+       if (HIWORD(wParam) == EN_KILLFOCUS) {
          char temp[256];
          GetDlgItemText(hWnd, IDC_PLAYBACK_SPEED, temp, sizeof(temp));
          song_set_play_speed(atof(temp));
@@ -479,8 +504,8 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
   struct helpers
   {
-    static void make_value(char *buff, size_t size, int value) {
-      if (value >= 0 && value < 128) {
+    static void make_value(char *buff, size_t size, int value, int range_min = 0, int range_max = 127) {
+      if (value >= range_min && value <= range_max) {
         _snprintf(buff, size, "%d", value);
       }
       else {
@@ -507,7 +532,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
         // transpose
         HWND transpose = GetDlgItem(hWnd, IDC_PLAY_TRANSPOSE1 + channel);
-        make_value(buff, sizeof(buff), config_get_key_transpose(channel));
+        make_value(buff, sizeof(buff), config_get_key_transpose(channel), -63, 63);
         SetDlgItemText(hWnd, IDC_PLAY_TRANSPOSE1 + channel, buff);
         SetWindowSubclass(transpose, EditSubProc, 0, 0);
 
@@ -560,15 +585,17 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
     }
   };
 
+  bool refresh = false;
+
   switch (uMsg)
   {
   case WM_INITDIALOG:
-    helpers::refresh(hWnd);
+    refresh = true;
     break;
 
   case WM_ACTIVATE:
     if (WA_INACTIVE != LOWORD(wParam))
-      helpers::refresh(hWnd);
+      refresh = true;
     break;
 
   case WM_HSCROLL:
@@ -591,232 +618,155 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
   case WM_COMMAND:
     if (LOWORD(wParam) == IDC_PLAY_REFRESH) {
-      helpers::refresh(hWnd);
+      refresh = true;
     }
 
     for (int channel = 0; channel < 2; channel ++)
     {
+      int value = lParam;
+
       if (LOWORD(wParam) == IDC_PLAY_VELOCITY1 + channel)
       {
-        switch (HIWORD(wParam)) 
-        {
-        case EN_SETFOCUS:
-          PostMessage(GetDlgItem(hWnd, IDC_PLAY_VELOCITY1 + channel), EM_SETSEL, 0, -1);
-          return 1;
+        switch (HIWORD(wParam)) {
+        case EN_VALUE_VALID:
+          if (value < 0) value = 0;
+          if (value > 127) value = 127;
+          config_set_key_velocity(channel, value);
+          refresh = true;
+          break;
 
-        case EN_KILLFOCUS:
-          {
-            char temp[256];
-            GetDlgItemText(hWnd, IDC_PLAY_VELOCITY1 + channel, temp, sizeof(temp));
-
-            int value = 0;
-            if (sscanf(temp, "%d", &value) == 1)
-            {
-              if (value < 0) value = 0;
-              if (value > 127) value = 127;
-
-              config_set_key_velocity(channel, value);
-            }
-
-            value = config_get_key_velocity(channel);
-            SendMessage(GetDlgItem(hWnd, IDC_PLAY_VELOCITY_SLIDER1 + channel), TBM_SETPOS, 1, value);
-            _snprintf(temp, sizeof(temp), "%d", value);
-            SetDlgItemText(hWnd, IDC_PLAY_VELOCITY1 + channel, temp);
-          }
+        case EN_VALUE_INVALID:
+          refresh = true;
           break;
         }
       }
 
       else if (LOWORD(wParam) == IDC_PLAY_TRANSPOSE1 + channel)
       {
-        switch (HIWORD(wParam)) 
-        {
-        case EN_SETFOCUS:
-          PostMessage(GetDlgItem(hWnd, IDC_PLAY_TRANSPOSE1 + channel), EM_SETSEL, 0, -1);
-          return 1;
+        switch (HIWORD(wParam)) {
+        case EN_VALUE_VALID:
+          if (value < -48) value = -48;
+          if (value > 48) value = 48;
+          config_set_key_transpose(channel, value);
+          refresh = true;
+          break;
 
-        case EN_KILLFOCUS:
-          {
-            char temp[256];
-            GetDlgItemText(hWnd, IDC_PLAY_TRANSPOSE1 + channel, temp, sizeof(temp));
-
-            int value = 0;
-            if (sscanf(temp, "%d", &value) == 1) {
-              if (value < -24) value = -24;
-              if (value > 24) value = 24;
-            }
-            config_set_key_transpose(channel, value);
-
-            value = config_get_key_transpose(channel);
-            _snprintf(temp, sizeof(temp), "%d", value);
-            SetDlgItemText(hWnd, IDC_PLAY_TRANSPOSE1 + channel, temp);
-          }
+        case EN_VALUE_INVALID:
+          refresh = true;
           break;
         }
       }
 
       else if (LOWORD(wParam) == IDC_PLAY_OCTAVE1 + channel)
       {
-        switch (HIWORD(wParam)) 
-        {
-        case CBN_SELCHANGE:
-          {
-            char temp[256];
-            GetDlgItemText(hWnd, IDC_PLAY_OCTAVE1 + channel, temp, sizeof(temp));
+        if (HIWORD(wParam) == CBN_SELCHANGE) {
+          char temp[256];
+          GetDlgItemText(hWnd, IDC_PLAY_OCTAVE1 + channel, temp, sizeof(temp));
 
-            config_set_key_octshift(channel, atoi(temp));
-          }
-          break;
+          config_set_key_octshift(channel, atoi(temp));
+          refresh = true;
         }
-        break;
       }
 
       else if (LOWORD(wParam) == IDC_PLAY_CHANNEL1 + channel)
       {
-        switch (HIWORD(wParam)) 
-        {
-        case CBN_SELCHANGE:
-          {
-            char temp[256];
-            GetDlgItemText(hWnd, IDC_PLAY_CHANNEL1 + channel, temp, sizeof(temp));
+        if (HIWORD(wParam) == CBN_SELCHANGE) {
+          char temp[256];
+          GetDlgItemText(hWnd, IDC_PLAY_CHANNEL1 + channel, temp, sizeof(temp));
 
-            config_set_key_channel(channel, atoi(temp));
-            helpers::refresh(hWnd);
-          }
-          break;
+          config_set_key_channel(channel, atoi(temp));
+          refresh = true;
         }
         break;
       }
 
       else if (LOWORD(wParam) == IDC_PLAY_PROGRAM1 + channel)
       {
-        switch (HIWORD(wParam)) 
-        {
-        case EN_SETFOCUS:
-          PostMessage(GetDlgItem(hWnd, IDC_PLAY_PROGRAM1 + channel), EM_SETSEL, 0, -1);
-          return 1;
+        switch (HIWORD(wParam)) {
+        case EN_VALUE_VALID:
+          if (value < 0) value = 0;
+          if (value > 127) value = 127;
+          midi_send_event(0xc0 | config_get_key_channel(channel), value, 0, 0);
+          refresh = true;
+          break;
 
-        case EN_KILLFOCUS:
-          {
-            char temp[256];
-            GetDlgItemText(hWnd, IDC_PLAY_PROGRAM1 + channel, temp, sizeof(temp));
-
-            int value = 0;
-            if (sscanf(temp, "%d", &value) == 1)
-            {
-              if (value < 0) value = 0;
-              if (value > 127) value = 127;
-
-              midi_send_event(0xc0 | config_get_key_channel(channel), value, 0, 0);
-            }
-            else {
-              config_set_program(config_get_key_channel(channel), -1);
-            }
-            helpers::refresh(hWnd);
-          }
+        case EN_VALUE_INVALID:
+          config_set_program(config_get_key_channel(channel), -1);
+          refresh = true;
           break;
         }
       }
 
       else if (LOWORD(wParam) == IDC_PLAY_BANK1 + channel)
       {
-        switch (HIWORD(wParam)) 
-        {
-        case EN_SETFOCUS:
-          PostMessage(GetDlgItem(hWnd, IDC_PLAY_BANK1 + channel), EM_SETSEL, 0, -1);
-          return 1;
+        byte ch = config_get_key_channel(channel);
 
-        case EN_KILLFOCUS:
-          {
-            char temp[256];
-            GetDlgItemText(hWnd, IDC_PLAY_BANK1 + channel, temp, sizeof(temp));
+        switch (HIWORD(wParam)) {
+        case EN_VALUE_VALID:
+          if (value < 0) value = 0;
+          if (value > 127) value = 127;
 
-            int value = 0;
-            byte ch = config_get_key_channel(channel);
-            if (sscanf(temp, "%d", &value) == 1)
-            {
-              if (value < 0) value = 0;
-              if (value > 127) value = 127;
+          midi_send_event(0xb0 | ch, 0, value, 0);
 
-              midi_send_event(0xb0 | ch, 0, value, 0);
+          if (config_get_program(ch) < 128)
+            midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
 
-              if (config_get_program(ch) < 128)
-                midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
-            }
-            else {
-              config_set_controller(ch, 0, -1);
-            }
-            helpers::refresh(hWnd);
-          }
+          refresh = true;
+          break;
+
+        case EN_VALUE_INVALID:
+          config_set_controller(ch, 0, -1);
+          refresh = true;
           break;
         }
       }
 
       else if (LOWORD(wParam) == IDC_PLAY_BANK3 + channel)
       {
-        switch (HIWORD(wParam)) 
-        {
-        case EN_SETFOCUS:
-          PostMessage(GetDlgItem(hWnd, IDC_PLAY_BANK3 + channel), EM_SETSEL, 0, -1);
-          return 1;
+        byte ch = config_get_key_channel(channel);
 
-        case EN_KILLFOCUS:
-          {
-            char temp[256];
-            GetDlgItemText(hWnd, IDC_PLAY_BANK3 + channel, temp, sizeof(temp));
+        switch (HIWORD(wParam)) {
+        case EN_VALUE_VALID:
+          if (value < 0) value = 0;
+          if (value > 127) value = 127;
 
-            int value = 0;
-            byte ch = config_get_key_channel(channel);
-            if (sscanf(temp, "%d", &value) == 1)
-            {
-              if (value < 0) value = 0;
-              if (value > 127) value = 127;
+          midi_send_event(0xb0 | ch, 32, value, 0);
 
-              midi_send_event(0xb0 | ch, 32, value, 0);
+          if (config_get_program(ch) < 128)
+            midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
 
-              if (config_get_program(ch) < 128)
-                midi_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
-            }
-            else {
-              config_set_controller(ch, 32, -1);
-            }
-            helpers::refresh(hWnd);
-          }
+          refresh = true;
+          break;
+
+        case EN_VALUE_INVALID:
+          config_set_controller(ch, 32, -1);
+          refresh = true;
           break;
         }
       }
 
       else if (LOWORD(wParam) == IDC_PLAY_SUSTAIN1 + channel)
       {
-        switch (HIWORD(wParam)) 
-        {
-        case EN_SETFOCUS:
-          PostMessage(GetDlgItem(hWnd, IDC_PLAY_SUSTAIN1 + channel), EM_SETSEL, 0, -1);
-          return 1;
+        switch (HIWORD(wParam)) {
+        case EN_VALUE_VALID:
+          if (value < 0) value = 0;
+          if (value > 127) value = 127;
+          midi_send_event(0xb0 | config_get_key_channel(channel), 64, value, 0);
+          refresh = true;
+          break;
 
-        case EN_KILLFOCUS:
-          {
-            char temp[256];
-            GetDlgItemText(hWnd, IDC_PLAY_SUSTAIN1 + channel, temp, sizeof(temp));
-
-            int value = 0;
-            if (sscanf(temp, "%d", &value) == 1)
-            {
-              if (value < 0) value = 0;
-              if (value > 127) value = 127;
-
-              midi_send_event(0xb0 | config_get_key_channel(channel), 64, value, 0);
-            }
-            else {
-              config_set_controller(config_get_key_channel(channel), 64, -1);
-            }
-            helpers::refresh(hWnd);
-          }
+        case EN_VALUE_INVALID:
+          config_set_controller(config_get_key_channel(channel), 64, -1);
+          refresh = true;
           break;
         }
       }
     }
     break;
+  }
+
+  if (refresh) {
+    helpers::refresh(hWnd);
   }
 
   return 0;
