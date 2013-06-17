@@ -42,11 +42,6 @@ static int display_width = 0;
 static int display_height = 0;
 static bool display_dirty = true;
 
-// refresh display
-static void inline display_refresh() {
-  display_dirty = true;
-}
-
 // get display width
 int display_get_width() { return 752; }
 int display_get_height() { return 336; }
@@ -1156,7 +1151,7 @@ static int d3d_device_reset() {
   device->SetFVF(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1);
 
   // refresh display
-  display_refresh();
+  display_dirty = true;
   return 0;
 }
 
@@ -1606,7 +1601,7 @@ static void update_keyboard(double fade) {
       uint color = (uint(255 * key->fade) << 24) | 0xffffff;
       if (color != key->active_color) {
         key->active_color = color;
-        display_refresh();
+        display_dirty = true;
       }
 
       key_bind_t map;
@@ -1617,14 +1612,14 @@ static void update_keyboard(double fade) {
       uint img = map.a ? keyboard_note_down : keyboard_unmapped_down;
       if (img != key->img) {
         key->img = img;
-        display_refresh();
+        display_dirty = true;
       }
 
       // key label
       const char *label = config_bind_get_label(key - keyboard_states);
       if (strcmp(label, key->label)) {
         strcpy_s(key->label, label);
-        display_refresh();
+        display_dirty = true;
       }
 
       // key note
@@ -1641,7 +1636,7 @@ static void update_keyboard(double fade) {
 
       if (note != key->note) {
         key->note = note;
-        display_refresh();
+        display_dirty = true;
       }
     }
   }
@@ -1701,7 +1696,7 @@ static void update_midi_keyboard(double fade) {
       uint color = (uint(255 * key->fade) << 24) | 0xffffff;
       if (color != key->active_color) {
         key->active_color = color;
-        display_refresh();
+        display_dirty = true;
       }
     }
   }
@@ -1810,19 +1805,19 @@ static void control_set_text(gui_control_t *ctl, const char *format, ...) {
 
   if (strcmp(buff, ctl->text)) {
     strcpy_s(ctl->text, buff);
-    display_refresh();
+    display_dirty = true;
   }
 }
 
 static void control_set_image(gui_control_t *ctl, uint image, uint color) {
   if (ctl->image != image) {
     ctl->image = image;
-    display_refresh();
+    display_dirty = true;
   }
 
   if (ctl->color != color) {
     ctl->color = color;
-    display_refresh();
+    display_dirty = true;
   }
 }
 
@@ -2106,6 +2101,11 @@ void display_render() {
       }
     }
   }
+}
+
+// refresh display
+void display_refresh() {
+  display_dirty = true;
 }
 
 // init display

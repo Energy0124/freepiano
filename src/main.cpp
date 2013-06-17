@@ -25,6 +25,9 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     return 1;
   }
 
+  // init language
+  lang_init();
+
   // init gui
   if (gui_init()) {
     MessageBox(NULL, lang_get_last_error(), APP_NAME, MB_OK);

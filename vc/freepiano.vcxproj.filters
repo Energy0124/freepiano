@@ -81,6 +81,7 @@
     <ClInclude Include="..\src\export_mp4.h" />
     <ClInclude Include="..\src\export_wav.h" />
     <ClInclude Include="..\src\export.h" />
+    <ClInclude Include="..\src\language_strdef.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\res\background.png">

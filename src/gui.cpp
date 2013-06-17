@@ -42,45 +42,80 @@ static void try_open_song(int err) {
 // Numeric edit control
 #define EN_VALUE_VALID      0xFE01
 #define EN_VALUE_INVALID    0xFE02
+#define WM_VALUE_CHANGED    WM_USER + 123
 
-static LRESULT CALLBACK EditSubProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+static LRESULT CALLBACK NumericEditProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
   switch (uMsg) {
-   case WM_CHAR:
-     if (wParam == VK_RETURN) {
-       SetFocus(NULL);
-       SetFocus(hWnd);
-       return 0;
-     }
-     break;
+  case WM_CHAR:
+    if (wParam == VK_RETURN) {
+      SetFocus(NULL);
+      SetFocus(hWnd);
+      return 0;
+    }
+    break;
 
-   case WM_SETFOCUS:
-     PostMessage(hWnd, EM_SETSEL, 0, -1);
-     break;
+  case WM_SETFOCUS:
+    PostMessage(hWnd, EM_SETSEL, 0, -1);
+    break;
 
-   case WM_KILLFOCUS:
-     {
-       HWND parent = GetParent(hWnd);
-       WORD id = GetDlgCtrlID(hWnd);
+  case WM_KILLFOCUS:
+    PostMessage(hWnd, WM_VALUE_CHANGED, 0, 0);
+    break;
 
-       if (parent && id) {
-         int value = 0;
-         char temp[256];
+  case WM_VALUE_CHANGED:
+    {
+      HWND parent = GetParent(hWnd);
+      WORD id = GetDlgCtrlID(hWnd);
 
-         GetWindowText(hWnd, temp, sizeof(temp));
-         if (sscanf(temp, "%d", &value) == 1)
-         {
-           PostMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_VALID), (LPARAM)value);
-         }
-         else
-         {
-           PostMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_INVALID), 0);
-         }
-       }
-     }
-     break;
+      if (parent && id) {
+        int value[2] = {0};
+        char temp[256];
+
+        GetWindowText(hWnd, temp, sizeof(temp));
+
+        if (dwRefData) {
+          if (sscanf(temp, (const char*)dwRefData, &value) == 1)
+          {
+            SendMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_VALID), (LPARAM)value);
+          }
+          else
+          {
+            SendMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_INVALID), (LPARAM)value);
+          }
+        }
+        else {
+            SendMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_VALID), (LPARAM)temp);
+        }
+      }
+    }
+    break;
   }
 
   return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+static void update_numeric_edit(HWND hwnd, int itemid, const char *value, const char* format) {
+  HWND edit = GetDlgItem(hwnd, itemid);
+  SetWindowText(edit, value);
+  SetWindowSubclass(edit, NumericEditProc, 0, (DWORD_PTR)format);
+}
+
+static void update_numeric_edit(HWND hwnd, int itemid, int value) {
+  char buff[32];
+  _snprintf(buff, sizeof(buff), "%d", value);
+  update_numeric_edit(hwnd, itemid, buff, "%d");
+}
+
+static void update_numeric_edit(HWND hwnd, int itemid, double value) {
+  char buff[32];
+  _snprintf(buff, sizeof(buff), "%g", value);
+  update_numeric_edit(hwnd, itemid, buff, "%g");
+}
+
+static void update_slider(HWND hwnd, int itemid, int value, short value_min, short value_max) {
+  HWND slider = GetDlgItem(hwnd, itemid);
+  SendMessage(slider, TBM_SETRANGE, (WPARAM) TRUE, (LPARAM) MAKELONG(value_min, value_max));
+  SendMessage(slider, TBM_SETPOS, (WPARAM) TRUE, (LPARAM) value);
 }
 
 // -----------------------------------------------------------------------------------------
@@ -184,6 +219,8 @@ static INT_PTR CALLBACK settings_midi_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
   switch (uMsg) {
    case WM_INITDIALOG: {
+     lang_localize_dialog(hWnd);
+
      LVCOLUMN lvc = {0};
      HWND input_list = GetDlgItem(hWnd, IDC_MIDI_INPUT_LIST);
 
@@ -310,27 +347,19 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
   };
 
   struct helpers {
-    static void refresh_play_speed(HWND hWnd, bool update_text = true, bool update_slider = true) {
-      if (update_text) {
-        HWND playback_speed = GetDlgItem(hWnd, IDC_PLAYBACK_SPEED);
+    static void refresh_play_speed(HWND hWnd) {
+      update_numeric_edit(hWnd, IDC_PLAYBACK_SPEED, song_get_play_speed());
+      update_slider(hWnd, IDC_PLAYBACK_SPEED_SLIDER, song_get_play_speed() * 10, 0, 20);
+    }
 
-        char temp[256];
-        _snprintf(temp, sizeof(temp), "%g", song_get_play_speed());
-        SetDlgItemText(hWnd, IDC_PLAYBACK_SPEED, temp);
-        SetWindowSubclass(playback_speed, EditSubProc, 0, 0);
-      }
+    static void refresh_output_delay(HWND hWnd) {
+      update_numeric_edit(hWnd, IDC_OUTPUT_DELAY, config_get_output_delay());
+      update_slider(hWnd, IDC_OUTPUT_DELAY_SLIDER, config_get_output_delay(), 0, 80);
+    }
 
-      if (update_slider) {
-        HWND playback_speed_slider = GetDlgItem(hWnd, IDC_PLAYBACK_SPEED_SLIDER);
-
-        SendMessage(playback_speed_slider, TBM_SETRANGE,
-          (WPARAM) TRUE,                  // redraw flag
-          (LPARAM) MAKELONG(1, 20));      // min. & max. positions
-
-        SendMessage(playback_speed_slider, TBM_SETPOS,
-          (WPARAM) TRUE,                      // redraw flag
-          (LPARAM) (song_get_play_speed() * 10)); // min. & max. positions
-      }
+    static void refresh_output_volume(HWND hWnd) {
+      update_numeric_edit(hWnd, IDC_OUTPUT_VOLUME, config_get_output_volume());
+      update_slider(hWnd, IDC_OUTPUT_VOLUME_SLIDER, config_get_output_volume(), 0, 200);
     }
 
     static void refresh_output_devices(HWND hWnd) {
@@ -397,43 +426,11 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
 
   switch (uMsg) {
    case WM_INITDIALOG: {
+     lang_localize_dialog(hWnd);
+
      helpers::refresh_output_devices(hWnd);
-
-     // output delay
-     GetDlgItemText(hWnd, IDC_OUTPUT_DELAY_TEXT, output_delay_text_format, sizeof(output_delay_text_format));
-     GetDlgItemText(hWnd, IDC_OUTPUT_VOLUME_TEXT, output_volume_text_format, sizeof(output_volume_text_format));
-
-     char temp[256];
-     _snprintf(temp, sizeof(temp), output_delay_text_format, config_get_output_delay());
-     SetDlgItemText(hWnd, IDC_OUTPUT_DELAY_TEXT, temp);
-
-     _snprintf(temp, sizeof(temp), output_volume_text_format, config_get_output_volume());
-     SetDlgItemText(hWnd, IDC_OUTPUT_VOLUME_TEXT, temp);
-
-     // output delay slider
-     HWND output_delay = GetDlgItem(hWnd, IDC_OUTPUT_DELAY);
-
-     SendMessage(output_delay, TBM_SETRANGE,
-                 (WPARAM) TRUE,                  // redraw flag
-                 (LPARAM) MAKELONG(0, 80));      // min. & max. positions
-
-     SendMessage(output_delay, TBM_SETPOS,
-                 (WPARAM) TRUE,                      // redraw flag
-                 (LPARAM) config_get_output_delay()); // min. & max. positions
-
-
-     // output volume slider
-     HWND output_volume = GetDlgItem(hWnd, IDC_OUTPUT_VOLUME);
-
-     SendMessage(output_volume, TBM_SETRANGE,
-                 (WPARAM) TRUE,                  // redraw flag
-                 (LPARAM) MAKELONG(0, 200));     // min. & max. positions
-
-     SendMessage(output_volume, TBM_SETPOS,
-                 (WPARAM) TRUE,                      // redraw flag
-                 (LPARAM) config_get_output_volume()); // min. & max. positions
-
-     // playback speed 
+     helpers::refresh_output_delay(hWnd);
+     helpers::refresh_output_volume(hWnd);
      helpers::refresh_play_speed(hWnd);
    }
    break;
@@ -460,44 +457,52 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
          helpers::refresh_output_devices(hWnd);
        }
      }
+     else if (LOWORD(wParam) == IDC_OUTPUT_DELAY) {
+       if (HIWORD(wParam) == EN_VALUE_VALID) {
+         config_set_output_delay(*reinterpret_cast<int*>(lParam));
+         helpers::refresh_output_delay(hWnd);
+       }
+       else if (HIWORD(wParam) == EN_VALUE_INVALID) {
+         helpers::refresh_output_delay(hWnd);
+       }
+     }
+     else if (LOWORD(wParam) == IDC_OUTPUT_VOLUME) {
+       if (HIWORD(wParam) == EN_VALUE_VALID) {
+         config_set_output_volume(*reinterpret_cast<int*>(lParam));
+         helpers::refresh_output_volume(hWnd);
+       }
+       else if (HIWORD(wParam) == EN_VALUE_INVALID) {
+         helpers::refresh_output_volume(hWnd);
+       }
+     }
      else if (LOWORD(wParam) == IDC_PLAYBACK_SPEED) {
-       if (HIWORD(wParam) == EN_KILLFOCUS) {
-         char temp[256];
-         GetDlgItemText(hWnd, IDC_PLAYBACK_SPEED, temp, sizeof(temp));
-         song_set_play_speed(atof(temp));
+       if (HIWORD(wParam) == EN_VALUE_VALID) {
+         song_set_play_speed(*reinterpret_cast<float*>(lParam));
+         helpers::refresh_play_speed(hWnd);
+       }
+       else if (HIWORD(wParam) == EN_VALUE_INVALID) {
          helpers::refresh_play_speed(hWnd);
        }
      }
      break;
 
    case WM_HSCROLL: {
-     HWND output_delay = GetDlgItem(hWnd, IDC_OUTPUT_DELAY);
-     HWND output_volume = GetDlgItem(hWnd, IDC_OUTPUT_VOLUME);
+     HWND output_delay = GetDlgItem(hWnd, IDC_OUTPUT_DELAY_SLIDER);
+     HWND output_volume = GetDlgItem(hWnd, IDC_OUTPUT_VOLUME_SLIDER);
      HWND playback_speed = GetDlgItem(hWnd, IDC_PLAYBACK_SPEED_SLIDER);
 
      if (output_delay == (HWND)lParam) {
        int pos = SendMessage(output_delay, TBM_GETPOS, 0, 0);
-
-       // update output delay
        config_set_output_delay(pos);
-
-       char temp[256];
-       _snprintf(temp, sizeof(temp), output_delay_text_format, config_get_output_delay());
-       SetDlgItemText(hWnd, IDC_OUTPUT_DELAY_TEXT, temp);
+       helpers::refresh_output_delay(hWnd);
      }
      else if (output_volume == (HWND)lParam) {
        int pos = SendMessage(output_volume, TBM_GETPOS, 0, 0);
-
-       // update output delay
        config_set_output_volume(pos);
-
-       char temp[256];
-       _snprintf(temp, sizeof(temp), output_volume_text_format, config_get_output_volume());
-       SetDlgItemText(hWnd, IDC_OUTPUT_VOLUME_TEXT, temp);
+       helpers::refresh_output_volume(hWnd);
      }
      else if (playback_speed == (HWND)lParam) {
        int pos = SendMessage(playback_speed, TBM_GETPOS, 0, 0);
-
        song_set_play_speed((double)pos / 10);
        helpers::refresh_play_speed(hWnd);
      }
@@ -531,22 +536,13 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
       {
         char buff[256];
 
-        // velocity edit
-        _snprintf(buff, sizeof(buff), "%d", config_get_key_velocity(channel));
-        HWND velocity = GetDlgItem(hWnd, IDC_PLAY_VELOCITY1 + channel);
-        SetDlgItemText(hWnd, IDC_PLAY_VELOCITY1 + channel, buff);
-        SetWindowSubclass(velocity, EditSubProc, 0, 0);
-
-        // velocity slider
-        HWND velocity_slider = GetDlgItem(hWnd, IDC_PLAY_VELOCITY_SLIDER1 + channel);
-        SendMessage(velocity_slider, TBM_SETRANGE, (WPARAM) TRUE, (LPARAM) MAKELONG(0, 127));
-        SendMessage(velocity_slider, TBM_SETPOS, (WPARAM) TRUE, (LPARAM) config_get_key_velocity(channel));
+        // velocity 
+        update_numeric_edit(hWnd, IDC_PLAY_VELOCITY1 + channel, config_get_key_velocity(channel));
+        update_slider(hWnd, IDC_PLAY_VELOCITY_SLIDER1 + channel, config_get_key_velocity(channel), 0, 127);
 
         // transpose
-        HWND transpose = GetDlgItem(hWnd, IDC_PLAY_TRANSPOSE1 + channel);
         make_value(buff, sizeof(buff), config_get_key_transpose(channel), -63, 63);
-        SetDlgItemText(hWnd, IDC_PLAY_TRANSPOSE1 + channel, buff);
-        SetWindowSubclass(transpose, EditSubProc, 0, 0);
+        update_numeric_edit(hWnd, IDC_PLAY_TRANSPOSE1 + channel, buff, "%d");
 
         // octave
         HWND octshift = GetDlgItem(hWnd, IDC_PLAY_OCTAVE1 + channel);
@@ -571,28 +567,20 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
         }
 
         // program
-        HWND program = GetDlgItem(hWnd, IDC_PLAY_PROGRAM1 + channel);
         make_value(buff, sizeof(buff), config_get_program(config_get_key_channel(channel)));
-        SetDlgItemText(hWnd, IDC_PLAY_PROGRAM1 + channel, buff);
-        SetWindowSubclass(program, EditSubProc, 0, 0);
+        update_numeric_edit(hWnd, IDC_PLAY_PROGRAM1 + channel, buff, "%d");
 
         // bank msb
-        HWND bank_msb = GetDlgItem(hWnd, IDC_PLAY_BANK1 + channel);
         make_value(buff, sizeof(buff), config_get_controller(config_get_key_channel(channel), 0));
-        SetDlgItemText(hWnd, IDC_PLAY_BANK1 + channel, buff);
-        SetWindowSubclass(bank_msb, EditSubProc, 0, 0);
+        update_numeric_edit(hWnd, IDC_PLAY_BANK1 + channel, buff, "%d");
 
         // bank lsb
-        HWND bank_lsb = GetDlgItem(hWnd, IDC_PLAY_BANK3 + channel);
         make_value(buff, sizeof(buff), config_get_controller(config_get_key_channel(channel), 32));
-        SetDlgItemText(hWnd, IDC_PLAY_BANK3 + channel, buff);
-        SetWindowSubclass(bank_lsb, EditSubProc, 0, 0);
+        update_numeric_edit(hWnd, IDC_PLAY_BANK3 + channel, buff, "%d");
 
         // sustain
-        HWND sustain = GetDlgItem(hWnd, IDC_PLAY_SUSTAIN1 + channel);
         make_value(buff, sizeof(buff), config_get_controller(config_get_key_channel(channel), 64));
-        SetDlgItemText(hWnd, IDC_PLAY_SUSTAIN1 + channel, buff);
-        SetWindowSubclass(sustain, EditSubProc, 0, 0);
+        update_numeric_edit(hWnd, IDC_PLAY_SUSTAIN1 + channel, buff, "%d");
       }
     }
   };
@@ -602,6 +590,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
   switch (uMsg)
   {
   case WM_INITDIALOG:
+    lang_localize_dialog(hWnd);
     refresh = true;
     break;
 
@@ -618,12 +607,8 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
       if (velocity_slider == (HWND)lParam)
       {
         int pos = SendMessage(velocity_slider, TBM_GETPOS, 0, 0);
-
         config_set_key_velocity(channel, pos);
-
-        char temp[256];
-        _snprintf(temp, sizeof(temp), "%d", config_get_key_velocity(channel));
-        SetDlgItemText(hWnd, IDC_PLAY_VELOCITY1 + channel, temp);
+        update_numeric_edit(hWnd, IDC_PLAY_VELOCITY1 + channel, config_get_key_velocity(channel));
       }
     }
     break;
@@ -635,10 +620,9 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
     for (int channel = 0; channel < 2; channel ++)
     {
-      int value = lParam;
-
       if (LOWORD(wParam) == IDC_PLAY_VELOCITY1 + channel)
       {
+        int value = *reinterpret_cast<int*>(lParam);
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
           if (value < 0) value = 0;
@@ -655,6 +639,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_TRANSPOSE1 + channel)
       {
+        int value = *reinterpret_cast<int*>(lParam);
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
           if (value < -48) value = -48;
@@ -694,6 +679,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_PROGRAM1 + channel)
       {
+        int value = *reinterpret_cast<int*>(lParam);
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
           if (value < 0) value = 0;
@@ -711,6 +697,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_BANK1 + channel)
       {
+        int value = *reinterpret_cast<int*>(lParam);
         byte ch = config_get_key_channel(channel);
 
         switch (HIWORD(wParam)) {
@@ -735,6 +722,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_BANK3 + channel)
       {
+        int value = *reinterpret_cast<int*>(lParam);
         byte ch = config_get_key_channel(channel);
 
         switch (HIWORD(wParam)) {
@@ -759,6 +747,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_SUSTAIN1 + channel)
       {
+        int value = *reinterpret_cast<int*>(lParam);
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
           if (value < 0) value = 0;
@@ -812,6 +801,8 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
 
   switch (uMsg) {
    case WM_INITDIALOG: {
+     lang_localize_dialog(hWnd);
+
      HWND output_content = GetDlgItem(hWnd, IDC_MAP_CONTENT);
      Edit_LimitText(output_content,-1);
      uint tabstops = 46;
@@ -842,6 +833,8 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
 static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
    case WM_INITDIALOG: {
+     lang_localize_dialog(hWnd);
+
      CheckDlgButton(hWnd, IDC_GUI_ENABLE_RESIZE, config_get_enable_resize_window());
      CheckDlgButton(hWnd, IDC_GUI_ENABLE_HOTKEY, !config_get_enable_hotkey());
      CheckDlgButton(hWnd, IDC_GUI_DISPLAY_MIDI_TRANSPOSE, config_get_midi_transpose());
@@ -920,6 +913,9 @@ setting_pages[] = {
   { IDD_SETTING_GUI,      settings_gui_proc },
 };
 
+// current selected page
+static int setting_selected_page = IDD_SETTING_AUDIO;
+
 static void add_setting_page(HWND list, const char *text, int page_id) {
   TVINSERTSTRUCT tvins;
 
@@ -942,6 +938,8 @@ static void add_setting_page(HWND list, const char *text, int page_id) {
 static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
    case WM_INITDIALOG: {
+     lang_localize_dialog(hWnd);
+
      HWND setting_list = GetDlgItem(hWnd, IDC_SETTING_LIST);
      add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_PLAY), IDD_SETTING_PLAY);
      add_setting_page(setting_list, lang_load_string(IDS_SETTING_LIST_AUDIO), IDD_SETTING_AUDIO);
@@ -977,6 +975,8 @@ static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
              rect.left = 100;
              MoveWindow(setting_page, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, FALSE);
              ShowWindow(setting_page, SW_SHOW);
+
+             setting_selected_page = setting_pages[id].dialog;
            }
          }
          break;
@@ -1005,8 +1005,9 @@ static INT_PTR CALLBACK settings_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
   return 0;
 }
 
-static void settings_show(int page = IDD_SETTING_PLAY) {
+static void settings_show() {
   HINSTANCE instance = GetModuleHandle(NULL);
+  int selected = setting_selected_page;
 
   if (setting_hwnd == NULL) {
     setting_hwnd = CreateDialog(instance, MAKEINTRESOURCE(IDD_SETTINGS), NULL, settings_proc);
@@ -1017,7 +1018,7 @@ static void settings_show(int page = IDD_SETTING_PLAY) {
   }
 
   for (int i = 0; i < ARRAY_COUNT(setting_pages); i++) {
-    if (setting_pages[i].dialog == page) {
+    if (setting_pages[i].dialog == selected) {
       TreeView_SelectItem(GetDlgItem(setting_hwnd, IDC_SETTING_LIST), setting_pages[i].item);
     }
   }
@@ -1027,6 +1028,8 @@ static void settings_show(int page = IDD_SETTING_PLAY) {
 static INT_PTR CALLBACK song_info_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
    case WM_INITDIALOG: {
+     lang_localize_dialog(hWnd);
+
      song_info_t *info = song_get_info();
      SetDlgItemText(hWnd, IDC_SONG_TITLE, info->title);
      SetDlgItemText(hWnd, IDC_SONG_AUTHOR, info->author);
@@ -1217,6 +1220,10 @@ static void menu_shutdown() {
 
 static INT_PTR CALLBACK about_dialog_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
+  case WM_INITDIALOG:
+    lang_localize_dialog(hWnd);
+    break;
+
    case WM_CLOSE:
      EndDialog(hWnd, 0);
      break;
@@ -1242,7 +1249,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      ofn.lpstrFile = temp;
      ofn.lpstrFile[0] = 0;
      ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_filter_string(IDS_OPEN_FILTER_VST);
+     ofn.lpstrFilter = lang_load_string(IDS_OPEN_FILTER_VST);
      ofn.nFilterIndex = 1;
      ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
@@ -1314,11 +1321,11 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      break;
 
    case MENU_ID_LANGUAGE_ENGLISH:
-     gui_set_language(LANG_ENGLISH);
+     gui_set_language(FP_LANG_ENGLISH);
      break;
 
    case MENU_ID_LANGUAGE_CHINESE:
-     gui_set_language(LANG_CHINESE);
+     gui_set_language(FP_LANG_SCHINESE);
      break;
 
    case MENU_ID_FILE_OPEN: {
@@ -1330,7 +1337,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      ofn.lpstrFile = temp;
      ofn.lpstrFile[0] = 0;
      ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_filter_string(IDS_OPEN_FILTER_SONG);
+     ofn.lpstrFilter = lang_load_string(IDS_OPEN_FILTER_SONG);
      ofn.nFilterIndex = 1;
      ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
@@ -1361,7 +1368,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
        ofn.lpstrFile = temp;
        ofn.lpstrFile[0] = 0;
        ofn.nMaxFile = sizeof(temp);
-       ofn.lpstrFilter = lang_load_filter_string(IDS_SAVE_FILTER_SONG);
+       ofn.lpstrFilter = lang_load_string(IDS_SAVE_FILTER_SONG);
        ofn.nFilterIndex = 1;
        ofn.Flags = OFN_PATHMUSTEXIST;
        ofn.lpstrDefExt = ".fpm";
@@ -1417,7 +1424,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      ofn.lpstrFile = temp;
      ofn.lpstrFile[0] = 0;
      ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_filter_string(IDS_FILTER_MAP);
+     ofn.lpstrFilter = lang_load_string(IDS_FILTER_MAP);
      ofn.nFilterIndex = 1;
      ofn.Flags = OFN_PATHMUSTEXIST;
      ofn.lpstrDefExt = ".map";
@@ -1443,7 +1450,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      ofn.lpstrFile = temp;
      ofn.lpstrFile[0] = 0;
      ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_filter_string(IDS_FILTER_MAP);
+     ofn.lpstrFilter = lang_load_string(IDS_FILTER_MAP);
      ofn.nFilterIndex = 1;
      ofn.Flags = OFN_PATHMUSTEXIST;
      ofn.lpstrDefExt = ".map";
@@ -1515,7 +1522,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      ofn.lpstrFile = temp;
      ofn.lpstrFile[0] = 0;
      ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_filter_string(IDS_SAVE_FILTER_MP4);
+     ofn.lpstrFilter = lang_load_string(IDS_SAVE_FILTER_MP4);
      ofn.nFilterIndex = 1;
      ofn.Flags = OFN_PATHMUSTEXIST;
      ofn.lpstrDefExt = ".mp4";
@@ -1538,7 +1545,7 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      ofn.lpstrFile = temp;
      ofn.lpstrFile[0] = 0;
      ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_filter_string(IDS_SAVE_FILTER_WAV);
+     ofn.lpstrFilter = lang_load_string(IDS_SAVE_FILTER_WAV);
      ofn.nFilterIndex = 1;
      ofn.Flags = OFN_PATHMUSTEXIST;
      ofn.lpstrDefExt = ".wav";
@@ -1778,6 +1785,8 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 
   switch (uMsg) {
    case WM_INITDIALOG: {
+     lang_localize_dialog(hWnd);
+
      CheckDlgButton(hWnd, IDC_KEY_SETTING_AUTOCLOSE, TRUE);
      helpers::refresh_controls(hWnd);
    }
@@ -2254,6 +2263,8 @@ static HWND export_hwnd = NULL;
 static INT_PTR CALLBACK export_progress_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
    case WM_INITDIALOG: {
+     lang_localize_dialog(hWnd);
+
      // output volume slider
      HWND progress_bar = GetDlgItem(hWnd, IDC_EXPORT_PROGRESS);
 
@@ -2308,12 +2319,12 @@ bool gui_is_exporting() {
 
 // change language
 void gui_set_language(int lang) {
-  typedef LANGID (WINAPI *FN_SetThreadUILanguage)(LANGID LangId);
-  HMODULE hKernel32 = GetModuleHandle("Kernel32.dll");
-  FN_SetThreadUILanguage pFn = (FN_SetThreadUILanguage)GetProcAddress(hKernel32, "SetThreadUILanguage");
-  if (pFn)
-    (*pFn)(lang);
-  SetThreadLocale(MAKELCID(MAKELANGID(lang, 0), SORT_DEFAULT));
+  lang_set_current(lang);
   menu_init();
   DrawMenuBar(mainhwnd);
+  display_refresh();
+
+  if (setting_hwnd) {
+    ::DestroyWindow(setting_hwnd);
+  }
 }
