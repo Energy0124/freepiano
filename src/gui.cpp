@@ -42,7 +42,6 @@ static void try_open_song(int err) {
 // Numeric edit control
 #define EN_VALUE_VALID      0xFE01
 #define EN_VALUE_INVALID    0xFE02
-#define WM_VALUE_CHANGED    WM_USER + 123
 
 static LRESULT CALLBACK NumericEditProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
   switch (uMsg) {
@@ -59,32 +58,23 @@ static LRESULT CALLBACK NumericEditProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
     break;
 
   case WM_KILLFOCUS:
-    PostMessage(hWnd, WM_VALUE_CHANGED, 0, 0);
-    break;
-
-  case WM_VALUE_CHANGED:
     {
       HWND parent = GetParent(hWnd);
       WORD id = GetDlgCtrlID(hWnd);
 
       if (parent && id) {
-        int value[2] = {0};
-        char temp[256];
-
-        GetWindowText(hWnd, temp, sizeof(temp));
-
         if (dwRefData) {
+          int value = 0;
+          char temp[256];
+          GetWindowText(hWnd, temp, sizeof(temp));
+
           if (sscanf(temp, (const char*)dwRefData, &value) == 1)
-          {
-            SendMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_VALID), (LPARAM)value);
-          }
+            PostMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_VALID), (LPARAM)value);
           else
-          {
-            SendMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_INVALID), (LPARAM)value);
-          }
+            PostMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_INVALID), 0);
         }
         else {
-            SendMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_VALID), (LPARAM)temp);
+          PostMessage(parent, WM_COMMAND, MAKEWPARAM(id, EN_VALUE_INVALID), 0);
         }
       }
     }
@@ -459,7 +449,7 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
      }
      else if (LOWORD(wParam) == IDC_OUTPUT_DELAY) {
        if (HIWORD(wParam) == EN_VALUE_VALID) {
-         config_set_output_delay(*reinterpret_cast<int*>(lParam));
+         config_set_output_delay((int)lParam);
          helpers::refresh_output_delay(hWnd);
        }
        else if (HIWORD(wParam) == EN_VALUE_INVALID) {
@@ -468,7 +458,7 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
      }
      else if (LOWORD(wParam) == IDC_OUTPUT_VOLUME) {
        if (HIWORD(wParam) == EN_VALUE_VALID) {
-         config_set_output_volume(*reinterpret_cast<int*>(lParam));
+         config_set_output_volume((int)lParam);
          helpers::refresh_output_volume(hWnd);
        }
        else if (HIWORD(wParam) == EN_VALUE_INVALID) {
@@ -477,7 +467,7 @@ static INT_PTR CALLBACK settings_audio_proc(HWND hWnd, UINT uMsg, WPARAM wParam,
      }
      else if (LOWORD(wParam) == IDC_PLAYBACK_SPEED) {
        if (HIWORD(wParam) == EN_VALUE_VALID) {
-         song_set_play_speed(*reinterpret_cast<float*>(lParam));
+         song_set_play_speed(*(float*)(&lParam));
          helpers::refresh_play_speed(hWnd);
        }
        else if (HIWORD(wParam) == EN_VALUE_INVALID) {
@@ -620,11 +610,13 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
     for (int channel = 0; channel < 2; channel ++)
     {
+      int value;
+
       if (LOWORD(wParam) == IDC_PLAY_VELOCITY1 + channel)
       {
-        int value = *reinterpret_cast<int*>(lParam);
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
+          value = (int)lParam;
           if (value < 0) value = 0;
           if (value > 127) value = 127;
           config_set_key_velocity(channel, value);
@@ -639,9 +631,9 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_TRANSPOSE1 + channel)
       {
-        int value = *reinterpret_cast<int*>(lParam);
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
+          value = (int)lParam;
           if (value < -48) value = -48;
           if (value > 48) value = 48;
           config_set_key_transpose(channel, value);
@@ -679,9 +671,9 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_PROGRAM1 + channel)
       {
-        int value = *reinterpret_cast<int*>(lParam);
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
+          value = (int)lParam;
           if (value < 0) value = 0;
           if (value > 127) value = 127;
           song_send_event(0xc0 | config_get_key_channel(channel), value, 0, 0);
@@ -697,11 +689,11 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_BANK1 + channel)
       {
-        int value = *reinterpret_cast<int*>(lParam);
         byte ch = config_get_key_channel(channel);
 
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
+          value = (int)lParam;
           if (value < 0) value = 0;
           if (value > 127) value = 127;
 
@@ -722,11 +714,11 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_BANK3 + channel)
       {
-        int value = *reinterpret_cast<int*>(lParam);
         byte ch = config_get_key_channel(channel);
 
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
+          value = (int)lParam;
           if (value < 0) value = 0;
           if (value > 127) value = 127;
 
@@ -747,9 +739,9 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
 
       else if (LOWORD(wParam) == IDC_PLAY_SUSTAIN1 + channel)
       {
-        int value = *reinterpret_cast<int*>(lParam);
         switch (HIWORD(wParam)) {
         case EN_VALUE_VALID:
+          value = (int)lParam;
           if (value < 0) value = 0;
           if (value > 127) value = 127;
           song_send_event(0xb0 | config_get_key_channel(channel), 64, value, 0);

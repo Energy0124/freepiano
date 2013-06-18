@@ -250,16 +250,6 @@ static ASIOTime* callback_buffer_switch_timeinfo(ASIOTime *timeInfo, long index,
     vsti_process(output_buffer[0], output_buffer[1], buffSize);
   }
 
-//#if WINDOWS && _DEBUG
-//	// a few debug messages for the Windows device driver developer
-//	// tells you the time when driver got its interrupt and the delay until the app receives
-//	// the event notification.
-//	static double last_samples = 0;
-//	printf ("diff: %d / %d ms / %d ms / %d samples                 \n", driver_info.sysRefTime - (long)(driver_info.nanoSeconds / 1000000.0), driver_info.sysRefTime, (long)(driver_info.nanoSeconds / 1000000.0), (long)(driver_info.samples - last_samples));
-//	last_samples = driver_info.samples;
-//#endif
-
-
   // perform the processing
   for (int i = 0; i < driver_info.inputBuffers + driver_info.outputBuffers; i++) {
     if (driver_info.bufferInfos[i].isInput == false) {

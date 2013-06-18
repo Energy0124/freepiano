@@ -608,14 +608,14 @@ static int font_initialize() {
       if (0 == FT_New_Face(font_library, buffer, 0, &font_list[font_count])) {
         if (++font_count == ARRAY_COUNT(font_list))
           break;
-	  }
-	  else {
-		fprintf(stderr, "font load failed: %s\n", buffer);
-	  }
+      }
+      else {
+        fprintf(stderr, "font load failed: %s\n", buffer);
+      }
     }
-	else {
-		fprintf(stderr, "font not found: %s\n", buffer);
-	}
+    else {
+      fprintf(stderr, "font not found: %s\n", buffer);
+    }
   }
 
   if (font_count == 0) {
@@ -2124,7 +2124,7 @@ int display_init(HWND hwnd) {
 
   // reset device
   if (d3d_device_reset()) {
-	  return -1;
+    return -1;
       }
 
   // load default skin
