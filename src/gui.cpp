@@ -914,7 +914,7 @@ setting_pages[] = {
 };
 
 // current selected page
-static int setting_selected_page = IDD_SETTING_AUDIO;
+static int setting_selected_page = IDD_SETTING_PLAY;
 
 static void add_setting_page(HWND list, const char *text, int page_id) {
   TVINSERTSTRUCT tvins;
@@ -1923,11 +1923,17 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
       if (lang_text_open(IDR_TEXT_CONTROLLERS)) {
         HWND button = GetDlgItem(hWnd, IDC_KEY_PRESET);
         HMENU menu = CreatePopupMenu();
+        HMENU target_menu = menu;
         char line[4096];
         int id = 0;
         while (lang_text_readline(line, sizeof(line))) {
+          if (line[0] == '*') {
+            target_menu = CreatePopupMenu();
+            AppendMenu(menu, MF_POPUP, (UINT_PTR)target_menu, line + 1);
+
+          }
           if (line[0] == '#')
-            AppendMenu(menu, MF_STRING, ++id, line + 1);
+            AppendMenu(target_menu, MF_STRING, ++id, line + 1);
         }
 
         lang_text_close();
