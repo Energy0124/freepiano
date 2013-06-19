@@ -13,6 +13,7 @@
 #include "song.h"
 #include "gui.h"
 #include "language.h"
+#include "utilities.h"
 
 #include "../res/resource.h"
 
@@ -25,6 +26,7 @@
 struct name_t {
   const char *name;
   uint value;
+  uint lang;
 };
 
 static name_t key_names[] = {
@@ -155,8 +157,9 @@ static name_t key_names[] = {
 
 static name_t action_names[] = {
   { "KeySignature",       SM_KEY_SIGNATURE },
-  { "Octshift",           SM_OCTSHIFT },
-  { "KeyboardOctshift",   SM_OCTSHIFT },
+  { "Octave",             SM_OCTAVE },
+  { "Octshift",           SM_OCTAVE },
+  { "KeyboardOctshift",   SM_OCTAVE },
   { "Velocity",           SM_VELOCITY },
   { "KeyboardVeolcity",   SM_VELOCITY },
   { "Channel",            SM_CHANNEL },
@@ -168,17 +171,19 @@ static name_t action_names[] = {
   { "Stop",               SM_STOP },
   { "Group",              SM_SETTING_GROUP },
   { "GroupCount",         SM_SETTING_GROUP_COUNT },
-  { "AutoPedal",          SM_AUTO_PEDAL },
-  { "DelayKeyup",         SM_DELAY_KEYUP },
+  { "Note",               SM_NOTE_ON },
+  { "NoteOn",             SM_NOTE_ON },
+  { "NoteOff",            SM_NOTE_OFF },
+  { "NotePressure",       SM_NOTE_PRESSURE },
+  { "Pressure",           SM_PRESSURE },
+  { "Pitch",              SM_PITCH },
+  { "Program",            SM_PROGRAM },
+  { "BankMSB",            SM_BANK_MSB },
+  { "BankLSB",            SM_BANK_LSB },
+  { "Sustain",            SM_SUSTAIN },
+  { "Controller",         SM_CONTROLLER_DEPRECATED },
 
-
-  { "NoteOff",            0x80 },
-  { "NoteOn",             0x90 },
-  { "KeyPressure",        0xa0 },
-  { "Controller",         0xb0 },
-  { "Program",            0xc0 },
-  { "ChannelPressure",    0xd0 },
-  { "PitchBend",          0xe0 },
+  { "MIDI",               0xff },
 };
 
 static name_t note_names[] = {
@@ -310,6 +315,19 @@ static name_t note_names[] = {
   { "F9",                 125 },
   { "F#9",                126 },
   { "G9",                 127 },
+  { "A9",                 128 },
+  { "A#9",                129 },
+  { "B9",                 130 },
+  { "C10",                131 },
+  { "C#10",               132 },
+  { "D10",                133 },
+  { "D#10",               134 },
+  { "E10",                135 },
+  { "F10",                136 },
+  { "F#10",               137 },
+  { "G10",                138 },
+  { "G#10",               139 },
+  { "A10",                140 },
 };
 
 static name_t controller_names[] = {
@@ -423,6 +441,22 @@ static name_t channel_names[] = {
 static name_t hand_names[] = {
   { "Ch_L",      0 },
   { "Ch_R",      1 },
+  { "Ch_0",      0 },
+  { "Ch_1",      1 },
+  { "Ch_2",      2 },
+  { "Ch_3",      3 },
+  { "Ch_4",      4 },
+  { "Ch_5",      5 },
+  { "Ch_6",      6 },
+  { "Ch_7",      7 },
+  { "Ch_8",      8 },
+  { "Ch_9",      9 },
+  { "Ch_10",     10 },
+  { "Ch_11",     11 },
+  { "Ch_12",     12 },
+  { "Ch_13",     13 },
+  { "Ch_14",     14 },
+  { "Ch_15",     15 },
 };
 
 // -----------------------------------------------------------------------------------------
@@ -491,14 +525,11 @@ struct setting_t {
   char key_velocity[16];
   char key_channel[16];
   char key_signature;
-  char auto_pedal;
-  char delay_keyup[16];
   char midi_program[16];
   char midi_controller[16][256];
 
   void clear() {
     key_signature = 0;
-    auto_pedal = 0;
 
     keydown_map.clear();
     keyup_map.clear();
@@ -513,7 +544,6 @@ struct setting_t {
       key_velocity[i] = 127;
       key_channel[i] = 0;
 
-      delay_keyup[i] = 0;
       midi_program[i] = -1;
 
       for (int j = 0; j < 128; j++)
@@ -533,7 +563,7 @@ static thread_lock_t config_lock;
 
 // verison
 static uint map_version = 0;
-static const uint map_current_version = 0x01070000;
+static const uint map_current_version = 0x01080000;
 
 
 int config_bind_get_keydown(byte code, key_bind_t *buff, int size) {
@@ -742,23 +772,6 @@ void config_set_controller(byte channel, byte id, byte value) {
   }
 }
 
-// get auto pedal time
-char config_get_auto_pedal() {
-  thread_lock lock(config_lock);
-
-  return settings[current_setting].auto_pedal;
-}
-
-// set auto pedal time
-void config_set_auto_pedal(char value) {
-  thread_lock lock(config_lock);
-
-  if (value < 0)
-    value = 0;
-
-  settings[current_setting].auto_pedal = value;
-}
-
 // reset config
 static void config_reset() {
   thread_lock lock(config_lock);
@@ -856,24 +869,6 @@ void config_set_setting_group_count(uint count) {
   setting_count = count;
 }
 
-// set keyup mode
-void config_set_delay_keyup(byte channel, char value) {
-  thread_lock lock(config_lock);
-
-  if (channel < ARRAY_COUNT(settings[current_setting].delay_keyup))
-    settings[current_setting].delay_keyup[channel] = value;
-}
-
-// get keyup mode
-char config_get_delay_keyup(byte channel) {
-  thread_lock lock(config_lock);
-
-  if (channel < ARRAY_COUNT(settings[current_setting].delay_keyup))
-    return settings[current_setting].delay_keyup[channel];
-  else
-    return 0;
-}
-
 // -----------------------------------------------------------------------------------------
 // configuration save and load
 // -----------------------------------------------------------------------------------------
@@ -919,24 +914,61 @@ static bool match_word(char **str, const char *match) {
   return false;
 }
 
+// match hex
+static bool match_hex(char **str, uint *value) {
+  char *s = *str;
+  uint v = 0;
+
+  for (;;) {
+    if (*s >= '0' && *s <= '9')
+      v = v * 16 + (*s++ - '0');
+    else if (*s >= 'a' && *s <= 'f') {
+      v = v * 16 + (10 + *s++ - 'a');
+    }
+    else if (*s >= 'A' && *s <= 'F') {
+      v = v * 16 + (10 + *s++ - 'A');
+    }
+    else break;
+  }
+
+  if (s > (*str + 1)) {
+    if (!match_space(&s) && !match_end(&s))
+      return false;
+
+    *value = v;
+    *str = s;
+    return true;
+  }
+
+  return false;
+}
+
 // match number
 static bool match_number(char **str, uint *value) {
   uint v = 0;
   char *s = *str;
 
-  if (*s == '-' || *s == '+')
+  // hex mode
+  if (*s == '$') {
     s++;
+    return match_hex(&s, value);
+  }
 
-  if (*s >= '0' && *s <= '9') {
-    while (*s >= '0' && *s <= '9')
-      v = v * 10 + (*s++ - '0');
+  else {
+    if (*s == '-' || *s == '+')
+      s++;
 
-    if (!match_space(&s) && !match_end(&s))
-      return false;
+    if (*s >= '0' && *s <= '9') {
+      while (*s >= '0' && *s <= '9')
+        v = v * 10 + (*s++ - '0');
 
-    *value = (**str == '-') ? -(int)v : v;
-    *str = s;
-    return true;
+      if (!match_space(&s) && !match_end(&s))
+        return false;
+
+      *value = (**str == '-') ? -(int)v : v;
+      *str = s;
+      return true;
+    }
   }
 
   return false;
@@ -1111,151 +1143,186 @@ static bool match_event(char **str, key_bind_t *e) {
   e->c = 0;
   e->d = 0;
 
-  if (action < 0x80) {
-    switch (action) {
-     case SM_SETTING_GROUP_COUNT:
-       if (!match_value(str, 0, NULL, &arg1))
-         return false;
-       break;
+  bool parsed = false;
 
-     case SM_KEY_SIGNATURE:
-     case SM_VOLUME:
-     case SM_SETTING_GROUP:
-     case SM_AUTO_PEDAL:
-       if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg1))
-         return false;
+  switch (action) {
+  case SM_SETTING_GROUP_COUNT:
+    if (!match_value(str, 0, NULL, &arg1))
+      return false;
 
-       if (!match_value(str, 0, NULL, &arg2))
-         return false;
+    break;
 
-       break;
+  case SM_KEY_SIGNATURE:
+  case SM_VOLUME:
+  case SM_SETTING_GROUP:
+    if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg1))
+      return false;
 
-     case SM_TRANSPOSE:
-     case SM_OCTSHIFT:
-     case SM_VELOCITY:
-     case SM_DELAY_KEYUP:
-       if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
-         return false;
+    if (!match_value(str, 0, NULL, &arg2))
+      return false;
 
-       if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
-         return false;
+    break;
 
-       if (!match_value(str, 0, NULL, &arg3))
-         return false;
+  case SM_PROGRAM:
+    if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+      return false;
 
-       break;
+    // version earlier than 1.8 have value before action
+    if (map_version < 0x01080000) {
+      if (!match_value(str, 0, NULL, &arg3))
+        return false;
 
-     case SM_CHANNEL:
-       if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
-         return false;
+      match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2);
+    }
+    else {
+      if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
+        return false;
 
-       if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
-         return false;
+      if (!match_value(str, 0, NULL, &arg3))
+        return false;
+    }
+    break;
 
-       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg3))
-         return false;
+  case SM_CONTROLLER_DEPRECATED:
+    map_version = 0x01070000;
+    // before version 1.8 only
+    if (map_version < 0x01080000) {
+      uint ch;
+      uint id;
+      uint value;
+      uint op;
 
-     default:
-       match_value(str, NULL, 0, &arg1);
-       match_value(str, NULL, 0, &arg2);
-       match_value(str, NULL, 0, &arg3);
-       break;
+      if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &ch))
+        return false;
+
+      if (!match_value(str, controller_names, ARRAY_COUNT(controller_names), &id))
+        return false;
+
+      if (!match_number(str, &value))
+        return false;
+
+      if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &op))
+        op = 0;
+
+      // sustain pedal
+      if (id == 64) {
+        if (op == SM_VALUE_FLIP)
+          value = 127;
+
+        action = SM_SUSTAIN;
+        arg1 = ch;
+        arg2 = op;
+        arg3 = value;
+      }
+      // set a controller can be translated to RAW midi message
+      else if (op == SM_VALUE_SET) {
+        action = SM_MIDI_CONTROLLER | (ch & 0x0f);
+        arg1 = id;
+        arg2 = value;
+        arg3 = 0;
+      }
+      else {
+        return false;
+      }
+    }
+    else {
+      return false;
+    }
+    break;
+
+  case SM_TRANSPOSE:
+  case SM_OCTAVE:
+  case SM_VELOCITY:
+  case SM_BANK_MSB:
+  case SM_BANK_LSB:
+  case SM_SUSTAIN:
+    if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+      return false;
+
+    if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
+      return false;
+
+    if (!match_value(str, 0, NULL, &arg3))
+      return false;
+
+    break;
+
+  case SM_CHANNEL:
+    if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+      return false;
+
+    if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
+      return false;
+
+    // before freepiano 1.8, channel map have names.
+    if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg3))
+      return false;
+
+    break;
+
+  case SM_NOTE_ON:
+  case SM_NOTE_OFF:
+  case SM_NOTE_PRESSURE:
+    if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+      return false;
+
+    if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg2))
+      return false;
+
+    // version earlier than 1.7 needs to convert note names
+    if (map_version < 0x01070000) {
+      arg1 -= 12;
     }
 
-    e->b = arg1;
-    e->c = arg2;
-    e->d = arg3;
-  }
-  // match midi events
-  else {
-    // parse args based on action
-    switch (action) {
-     case 0x80:      // NoteOff
-     case 0x90:      // NoteOn
-     case 0xa0:      // NoteAfterTouch
-       if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &channel))
-         return false;
+    // default pressure is 127
+    if (!match_number(str, &arg3))
+      arg3 = 127;
 
-       if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg1))
-         return false;
+    break;
 
-       // version earlier than 1.7 needs to convert note names
-       if (map_version < 0x01070000) {
-         arg1 -= 12;
-       }
+  case SM_PRESSURE:
+    if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+      return false;
 
-       e->a = action | (channel & 0xf);
-       e->b = arg1 & 0x7f;
-       e->c = match_number(str, &arg2) ? arg2 : 127;
-       break;
+    if (!match_value(str, 0, NULL, &arg2))
+      return false;
 
-     case 0xb0:      // Controller
-       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &channel))
-         return false;
+    break;
 
-       if (!match_value(str, controller_names, ARRAY_COUNT(controller_names), &arg1))
-         return false;
+  case SM_PITCH:
+    if (!match_number(str, &arg3))
+      return false;
 
-       if (!match_number(str, &arg2))
-         return false;
+    // convert pitch
+    arg1 = (arg3 >> 0) & 0x7f;
+    arg2 = (arg3 >> 7) & 0x7f;
+    arg3 = 0;
+    break;
 
-       match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg3);
+  default:
+    // a hex value
+    if (**str == '$') {
+      uint msg;
+      match_number(str, &msg);
 
-       e->a = action | (channel & 0xf);
-       e->b = arg1 & 0x7f;
-       e->c = arg2 & 0x7f;
-       e->d = arg3;
-       break;
-
-     case 0xc0:      // ProgramChange
-       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &channel))
-         return false;
-
-       if (!match_number(str, &arg1))
-         return false;
-
-       match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2);
-
-       e->a = action | (channel & 0xf);
-       e->b = arg1 & 0x7f;
-       e->c = arg2;
-       break;
-
-     case 0xd0:
-       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &channel))
-         return false;
-
-       if (!match_number(str, &arg1))
-         return false;
-
-       e->a = action | (channel & 0xf);
-       e->b = arg1 & 0x7f;
-       break;
-
-     case 0xe0:
-       if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &channel))
-         return false;
-
-       if (!match_number(str, &arg1))
-         return false;
-
-       e->a = action | (channel & 0xf);
-       e->b = arg1;
-       e->c = arg1 >> 8;
-       break;
-
-     default:
-       if (action < 0xf0)
-         return false;
-
-       match_number(str, &arg1);
-       match_number(str, &arg2);
-       e->a = action;
-       e->b = arg1;
-       e->c = arg2;
+      action = (msg >> 24) & 0xff;
+      arg1 = (msg >> 16) & 0xff;
+      arg2 = (msg >> 8) & 0xff;
+      arg3 = (msg >> 0) & 0xff;
     }
+    else {
+      match_hex(str, &action);
+      match_hex(str, &arg1);
+      match_hex(str, &arg2);
+      match_hex(str, &arg3);
+    }
+    break;
   }
 
+  e->a = action;
+  e->b = arg1;
+  e->c = arg2;
+  e->d = arg3;
   return true;
 }
 
@@ -1385,20 +1452,6 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
     if (match_number(&s, &value)) {
       config_set_setting_group(value);
     }
-  } else if (match_word(&s, "AutoPedal")) {
-    int value;
-
-    if (match_number(&s, &value)) {
-      config_set_auto_pedal(value);
-    }
-  } else if (match_word(&s, "DelayKeyup")) {
-    uint channel;
-    uint value;
-
-    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
-        match_number(&s, &value)) {
-      config_set_delay_keyup(channel, value);
-    }
   } else if (match_word(&s, "Program")) {
     uint channel;
     uint value;
@@ -1423,8 +1476,6 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
       map_version = version;
     }
   }
-
-
 
   return -1;
 }
@@ -1494,6 +1545,10 @@ int config_load_keymap(const char *filename) {
   return 0;
 }
 
+static int print_hex(char *buff, int buff_size, int value, const char *sep = "\t") {
+  return _snprintf(buff, buff_size, "%s%x", sep, value);
+}
+
 static int print_value(char *buff, int buff_size, int value, name_t *names = NULL, int name_count = 0, const char *sep = "\t") {
   for (int i = 0; i < name_count; i++) {
     if (names[i].value == value) {
@@ -1525,37 +1580,52 @@ static int print_version(char *buff, int buff_size, uint value, const char *sep 
   return s - buff;
 }
 
-static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t &e) {
+static int print_event(char *buff, int buffer_size, key_bind_t &e, const char *sep = "\t") {
   char *s = buff;
   char *end = buff + buffer_size;
 
-  s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
-
-  // Control messages
-  if (e.a < 0x80) {
-    s += print_value(s, end - s, e.a, action_names, ARRAY_COUNT(action_names));
+  if (e.a < SM_MIDI_MESSAGE_START) {
+    s += print_value(s, end - s, e.a, action_names, ARRAY_COUNT(action_names), sep);
 
     switch (e.a) {
      case SM_KEY_SIGNATURE:
      case SM_VOLUME:
      case SM_SETTING_GROUP:
        s += print_value(s, end - s, e.b, value_action_names, ARRAY_COUNT(value_action_names));
-       s += print_value(s, end - s, e.c, NULL, 0);
+       s += print_value(s, end - s, (char)e.c, NULL, 0);
        break;
 
-     case SM_TRANSPOSE:
-     case SM_OCTSHIFT:
+     case SM_OCTAVE:
      case SM_VELOCITY:
-     case SM_DELAY_KEYUP:
+     case SM_TRANSPOSE:
+     case SM_PROGRAM:
+     case SM_BANK_MSB:
+     case SM_BANK_LSB:
+     case SM_SUSTAIN:
+     case SM_PRESSURE:
        s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
        s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
-       s += print_value(s, end - s, e.d, NULL, 0);
+       s += print_value(s, end - s, (char)e.d);
+       break;
+
+     case SM_NOTE_ON:
+     case SM_NOTE_OFF:
+     case SM_NOTE_PRESSURE:
+       s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
+       s += print_value(s, end - s, e.c, note_names, ARRAY_COUNT(note_names));
+       if (e.d != 127)
+         s += print_value(s, end - s, e.d);
+       break;
+
+     case SM_PITCH:
+       s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
+       s += print_value(s, end - s, e.c + e.d * 127);
        break;
 
      case SM_CHANNEL:
        s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
        s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
-       s += print_value(s, end - s, e.d, channel_names, ARRAY_COUNT(channel_names));
+       s += print_value(s, end - s, (char)e.d, channel_names, ARRAY_COUNT(channel_names));
 
      case SM_PLAY:
      case SM_RECORD:
@@ -1569,55 +1639,42 @@ static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t
        break;
     }
   }
+  else
+  {
+    uint midi_msg = (e.a << 24) | (e.b << 16) | e.c << 8 | e.d;
+    s += _snprintf(s, end - s, "%sMIDI", sep);
+    const char *tab = "\t";
+    const char *spc = " ";
 
-  // Midi messages
-  else {
-    byte action = e.a & 0xf0;
-    byte channel = e.a & 0x0f;
-
-    switch (action) {
-     case 0x80:
-     case 0x90:
-       s += print_value(s, end - s, action, action_names, ARRAY_COUNT(action_names));
-       s += print_value(s, end - s, channel, hand_names, ARRAY_COUNT(hand_names));
-       s += print_value(s, end - s, e.b, note_names, ARRAY_COUNT(note_names));
-       if (e.c != 127)
-         s += print_value(s, end - s, e.c, NULL, 0);
-       break;
-
-     case 0xa0:
-     case 0xd0:
-       s += print_value(s, end - s, action, action_names, ARRAY_COUNT(action_names));
-       s += print_value(s, end - s, channel, channel_names, ARRAY_COUNT(channel_names));
-       s += print_value(s, end - s, e.b, note_names, ARRAY_COUNT(note_names));
-       s += print_value(s, end - s, e.c, NULL, 0);
-       break;
-
-     case 0xb0:
-       s += print_value(s, end - s, action, action_names, ARRAY_COUNT(action_names));
-       s += print_value(s, end - s, channel, channel_names, ARRAY_COUNT(channel_names));
-       s += print_value(s, end - s, e.b, controller_names, ARRAY_COUNT(controller_names));
-       s += print_value(s, end - s, e.c, NULL, 0);
-
-       if (e.d) s += print_value(s, end - s, e.d, value_action_names, ARRAY_COUNT(controller_names));
-       break;
-
-     case 0xc0:
-       s += print_value(s, end - s, action, action_names, ARRAY_COUNT(action_names));
-       s += print_value(s, end - s, channel, channel_names, ARRAY_COUNT(channel_names));
-       s += print_value(s, end - s, e.b, NULL, 0);
-       if (e.c) s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(controller_names));
-       break;
-
-     default:
-       s += print_value(s, end - s, e.a, NULL, 0);
-       s += print_value(s, end - s, e.b, NULL, 0);
-       s += print_value(s, end - s, e.c, NULL, 0);
-       s += print_value(s, end - s, e.d, NULL, 0);
-       break;
+    if (e.d) {
+      s += print_hex(s, end - s, e.a, tab);
+      s += print_hex(s, end - s, e.b, spc);
+      s += print_hex(s, end - s, e.c, spc);
+      s += print_hex(s, end - s, e.d, spc);
+    }
+    else if (e.c) {
+      s += print_hex(s, end - s, e.a, tab);
+      s += print_hex(s, end - s, e.b, spc);
+      s += print_hex(s, end - s, e.c, spc);
+    }
+    else if (e.b) {
+      s += print_hex(s, end - s, e.a, tab);
+      s += print_hex(s, end - s, e.b, spc);
+    }
+    else if (e.a) {
+      s += print_hex(s, end - s, e.a, tab);
     }
   }
 
+  return s - buff;
+}
+
+static int print_keyboard_event(char *buff, int buffer_size, int key, key_bind_t &e) {
+  char *s = buff;
+  char *end = buff + buffer_size;
+
+  s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
+  s += print_event(s, end - s, e);
 
   return s - buff;
 }
@@ -1700,16 +1757,6 @@ static int config_save_key_settings(char *buff, int buffer_size) {
     }
   }
 
-  // delay keyup
-  for (int ch = 0; ch < 16; ch++) {
-    if (config_get_delay_keyup(ch)) {
-      s += _snprintf(s, end - s, "DelayKeyup");
-      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
-      s += print_value(s, end - s, config_get_delay_keyup(ch));
-      s += _snprintf(s, end - s, "\r\n");
-    }
-  }
-
   // channel
   for (int ch = 0; ch < 16; ch++) {
     if (config_get_key_channel(ch) != 0) {
@@ -1741,13 +1788,6 @@ static int config_save_key_settings(char *buff, int buffer_size) {
         s += _snprintf(s, end - s, "\r\n");
       }
     }
-  }
-
-  // auto pedal
-  if (config_get_auto_pedal()) {
-    s += _snprintf(s, end - s, "AutoPedal");
-    s += print_value(s, end - s, config_get_auto_pedal());
-    s += _snprintf(s, end - s, "\r\n");
   }
 
   // save key bindings
@@ -2461,6 +2501,30 @@ const char* config_get_key_name(byte code) {
   return buff;
 }
 
+// get note name
+const char* config_get_note_name(byte note) {
+  int octave = (note / 12) - 1;
+  int tone = note % 12;
+
+
+  static bool initialized = false;
+  static const char* name_map[128] = {0};
+
+  if (!initialized) {
+    for (int i = 0; i < 128; i++) {
+      name_map[i] = "";
+    }
+    for (int i = 0; i < ARRAYSIZE(note_names); i++) {
+      if (note_names[i].value < 128) {
+        name_map[note_names[i].value] = note_names[i].name;
+      }
+    }
+    initialized = true;
+  }
+
+  return note < 128 ? name_map[note] : "";
+}
+
 // instrument show midi 
 bool config_get_instrument_show_midi() {
   thread_lock lock(config_lock);
@@ -2519,4 +2583,9 @@ void config_set_gui_transparency(byte value) {
 
 byte config_get_gui_transparency() {
   return global.gui_transparency;
+}
+
+// remap note
+byte config_translate_note(byte ch, byte note) {
+  return clamp_value<int>((int)note + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch) + config_get_key_signature(), 0, 127);
 }

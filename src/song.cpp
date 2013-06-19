@@ -12,6 +12,7 @@
 #include "config.h"
 #include "gui.h"
 #include "language.h"
+#include "utilities.h"
 
 struct song_event_t {
   double time;
@@ -39,7 +40,171 @@ static song_info_t song_info;
 static thread_lock_t song_lock;
 
 // current version
-static uint current_version = 0x01070000;
+static uint current_version = 0x01080000;
+
+
+
+// -----------------------------------------------------------------------------------------
+// event translator
+// -----------------------------------------------------------------------------------------
+
+// controller save state
+static struct controller_state_t {
+  double restore_timer;
+  byte   restore_value;
+  bool sync_wait;
+  byte sync_value;
+}
+midi_controller_state[16][128] = {0};
+
+// sync trigger
+static bool midi_sync_trigger = false;
+
+static inline byte translate_channel(byte ch) {
+  return config_get_key_channel(ch);
+}
+
+static inline byte translate_note(byte ch, byte note) {
+  return clamp_value((int)note + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch) + config_get_key_signature(), 0, 127);
+}
+
+static inline byte translate_pressure(byte ch, byte pressure) {
+  return clamp_value((int)pressure * config_get_key_velocity(ch) / 127, 0, 127);
+}
+
+static inline int default_value(int v, int dv = 0) {
+  if (v > 127) return dv;
+  if (v < -127) return dv;
+  return v;
+}
+
+static int translate_value(byte action, int value, int change) {
+  switch (action & 0x0f) {
+  case SM_VALUE_SET: value = change; break;
+  case SM_VALUE_INC: value = value + change; break;
+  case SM_VALUE_DEC: value = value - change; break;
+  case SM_VALUE_FLIP: value = change - value; break;
+  case SM_VALUE_PRESS: value = change; break;
+  case SM_VALUE_SET10: value = change / 10 * 10 + (value % 10); break;
+  case SM_VALUE_SET1: value = value / 10 * 10 + (change % 10); break;
+  }
+  return value;
+}
+
+static bool translate_controller(byte &a, byte &b, byte &c, byte &d, int id) {
+  byte ch = config_get_key_channel(b);
+  byte op = c;
+  int change = (char)d;
+  int value = config_get_controller(ch, id);
+  
+
+  // sync or press
+  if ((op & 0x0f) == SM_VALUE_PRESS || (op & 0x10)) {
+    return false;
+  }
+
+  value = default_value(value);
+  value = translate_value(op, value, change);
+  value = clamp_value(value, 0, 127);
+
+  a = SM_MIDI_CONTROLLER | ch;
+  b = id;
+  c = value;
+  d = 0;
+  return true;
+}
+
+// translate message
+bool song_translate_event(byte &a, byte &b, byte &c, byte &d) {
+  switch (a) {
+  case SM_NOTE_ON:
+    {
+      byte ch = b;
+      byte note = c;
+      byte pressure = d;
+      a = SM_MIDI_NOTEON | translate_channel(ch);
+      b = translate_note(ch, note);
+      c = translate_pressure(ch, pressure);
+      d = 0;
+      return true;
+    }
+    break;
+  case SM_NOTE_OFF:
+    {
+      a = SM_MIDI_NOTEOFF | config_get_key_channel(b);
+      b = translate_note(b, c);
+      c = 0;
+      d = 0;
+      return true;
+    }
+    break;
+
+  case SM_NOTE_PRESSURE:
+    {
+      byte ch = b;
+      byte note = c;
+      byte pressure = d;
+      a = SM_MIDI_PRESSURE | translate_channel(ch);
+      b = translate_note(ch, note);
+      c = translate_pressure(ch, pressure);
+      d = 0;
+      return true;
+    }
+    break;
+
+  case SM_PRESSURE:
+    {
+      byte ch = b;
+      byte pressure = c;
+      a = SM_MIDI_CHANNEL_PRESSURE | translate_channel(ch);
+      b = translate_pressure(ch, pressure);
+      c = 0;
+      d = 0;
+      return true;
+    }
+    break;
+
+  case SM_PITCH:
+    {
+      byte ch = b;
+      a = SM_MIDI_PITCH_BEND | translate_channel(ch);
+      b = c;
+      c = d;
+      d = 0;
+      return true;
+    }
+    break;
+
+  case SM_PROGRAM:
+    {
+      byte ch = config_get_key_channel(b);
+      byte op = c;
+      char change = d;
+      int value = config_get_program(ch);
+      value = default_value(value);
+      value = translate_value(op, value, change);
+
+      a = SM_MIDI_PROGRAM | ch;
+      b = clamp_value(value, 0, 127);
+      c = 0;
+      d = 0;
+
+      return true;
+    }
+    break;
+
+  case SM_BANK_LSB:
+    return translate_controller(a, b, c, d, 0x20);
+
+  case SM_BANK_MSB:
+    return translate_controller(a, b, c, d, 0x00);
+
+  case SM_SUSTAIN:
+    return translate_controller(a, b, c, d, 64);
+  }
+
+  return false;
+}
 
 // -----------------------------------------------------------------------------------------
 // event parser
@@ -54,21 +219,6 @@ static byte keyboard_map_key_type = 0;
 static byte keyboard_label_key_code = 0;
 static byte keyboard_label_key_size = 0;
 static char keyboard_label_text[256];
-
-// wrap value
-static int wrap_value(int value, int min_v, int max_v) {
-  if (value < min_v) value = max_v;
-  if (value > max_v) value = min_v;
-  return value;
-}
-
-// clamp value
-static int clamp_value(int value, int min_v, int max_v) {
-  if (value < min_v) value = min_v;
-  if (value > max_v) value = max_v;
-  return value;
-}
-
 
 // keyboard event map
 static void keyboard_event_map(int code, int type) {
@@ -137,9 +287,39 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record) {
   song_output_event(a, b, c, d);
 }
 
+static void output_controller(byte a, byte b, byte c, byte d, byte id) {
+  byte ch = config_get_key_channel(b);
+  byte op = c;
+  int change = (char)d;
+  int value = 0;
+
+  // midi controller state
+  controller_state_t &state = midi_controller_state[ch][id];
+
+  value = config_get_controller(ch, id);
+  value = default_value(value);
+  value = translate_value(op, value, change);
+  value = clamp_value(value, 0, 127);
+
+  // press
+  if ((op & 0x0f) == SM_VALUE_PRESS) {
+    state.restore_timer = 20;
+    state.restore_value = config_get_controller(ch, id);
+  }
+
+  // sync
+  if (op & 0x10) {
+    state.sync_wait = true;
+    state.sync_value = value;
+    return;
+  }
+
+  midi_output_event(SM_MIDI_CONTROLLER | ch, id, value, 0);
+}
+
 void song_output_event(byte a, byte b, byte c, byte d) {
   // midi events
-  if (a >= 0x80) {
+  if (a >= SM_MIDI_MESSAGE_START) {
     midi_output_event(a, b, c, d);
     return;
   }
@@ -149,11 +329,8 @@ void song_output_event(byte a, byte b, byte c, byte d) {
    case SM_KEY_SIGNATURE: {
      int value = config_get_key_signature();
 
-     switch (b) {
-      case 0: value = c; break;
-      case 1: value = wrap_value(value + (char)c, -4, 7); break;
-      case 2: value = wrap_value(value - (char)c, -4, 7); break;
-     }
+     value = translate_value(b, value, (char)c);
+     value = wrap_value(value, -4, 7);
 
      config_set_key_signature(value);
    }
@@ -163,25 +340,19 @@ void song_output_event(byte a, byte b, byte c, byte d) {
      int ch = b;
      int value = config_get_key_transpose(ch);
 
-     switch (c) {
-      case 0: value = d; break;
-      case 1: value = clamp_value(value + (char)d, -127, 127); break;
-      case 2: value = clamp_value(value - (char)d, -127, 127); break;
-     }
+     value = translate_value(c, value, (char)d);
+     value = clamp_value(value, -64, 64);
 
      config_set_key_transpose(ch, value);
    }
    break;
 
-   case SM_OCTSHIFT: {
+   case SM_OCTAVE: {
      int ch = b;
      int value = config_get_key_octshift(ch);
 
-     switch (c) {
-      case 0: value = d; break;
-      case 1: value = wrap_value(value + (char)d, -1, 1); break;
-      case 2: value = wrap_value(value - (char)d, -1, 1); break;
-     }
+     value = translate_value(c, value, (char)d);
+     value = wrap_value(value, -1, 1);
 
      config_set_key_octshift(ch, value);
    }
@@ -191,11 +362,8 @@ void song_output_event(byte a, byte b, byte c, byte d) {
      int ch = b;
      int value = config_get_key_velocity(ch);
 
-     switch (c) {
-      case 0: value = d; break;
-      case 1: value = clamp_value(value + (char)d, 0, 127); break;
-      case 2: value = clamp_value(value - (char)d, 0, 127); break;
-     }
+     value = translate_value(c, value, (char)d);
+     value = clamp_value(value, 0, 127);
 
      config_set_key_velocity(ch, value);
    }
@@ -205,11 +373,8 @@ void song_output_event(byte a, byte b, byte c, byte d) {
      int ch = b;
      int value = config_get_key_channel(ch);
 
-     switch (c) {
-      case 0: value = d; break;
-      case 1: value = clamp_value(value + (char)d, 0, 15); break;
-      case 2: value = clamp_value(value - (char)d, 0, 15); break;
-     }
+     value = translate_value(c, value, (char)d);
+     value = clamp_value(value, 0, 15);
 
      config_set_key_channel(ch, value);
    }
@@ -218,11 +383,8 @@ void song_output_event(byte a, byte b, byte c, byte d) {
    case SM_VOLUME: {
      int value = config_get_output_volume();
 
-     switch (b) {
-      case 0: value = c; break;
-      case 1: value = clamp_value(value + (char)c, 0, 100); break;
-      case 2: value = clamp_value(value - (char)c, 0, 100); break;
-     }
+     value = translate_value(b, value, c);
+     value = clamp_value(value, 0, 200);
 
      config_set_output_volume(value);
    }
@@ -253,11 +415,8 @@ void song_output_event(byte a, byte b, byte c, byte d) {
    case SM_SETTING_GROUP: {
      int value = config_get_setting_group();
 
-     switch (b) {
-      case 0: value = c; break;
-      case 1: value = wrap_value(value + (char)c, 0, config_get_setting_group_count() - 1); break;
-      case 2: value = wrap_value(value - (char)c, 0, config_get_setting_group_count() - 1); break;
-     }
+     value = translate_value(b, value, (char)c);
+     value = wrap_value(value, 0, (int)config_get_setting_group_count() - 1);
 
      config_set_setting_group(value);
    }
@@ -268,35 +427,30 @@ void song_output_event(byte a, byte b, byte c, byte d) {
    }
    break;
 
-   case SM_AUTO_PEDAL: {
-     int value = config_get_auto_pedal();
-
-     switch (b) {
-      case 0: value = c; break;
-      case 1: value = clamp_value(value + (char)c, 0, 127); break;
-      case 2: value = clamp_value(value - (char)c, 0, 127); break;
+   case SM_NOTE_ON:
+   case SM_NOTE_OFF:
+   case SM_NOTE_PRESSURE:
+   case SM_PRESSURE:
+   case SM_PITCH:
+   case SM_PROGRAM:
+     {
+       if (song_translate_event(a, b, c, d)) {
+         midi_output_event(a, b, c, d);
+       }
      }
+     break;
 
-     config_set_auto_pedal(value);
-   }
-   break;
+  case SM_BANK_LSB:
+    output_controller(a, b, c, d, 32);
+    break;
 
-   case SM_DELAY_KEYUP: {
-     byte ch = b;
-     int value = config_get_delay_keyup(ch);
+  case SM_BANK_MSB:
+    output_controller(a, b, c, d, 0);
+    break;
 
-     switch (c) {
-      case 0: value = d; break;
-      case 1: value = clamp_value(value + (char)d, 0, 127); break;
-      case 2: value = clamp_value(value - (char)d, 0, 127); break;
-     }
-
-     config_set_delay_keyup(ch, value);
-
-     // update keyboard to let delay keyup take effect.
-     keyboard_update(0);
-   }
-   break;
+  case SM_SUSTAIN:
+    output_controller(a, b, c, d, 64);
+    break;
   }
 }
 
@@ -353,8 +507,14 @@ static void song_reset_event() {
   // reset keyboard
   keyboard_reset();
 
+  // clear controller save
+  memset(midi_controller_state, 0, sizeof(midi_controller_state));
+
   // reset midi
   midi_reset();
+
+  // reset sync trigger
+  midi_sync_trigger = false;
 }
 
 // start record
@@ -380,13 +540,10 @@ void song_start_record() {
     // record current configs
     song_add_event(0, SM_KEY_SIGNATURE, 0, config_get_key_signature(), 0);
 
-    // record auto pedal
-    song_add_event(0, SM_AUTO_PEDAL, config_get_auto_pedal(), 0, 0);
-
     // record key settings
     for (int ch = 0; ch < 16; ch++) {
       if (config_get_key_octshift(ch))
-        song_add_event(0, SM_OCTSHIFT, ch, 0, config_get_key_octshift(ch));
+        song_add_event(0, SM_OCTAVE, ch, 0, config_get_key_octshift(ch));
 
       if (config_get_key_transpose(ch))
         song_add_event(0, SM_TRANSPOSE, ch, 0, config_get_key_transpose(ch));
@@ -396,9 +553,6 @@ void song_start_record() {
 
       if (config_get_key_channel(ch))
         song_add_event(0, SM_CHANNEL, ch, 0, config_get_key_channel(ch));
-
-      if (config_get_delay_keyup(ch))
-        song_add_event(0, SM_DELAY_KEYUP, ch, 0, config_get_delay_keyup(ch));
 
       if (config_get_program(ch) < 128)
         song_add_event(0, 0xc0 | ch, config_get_program(ch), 0, 0);
@@ -590,51 +744,47 @@ void song_update(double time_elapsed) {
     } else break;
   }
 
-  // auto pedal
-  if (config_get_auto_pedal()) {
-    static int pedal_value = 0;
-    int pedal_time = config_get_auto_pedal() * 100;
-
-    song_auto_pedal_timer -= time_elapsed;
-
-    if (song_auto_pedal_timer < 0) {
-      pedal_value = config_get_controller(0, 0x40);
-
-      if (pedal_value) {
-        song_send_event(0xb0, 0x40, 0, 0);
-      }
-
-      // reset pedal
-      while (song_auto_pedal_timer < 0)
-        song_auto_pedal_timer += pedal_time;
-    }
-
-    // pedal down
-    if (song_auto_pedal_timer < pedal_time - 100) {
-      if (pedal_value) {
-        int value = config_get_controller(0, 0x40);
-
-        if (value != pedal_value) {
-          song_send_event(0xb0, 0x40, pedal_value, 0);
-        }
-      }
-    }
-  }
-
   // adjust clock
   song_clock += time_elapsed;
 
   // update keyboard
   keyboard_update(time_elapsed);
 
-  // process midi evens
-  midi_update(time_elapsed);
+  // update controllers
+  for (int ch = 0; ch < 16; ch++) {
+    for (int id = 0; id < 128; id++) {
+      // midi controller state
+      controller_state_t &state = midi_controller_state[ch][id];
+
+      // sync controller
+      if (state.sync_wait) {
+        if (midi_sync_trigger) {
+          state.sync_wait = false;
+          midi_output_event(0xb0 | ch, id, state.sync_value, 0);
+        }
+      }
+
+      // restore mode
+      else if (state.restore_timer > 0) {
+        state.restore_timer -= time_elapsed;
+
+        if (state.restore_timer <= 0) {
+          midi_output_event(0xb0 | ch, id, state.restore_value, 0);
+        }
+      }
+    }
+  }
+
+  midi_sync_trigger = false;
 }
 
 song_info_t* song_get_info() {
   return &song_info;
 }
 
+void song_trigger_sync() {
+  midi_sync_trigger = true;
+}
 
 // -----------------------------------------------------------------------------------------
 // load and save functions
@@ -731,11 +881,11 @@ int song_open_lyt(const char *filename) {
     read(&map, sizeof(map), fp);
 
     // record set params command
-    song_add_event(0, SM_KEY_SIGNATURE, 0, map.midi_shift, 0);
-    song_add_event(0, SM_OCTSHIFT, 0, 0, map.shift_left);
-    song_add_event(0, SM_OCTSHIFT, 1, 0, map.shift_right);
-    song_add_event(0, SM_VELOCITY, 0, 0, map.velocity_left);
-    song_add_event(0, SM_VELOCITY, 1, 0, map.velocity_right);
+    song_add_event(0, SM_KEY_SIGNATURE, SM_VALUE_SET, map.midi_shift, 0);
+    song_add_event(0, SM_OCTAVE, 0, SM_VALUE_SET, map.shift_left);
+    song_add_event(0, SM_OCTAVE, 1, SM_VALUE_SET, map.shift_right);
+    song_add_event(0, SM_VELOCITY, 0, SM_VALUE_SET, map.velocity_left);
+    song_add_event(0, SM_VELOCITY, 1, SM_VALUE_SET, map.velocity_right);
 
     // push down padel
     if (map.voice1 > 0 || map.voice2 > 0)
@@ -872,9 +1022,10 @@ int song_open_lyt(const char *filename) {
 
         if (key.enabled && key.note) {
           key_bind_t keydown, keyup;
-          keydown.a = 0x90 | (key.channel & 0xf);
-          keydown.b = 12 + key.octive * 12 + notes[key.note % 8] + shifts[key.shift % 3];
-          keydown.c = 127;
+          keydown.a = SM_NOTE_ON;
+          keydown.b = (key.channel & 0xf);
+          keydown.c = 12 + key.octive * 12 + notes[key.note % 8] + shifts[key.shift % 3];
+          keydown.d = 127;
 
           // add keymap event
           song_add_event(0, SM_SYSTEM, SMS_KEY_MAP, keycode[i], 0);
@@ -910,9 +1061,9 @@ int song_open_lyt(const char *filename) {
       switch (type) {
        case 1: song_add_event(time, SM_SYSTEM, SMS_KEY_EVENT, key, 1); break;      // keydown
        case 2: song_add_event(time, SM_SYSTEM, SMS_KEY_EVENT, key, 0); break;      // keyup
-       case 3: song_add_event(time, SM_OCTSHIFT, 1, 0, key); break;                // set oct shift
-       case 4: song_add_event(time, SM_OCTSHIFT, 0, 0, key); break;                // set oct shift
-       case 5: song_add_event(time, SM_KEY_SIGNATURE, 0, key, 0); break;           // set midi oct shift
+       case 3: song_add_event(time, SM_OCTAVE, 1, SM_VALUE_SET, key); break;       // set oct shift
+       case 4: song_add_event(time, SM_OCTAVE, 0, SM_VALUE_SET, key); break;       // set oct shift
+       case 5: song_add_event(time, SM_KEY_SIGNATURE, SM_VALUE_SET, key, 0); break;// set midi oct shift
        case 18:    break;      // drum
        case 19:    break;      // maybe song end.
        default:
@@ -944,6 +1095,79 @@ void song_close() {
   song_end = NULL;
 }
 
+
+// check compatibility
+static void check_compatibility() {
+  // upgrade from 1.7 to 1.8
+  if (song_info.version <= 0x01070000) {
+    song_event_t *e;
+
+    // foreach event
+    for (e = song_event_buffer; e < song_end; e++) {
+      byte a = e->a;
+      byte b = e->b;
+      byte c = e->c;
+      byte d = e->d;
+
+      if (a == SM_SYSTEM) {
+        if (b == SMS_KEY_LABEL) {
+          e += (d + 3) / 4;
+        }
+      }
+
+      else if (a == SM_AUTO_PEDAL_OBSOLETE) {
+        if (b != 0 || c != 0)
+          song_info.compatibility = false;
+      }
+
+      else if (a == SM_DELAY_KEYUP_OBSOLETE) {
+        if (c != 0 || d != 0)
+          song_info.compatibility = false;
+      }
+      else
+      {
+        switch (a & 0xf0) {
+        case SM_MIDI_NOTEON:
+          e->a = SM_NOTE_ON;
+          e->b = a & 0x0f;
+          e->c = b;
+          e->d = c;
+          break;
+
+        case SM_MIDI_NOTEOFF:
+          e->a = SM_NOTE_OFF;
+          e->b = a & 0x0f;
+          e->c = b;
+          e->d = 0;
+          break;
+
+        case SM_MIDI_PROGRAM:
+          e->a = SM_PROGRAM;
+          e->b = a & 0x0f;
+          e->c = c;
+          e->d = b;
+          break;
+
+        case SM_MIDI_CONTROLLER:
+          if (b == 64) {
+            e->a = SM_SUSTAIN;
+            e->b = a & 0x0f;
+            e->c = d;
+            e->d = c;
+
+            // flip needs a value since 1.8
+            if (d == SM_VALUE_FLIP) {
+              e->d = 127;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+}
+
 // open song
 int song_open(const char *filename) {
   thread_lock lock(song_lock);
@@ -964,13 +1188,13 @@ int song_open(const char *filename) {
     if (memcmp(magic, "FreePianoSong", sizeof("FreePianoSong")) != 0)
       throw -1;
 
+    // start record
+    song_init_record();
+
     // version
     read(&song_info.version, sizeof(song_info.version), fp);
     if (song_info.version > current_version)
       throw -2;
-
-    // start record
-    song_init_record();
 
     // song info
     read_string(song_info.title, sizeof(song_info.title), fp);
@@ -1000,6 +1224,9 @@ int song_open(const char *filename) {
 
     // mark song protected
     song_info.write_protected = true;
+
+    // check compatibility and perhaps upgrade to lastest version.
+    check_compatibility();
 
     return 0;
   } catch (int err) {

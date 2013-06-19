@@ -1,28 +1,66 @@
 #pragma once
 
-#define SMS_KEY_EVENT           0
-#define SMS_KEY_MAP             1
-#define SMS_KEY_LABEL           2
+#define SMS_KEY_EVENT             0x00
+#define SMS_KEY_NOP               0x00
+#define SMS_KEY_MAP             	0x01
+#define SMS_KEY_LABEL           	0x02
 
 // FreePiano 1.0 messages
-#define SM_SYSTEM               0
-#define SM_KEY_SIGNATURE        1
-#define SM_OCTSHIFT             2
-#define SM_VELOCITY             3
-#define SM_CHANNEL              4
-#define SM_VOLUME               5
-#define SM_PLAY                 6
-#define SM_RECORD               7
-#define SM_STOP                 8
+#define SM_SYSTEM                 0x00
+#define SM_KEY_SIGNATURE        	0x01
+#define SM_OCTAVE               	0x02
+#define SM_VELOCITY             	0x03
+#define SM_CHANNEL              	0x04
+#define SM_VOLUME               	0x05
+#define SM_PLAY                 	0x06
+#define SM_RECORD               	0x07
+#define SM_STOP                 	0x08
 
 // FreePiano 1.1 messages
-#define SM_SETTING_GROUP        9
-#define SM_SETTING_GROUP_COUNT  10
-#define SM_AUTO_PEDAL           11
-#define SM_DELAY_KEYUP          12
+#define SM_SETTING_GROUP          0x09
+#define SM_SETTING_GROUP_COUNT  	0x0a
+#define SM_AUTO_PEDAL_OBSOLETE  	0x0b
+#define SM_DELAY_KEYUP_OBSOLETE 	0x0c
 
 // FreePiano 1.7 messages
-#define SM_TRANSPOSE            13
+#define SM_TRANSPOSE              0x0d
+
+// for compatibility
+#define SM_CONTROLLER_DEPRECATED  0x0e
+
+// FreePiano 1.8 messages
+#define SM_NOTE_OFF               0x10
+#define SM_NOTE_ON                0x11
+#define SM_NOTE_PRESSURE          0x12
+#define SM_PRESSURE               0x13
+#define SM_PITCH                  0x14
+#define SM_PROGRAM                0x15
+#define SM_BANK_MSB               0x16
+#define SM_BANK_LSB               0x17
+#define SM_SUSTAIN                0x18
+
+// value op
+#define SM_VALUE_SET              0x00
+#define SM_VALUE_INC              0x01
+#define SM_VALUE_DEC              0x02
+#define SM_VALUE_FLIP             0x03
+#define SM_VALUE_PRESS            0x04
+#define SM_VALUE_SET10            0x0a
+#define SM_VALUE_SET1             0x0b
+#define SM_VALUE_SYNC             0x10
+
+// MIDI messages
+#define SM_MIDI_MASK_MSG          0xf0
+#define SM_MIDI_MASK_CHANNEL      0x0f
+#define SM_MIDI_MESSAGE_START     0x80
+#define SM_MIDI_NOTEOFF           0x80
+#define SM_MIDI_NOTEON            0x90
+#define SM_MIDI_PRESSURE          0xa0
+#define SM_MIDI_CONTROLLER        0xb0
+#define SM_MIDI_PROGRAM           0xc0
+#define SM_MIDI_CHANNEL_PRESSURE  0xd0
+#define SM_MIDI_PITCH_BEND        0xe0
+#define SM_MIDI_SYSEX             0xf0
 
 struct song_info_t {
   uint version;
@@ -30,6 +68,7 @@ struct song_info_t {
   char author[256];
   char comment[1024];
   bool write_protected;
+  bool compatibility;
 };
 
 // send event message
@@ -97,4 +136,10 @@ int song_open(const char *filename);
 
 // get song info
 song_info_t* song_get_info();
+
+// translate message
+bool song_translate_event(byte &a, byte &b, byte &c, byte &d);
+
+// trigger sync
+void song_trigger_sync();
 

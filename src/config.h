@@ -202,20 +202,11 @@ uint config_get_setting_group_count();
 // set setting group count
 void config_set_setting_group_count(uint count);
 
-// get auto pedal time
-char config_get_auto_pedal();
-
-// set auto pedal time
-void config_set_auto_pedal(char value);
-
-// set keyup mode
-void config_set_delay_keyup(byte channel, char value);
-
-// get keyup mode
-char config_get_delay_keyup(byte channel);
-
 // get key name
 const char* config_get_key_name(byte code);
+
+// get note name
+const char* config_get_note_name(byte note);
 
 // instrument show midi 
 bool config_get_instrument_show_midi();

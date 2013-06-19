@@ -531,7 +531,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
         update_slider(hWnd, IDC_PLAY_VELOCITY_SLIDER1 + channel, config_get_key_velocity(channel), 0, 127);
 
         // transpose
-        make_value(buff, sizeof(buff), config_get_key_transpose(channel), -63, 63);
+        make_value(buff, sizeof(buff), config_get_key_transpose(channel), -64, 64);
         update_numeric_edit(hWnd, IDC_PLAY_TRANSPOSE1 + channel, buff, "%d");
 
         // octave
@@ -676,7 +676,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
           value = (int)lParam;
           if (value < 0) value = 0;
           if (value > 127) value = 127;
-          song_send_event(0xc0 | config_get_key_channel(channel), value, 0, 0);
+          song_send_event(SM_PROGRAM, channel, SM_VALUE_SET, value);
           refresh = true;
           break;
 
@@ -697,10 +697,10 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
           if (value < 0) value = 0;
           if (value > 127) value = 127;
 
-          song_send_event(0xb0 | ch, 0, value, 0);
+          song_send_event(SM_BANK_MSB, channel, SM_VALUE_SET, value);
 
           if (config_get_program(ch) < 128)
-            song_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
+            song_send_event(SM_PROGRAM, channel, SM_VALUE_INC, 0);
 
           refresh = true;
           break;
@@ -722,10 +722,10 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
           if (value < 0) value = 0;
           if (value > 127) value = 127;
 
-          song_send_event(0xb0 | ch, 32, value, 0);
+          song_send_event(SM_BANK_LSB, channel, SM_VALUE_SET, value);
 
           if (config_get_program(ch) < 128)
-            song_send_event(0xc0 | ch, config_get_program(ch), 0, 0);
+            song_send_event(SM_PROGRAM, channel, SM_VALUE_INC, 0);
 
           refresh = true;
           break;
@@ -744,7 +744,7 @@ static INT_PTR CALLBACK settings_play_proc(HWND hWnd, UINT uMsg, WPARAM wParam, 
           value = (int)lParam;
           if (value < 0) value = 0;
           if (value > 127) value = 127;
-          song_send_event(0xb0 | config_get_key_channel(channel), 64, value, 0);
+          song_send_event(SM_SUSTAIN, channel, SM_VALUE_SET, value);
           refresh = true;
           break;
 
@@ -1151,7 +1151,6 @@ static int menu_init() {
   AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_keymap, lang_load_string(IDS_MENU_KEYMAP));
   AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_setting_group, lang_load_string(IDS_MENU_KEYGROUP));
   AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_config, lang_load_string(IDS_MENU_CONFIG));
-  AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_language, lang_load_string(IDS_MENU_LANGUAGE));
   AppendMenu(menu_main, MF_POPUP, (UINT_PTR)menu_about, lang_load_string(IDS_MENU_HELP));
 
   // Record menu
@@ -1173,6 +1172,7 @@ static int menu_init() {
   AppendMenu(menu_config, MF_POPUP, (UINT_PTR)menu_play_speed, lang_load_string(IDS_MENU_CONFIG_PLAYSPEED));
 
   // About menu
+  AppendMenu(menu_about, MF_POPUP, (UINT_PTR)menu_language, lang_load_string(IDS_MENU_LANGUAGE));
   AppendMenu(menu_about, MF_STRING, (UINT_PTR)MENU_ID_HELP_HOMEPAGE, lang_load_string(IDS_MENU_HELP_HOMEPAGE));
   AppendMenu(menu_about, MF_STRING, (UINT_PTR)MENU_ID_HELP_ONLINE, lang_load_string(IDS_MENU_HELP_ONLINE));
   AppendMenu(menu_about, MF_SEPARATOR, 0, NULL);
@@ -1734,32 +1734,38 @@ static HWND key_setting_window = NULL;
 // key setting proc
 static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static POINT move_pos;
+  static key_bind_t last_bind(SM_NOTE_ON, 0, 60, 127);
 
   struct helpers {
     static void refresh_controls(HWND hWnd) {
       key_bind_t keydown;
       config_bind_get_keydown(selected_key, &keydown, 1);
 
-      bool is_note = (keydown.a & 0xf0) == 0x80 || (keydown.a & 0xf0) == 0x90;
+      bool is_note = keydown.a == SM_NOTE_ON || keydown.a == SM_NOTE_OFF;
+
+      // remember this bind as last bind
+      if (is_note) {
+        last_bind = keydown;
+      }
 
       // notes
       for (int note = 0; note < 12; note++) {
         HWND button = GetDlgItem(hWnd, IDC_KEY_SETTING_NOTE_1 + note);
-        BOOL value = is_note && (keydown.b % 12 == note);
+        BOOL value = is_note && (keydown.c % 12 == note);
         Button_SetState(button, value);
       }
 
       // octave
       for (int octave = 0; octave < 8; octave++) {
         HWND button = GetDlgItem(hWnd, IDC_KEY_SETTING_OCTAVE_0 + octave);
-        BOOL value = is_note && (keydown.b / 12 - 1 == octave);
+        BOOL value = is_note && (keydown.c / 12 - 1 == octave);
         Button_SetState(button, value);
       }
 
       // channel
       for (int channel = 0; channel < 2; channel++) {
         HWND button = GetDlgItem(hWnd, IDC_KEY_SETTING_CHANNEL_0 + channel);
-        BOOL value = is_note && ((keydown.a & 0xf) == channel);
+        BOOL value = is_note && (keydown.b == channel);
         Button_SetState(button, value);
       }
 
@@ -1831,57 +1837,40 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 
    case WM_COMMAND:
      wParam = LOWORD(wParam);
+
+     key_bind_t keydown;
+     config_bind_get_keydown(selected_key, &keydown, 1);
+
+     bool rebind = false;
+     bool is_note = keydown.a == SM_NOTE_ON || keydown.a == SM_NOTE_OFF;
+
+     // make a default note
+     if (!is_note) {
+         keydown.a = SM_NOTE_ON;
+         keydown.b = last_bind.b;
+         keydown.c = last_bind.c;
+         keydown.d = last_bind.d;
+     }
+
      if (wParam >= IDC_KEY_SETTING_NOTE_1 && wParam <= IDC_KEY_SETTING_NOTE_12) {
        int note = wParam - IDC_KEY_SETTING_NOTE_1;
-       key_bind_t keydown;
-       config_bind_get_keydown(selected_key, &keydown, 1);
-
-       if ((keydown.a >> 4) == 0x9) {
-         keydown.b = (byte)((keydown.b / 12) * 12 + note);
-       } else {
-         keydown.a = 0x90;
-         keydown.b = (byte)(60 + note);
-         keydown.c = 127;
-       }
-
-       config_bind_set_label(selected_key, NULL);
-       config_bind_clear_keydown(selected_key);
-       config_bind_clear_keyup(selected_key);
-       config_bind_add_keydown(selected_key, keydown);
-       helpers::refresh_controls(hWnd);
+       keydown.c = (byte)((keydown.c / 12) * 12 + note);
+       rebind = true;
      }
 
      else if (wParam >= IDC_KEY_SETTING_OCTAVE_0 && wParam <= IDC_KEY_SETTING_OCTAVE_8) {
        int octave = wParam - IDC_KEY_SETTING_OCTAVE_0;
-       key_bind_t keydown;
-       config_bind_get_keydown(selected_key, &keydown, 1);
-
-       if ((keydown.a >> 4) == 0x9) {
-         keydown.b = (byte)(12 + octave * 12 + (keydown.b % 12));
-       } else {
-         keydown.a = 0x90;
-         keydown.b = (byte)(12 + octave * 12);
-         keydown.c = 127;
-       }
-
-       config_bind_set_label(selected_key, NULL);
-       config_bind_clear_keydown(selected_key);
-       config_bind_clear_keyup(selected_key);
-       config_bind_add_keydown(selected_key, keydown);
-       helpers::refresh_controls(hWnd);
+       keydown.c = (byte)(12 + octave * 12 + (keydown.c % 12));
+       rebind = true;
      }
 
      else if (wParam >= IDC_KEY_SETTING_CHANNEL_0 && wParam <= IDC_KEY_SETTING_CHANNEL_1) {
        int channel = wParam - IDC_KEY_SETTING_CHANNEL_0;
-       key_bind_t keydown;
-       config_bind_get_keydown(selected_key, &keydown, 1);
+       keydown.b = channel;
+       rebind = true;
+     }
 
-       switch (keydown.a >> 4) {
-       case 0x9: case 0x8: case 0xa: case 0xb: case 0xc: case 0xd:
-         keydown.a = static_cast<byte>((keydown.a & 0xf0) | (channel & 0x0f));
-         break;
-       }
-
+     if (rebind) {
        config_bind_set_label(selected_key, NULL);
        config_bind_clear_keydown(selected_key);
        config_bind_clear_keyup(selected_key);
@@ -1889,7 +1878,7 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
        helpers::refresh_controls(hWnd);
      }
 
-     else if (wParam == IDC_KEY_SETTING_BUTTON_APPLY) {
+     if (wParam == IDC_KEY_SETTING_BUTTON_APPLY) {
        config_bind_set_label(selected_key, NULL);
        config_bind_clear_keydown(selected_key);
        config_bind_clear_keyup(selected_key);

@@ -26,6 +26,7 @@
 #include "export.h"
 #include "../res/resource.h"
 #include "language.h"
+#include "utilities.h"
 
 
 // directX device handle.
@@ -61,8 +62,6 @@ static D3DMATRIX matrix_identity = {
   0, 0, 1, 0,
   0, 0, 0, 1,
 };
-
-static inline float round(float x) { return floor(x + 0.5f); }
 
 enum resource_type {
   background,
@@ -1255,7 +1254,7 @@ static void init_keyboard_states() {
     { DIK_APOSTROPHE,   0,  1.0f,   1.0f,   },
     { DIK_RETURN,       0,  2.25f,  1.0f,   },
     { 0,                1,  0.0f,   1.0f,   },
-    { DIK_LSHIFT,       0,  2.5f,   1.0f,   },
+    { DIK_LSHIFT,       0,  2.25,   1.0f,   },
     { DIK_Z,            0,  1.0f,   1.0f,   },
     { DIK_X,            0,  1.0f,   1.0f,   },
     { DIK_C,            0,  1.0f,   1.0f,   },
@@ -1266,16 +1265,16 @@ static void init_keyboard_states() {
     { DIK_COMMA,        0,  1.0f,   1.0f,   },
     { DIK_PERIOD,       0,  1.0f,   1.0f,   },
     { DIK_SLASH,        0,  1.0f,   1.0f,   },
-    { DIK_RSHIFT,       0,  2.5f,   1.0f,   },
+    { DIK_RSHIFT,       0,  2.75f,  1.0f,   },
     { 0,                1,  0.0f,   1.0f,   },
     { DIK_LCONTROL,     0,  1.25,   1.0f,   },
     { DIK_LWIN,         0,  1.25,   1.0f,   },
     { DIK_LMENU,        0,  1.25,   1.0f,   },
-    { DIK_SPACE,        0,  6.25,   1.0f,   },
+    { DIK_SPACE,        0,  6.00,   1.0f,   },
     { DIK_RMENU,        0,  1.25,   1.0f,   },
     { DIK_RWIN,         0,  1.25,   1.0f,   },
     { DIK_APPS,         0,  1.25,   1.0f,   },
-    { DIK_RCONTROL,     0,  1.25,   1.0f,   },
+    { DIK_RCONTROL,     0,  1.50,   1.0f,   },
 
     { 0,                3,  15.45f, 0.0f,   },
     { DIK_SYSRQ,        0,  1.0f,   1.0f,   },
@@ -1615,27 +1614,45 @@ static void update_keyboard(double fade) {
         display_dirty = true;
       }
 
-      // key label
-      const char *label = config_bind_get_label(key - keyboard_states);
-      if (strcmp(label, key->label)) {
-        strcpy_s(key->label, label);
-        display_dirty = true;
-      }
-
       // key note
       int note = -1;
-      if ((map.a & 0xF0) == 0x90) {
-        byte ch = map.a & 0x0f;
-        note = map.b + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch);
+      if ((map.a & 0xf0) == SM_MIDI_NOTEON) {
+        note = map.b;
+      }
+      else if (map.a == SM_NOTE_ON || map.a == SM_NOTE_OFF) {
+        byte ch = map.b;
+        note = map.c + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch);
 
         // fixed-doh
         if (config_get_fixed_doh()) {
           note += config_get_key_signature();
         }
+
+        note = clamp_value(note, 0, 127);
       }
 
       if (note != key->note) {
         key->note = note;
+        display_dirty = true;
+      }
+
+      // key label
+      const char *label = config_bind_get_label(key - keyboard_states);
+
+      // generate key label
+      if (label[0] == 0) {
+        if (note != -1) {
+          if ((map.a & 0xf0) == SM_MIDI_NOTEON) {
+            label = config_get_note_name(note);
+          }
+          else if (note <= 12 || note >= 120) {
+            label = config_get_note_name(note);
+          }
+        }
+      }
+
+      if (strcmp(label, key->label)) {
+        strcpy_s(key->label, label);
         display_dirty = true;
       }
     }
@@ -2209,7 +2226,7 @@ static int find_control_button(int x, int y) {
 void dispatch_command(int command, int action) {
   switch (command) {
    case CMD_SUSTAIN:
-     song_send_event(0xb0, 0x40, 0, 3, true);
+     song_send_event(SM_SUSTAIN, 0, SM_VALUE_FLIP, 0, true);
      break;
 
    case CMD_MIDI_KEY:
@@ -2239,11 +2256,11 @@ void dispatch_command(int command, int action) {
      break;
 
    case CMD_OCTSHIFT_LEFT:
-     song_send_event(SM_OCTSHIFT, 0, action, 1, true);
+     song_send_event(SM_OCTAVE, 0, action, 1, true);
      break;
 
    case CMD_OCTSHIFT_RIGHT:
-     song_send_event(SM_OCTSHIFT, 1, action, 1, true);
+     song_send_event(SM_OCTAVE, 1, action, 1, true);
      break;
 
    case CMD_GROUP:
@@ -2403,10 +2420,10 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
   // update midi button
   if (midinote != previous_midi_note) {
     if (previous_midi_note != -1)
-      song_send_event(0x80, previous_midi_note, velocity, 0, true);
+      song_send_event(SM_NOTE_ON, 0, previous_midi_note, 0, true);
 
     if (midinote != -1)
-      song_send_event(0x90, midinote, velocity, 0, true);
+      song_send_event(SM_NOTE_ON, 0, midinote, velocity, true);
 
     previous_midi_note = midinote;
   }

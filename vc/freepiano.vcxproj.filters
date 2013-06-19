@@ -37,6 +37,7 @@
     <ClCompile Include="..\src\export_mp4.cpp" />
     <ClCompile Include="..\src\export_wav.cpp" />
     <ClCompile Include="..\src\export.cpp" />
+    <ClCompile Include="..\src\utilities.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\asio\asio.h">
@@ -82,6 +83,7 @@
     <ClInclude Include="..\src\export_wav.h" />
     <ClInclude Include="..\src\export.h" />
     <ClInclude Include="..\src\language_strdef.h" />
+    <ClInclude Include="..\src\utilities.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\res\background.png">

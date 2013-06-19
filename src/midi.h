@@ -17,9 +17,6 @@ void midi_open_inputs();
 void midi_close_inputs();
 
 // send event
-void midi_send_event(byte a, byte b, byte c, byte d);
-
-// send event
 void midi_output_event(byte a, byte b, byte c, byte d);
 
 // enum input
@@ -30,9 +27,6 @@ void midi_enum_output(midi_enum_callback &callbcak);
 
 // rest midi
 void midi_reset();
-
-// update midi
-void midi_update(double time);
 
 // get key status
 byte midi_get_note_status(byte ch, byte note);
