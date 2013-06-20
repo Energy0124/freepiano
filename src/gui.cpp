@@ -39,6 +39,57 @@ static void try_open_song(int err) {
   }
 }
 
+static bool open_dialog(char *buff, size_t size, const char* filters, const char* init_dir = NULL) {
+  char dir[260] = {0};
+
+  OPENFILENAME ofn;
+  memset(&ofn, 0, sizeof(ofn));
+  ofn.lStructSize = sizeof(ofn);
+  ofn.hwndOwner = gui_get_window();
+  ofn.lpstrFile = buff;
+  ofn.lpstrFile[0] = 0;
+  ofn.nMaxFile = size;
+  ofn.lpstrFilter = filters;
+  ofn.nFilterIndex = 1;
+  ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+  //ofn.lpstrDefExt = ".map";
+  ofn.nFileExtension = 0;
+
+  if (init_dir) {
+    config_get_media_path(dir, sizeof(dir), init_dir);
+    PathRemoveFileSpec(dir);
+    ofn.lpstrInitialDir = dir;
+  }
+
+  return GetOpenFileName(&ofn) != 0;
+}
+
+static bool save_dialog(char *buff, size_t size, const char *filters, const char* init_dir = NULL) {
+  char dir[260] = {0};
+
+  OPENFILENAME ofn;
+  memset(&ofn, 0, sizeof(ofn));
+  ofn.lStructSize = sizeof(ofn);
+  ofn.hwndOwner = gui_get_window();
+  ofn.lpstrFile = buff;
+  ofn.lpstrFile[0] = 0;
+  ofn.nMaxFile = size;
+  ofn.lpstrFilter = lang_load_string(IDS_FILTER_MAP);
+  ofn.nFilterIndex = 1;
+  ofn.Flags = OFN_PATHMUSTEXIST;
+  ofn.nFileExtension = 0;
+  //ofn.lpstrDefExt = ".map";
+
+  if (init_dir) {
+    config_get_media_path(dir, sizeof(dir), init_dir);
+    PathRemoveFileSpec(dir);
+    ofn.lpstrInitialDir = dir;
+  }
+
+  return GetSaveFileName(&ofn) != 0;
+}
+
+
 // Numeric edit control
 #define EN_VALUE_VALID      0xFE01
 #define EN_VALUE_INVALID    0xFE02
@@ -1088,7 +1139,7 @@ enum MENU_ID {
   MENU_ID_KEY_MAP,
   MENU_ID_KEY_MAP_LOAD,
   MENU_ID_KEY_MAP_SAVE,
-  MENU_ID_KEY_FIXED_DOH,
+  MENU_ID_KEY_MAP_SAVEAS,
   MENU_ID_HELP_HOMEPAGE,
   MENU_ID_HELP_ONLINE,
   MENU_ID_HELP_ABOUT,
@@ -1234,20 +1285,9 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (id) {
    case MENU_ID_INSTRUMENT_VSTI_BROWSE: {
      char temp[260];
-     OPENFILENAME ofn;
-     memset(&ofn, 0, sizeof(ofn));
-     ofn.lStructSize = sizeof(ofn);
-     ofn.hwndOwner = hwnd;
-     ofn.lpstrFile = temp;
-     ofn.lpstrFile[0] = 0;
-     ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_string(IDS_OPEN_FILTER_VST);
-     ofn.nFilterIndex = 1;
-     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
-
-     if (GetOpenFileName(&ofn)) {
-       if (int err = config_select_instrument(INSTRUMENT_TYPE_VSTI, ofn.lpstrFile)) {
+     if (open_dialog(temp, sizeof(temp), lang_load_string(IDS_OPEN_FILTER_VST))) {
+       if (int err = config_select_instrument(INSTRUMENT_TYPE_VSTI, temp)) {
          char buff[256];
          lang_format_string(buff, sizeof(buff), IDS_ERR_LOAD_VST, err);
          MessageBoxA(gui_get_window(), buff, APP_NAME, MB_OK);
@@ -1322,28 +1362,17 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
    case MENU_ID_FILE_OPEN: {
      char temp[260];
-     OPENFILENAME ofn;
-     memset(&ofn, 0, sizeof(ofn));
-     ofn.lStructSize = sizeof(ofn);
-     ofn.hwndOwner = hwnd;
-     ofn.lpstrFile = temp;
-     ofn.lpstrFile[0] = 0;
-     ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_string(IDS_OPEN_FILTER_SONG);
-     ofn.nFilterIndex = 1;
-     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-
-     song_close();
-
-     if (GetOpenFileName(&ofn)) {
+     if (open_dialog(temp, sizeof(temp), lang_load_string(IDS_OPEN_FILTER_SONG), "song\\")) {
        int result = -1;
-       const char *extension = PathFindExtension(ofn.lpstrFile);
+       const char *extension = PathFindExtension(temp);
+
+       song_close();
 
        if (strcmp(extension, ".lyt") == 0)
-         try_open_song(song_open_lyt(ofn.lpstrFile));
+         try_open_song(song_open_lyt(temp));
 
        else if (strcmp(extension, ".fpm") == 0)
-         try_open_song(song_open(ofn.lpstrFile));
+         try_open_song(song_open(temp));
      }
    }
    break;
@@ -1353,21 +1382,9 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
      if (result) {
        char temp[260];
-       OPENFILENAME ofn;
-       memset(&ofn, 0, sizeof(ofn));
-       ofn.lStructSize = sizeof(ofn);
-       ofn.hwndOwner = hwnd;
-       ofn.lpstrFile = temp;
-       ofn.lpstrFile[0] = 0;
-       ofn.nMaxFile = sizeof(temp);
-       ofn.lpstrFilter = lang_load_string(IDS_SAVE_FILTER_SONG);
-       ofn.nFilterIndex = 1;
-       ofn.Flags = OFN_PATHMUSTEXIST;
-       ofn.lpstrDefExt = ".fpm";
-
-       if (GetSaveFileName(&ofn)) {
-         PathRenameExtension(ofn.lpstrFile, ".fpm");
-         int result = song_save(ofn.lpstrFile);
+       if (save_dialog(temp, sizeof(temp), lang_load_string(IDS_SAVE_FILTER_SONG), "song\\")) {
+         PathRenameExtension(temp, ".fpm");
+         int result = song_save(temp);
 
          if (result != 0) {
            MessageBox(gui_get_window(), lang_load_string(IDS_ERR_SAVE_SONG), APP_NAME, MB_OK);
@@ -1403,53 +1420,28 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      break;
 
    case MENU_ID_KEY_MAP_LOAD: {
-     char dir[260];
-     char temp[260];
+     char temp[260] = {0};
+     if (open_dialog(temp, sizeof(temp), lang_load_string(IDS_FILTER_MAP), config_get_keymap())) {
+       config_set_keymap(temp);
+     }
 
-     config_get_media_path(dir, sizeof(dir), config_get_keymap());
-     PathRemoveFileSpec(dir);
-
-     OPENFILENAME ofn;
-     memset(&ofn, 0, sizeof(ofn));
-     ofn.lStructSize = sizeof(ofn);
-     ofn.hwndOwner = hwnd;
-     ofn.lpstrFile = temp;
-     ofn.lpstrFile[0] = 0;
-     ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_string(IDS_FILTER_MAP);
-     ofn.nFilterIndex = 1;
-     ofn.Flags = OFN_PATHMUSTEXIST;
-     ofn.lpstrDefExt = ".map";
-     ofn.nFileExtension = 4;
-     ofn.lpstrInitialDir = dir;
-
-     if (GetOpenFileName(&ofn))
-       config_set_keymap(ofn.lpstrFile);
    }
    break;
 
-   case MENU_ID_KEY_MAP_SAVE: {
-     char dir[260];
+   case MENU_ID_KEY_MAP_SAVE:
+   case MENU_ID_KEY_MAP_SAVEAS: {
      char temp[260] = {0};
 
-     config_get_media_path(dir, sizeof(dir), config_get_keymap());
-     PathRemoveFileSpec(dir);
+     if (id == MENU_ID_KEY_MAP_SAVEAS) {
+       if (save_dialog(temp, sizeof(temp), lang_load_string(IDS_FILTER_MAP), config_get_keymap())) {
+         PathRenameExtension(temp, ".map");
+       }
+     }
+     else {
+       config_get_media_path(temp, sizeof(temp), config_get_keymap());
+     }
 
-     OPENFILENAME ofn;
-     memset(&ofn, 0, sizeof(ofn));
-     ofn.lStructSize = sizeof(ofn);
-     ofn.hwndOwner = hwnd;
-     ofn.lpstrFile = temp;
-     ofn.lpstrFile[0] = 0;
-     ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_string(IDS_FILTER_MAP);
-     ofn.nFilterIndex = 1;
-     ofn.Flags = OFN_PATHMUSTEXIST;
-     ofn.lpstrDefExt = ".map";
-     ofn.nFileExtension = 4;
-     ofn.lpstrInitialDir = dir;
-
-     if (GetSaveFileName(&ofn)) {
+     if (temp[0]) {
        char *buffer = config_save_keymap();
 
        FILE *fp = fopen(temp, "wb");
@@ -1464,10 +1456,6 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
      }
    }
    break;
-
-   case MENU_ID_KEY_FIXED_DOH:
-     config_set_fixed_doh(!config_get_fixed_doh());
-     break;
 
    case MENU_ID_SETTING_GROUP_CHANGE:
      if (GetMenuString(menu, pos, buff, sizeof(buff), MF_BYPOSITION))
@@ -1506,22 +1494,10 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
    case MENU_ID_FILE_EXPORT_MP4: {
      song_stop_playback();
 
-     char temp[260];
-     OPENFILENAME ofn;
-     memset(&ofn, 0, sizeof(ofn));
-     ofn.lStructSize = sizeof(ofn);
-     ofn.hwndOwner = hwnd;
-     ofn.lpstrFile = temp;
-     ofn.lpstrFile[0] = 0;
-     ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_string(IDS_SAVE_FILTER_MP4);
-     ofn.nFilterIndex = 1;
-     ofn.Flags = OFN_PATHMUSTEXIST;
-     ofn.lpstrDefExt = ".mp4";
-
-     if (GetSaveFileName(&ofn)) {
-       PathRenameExtension(ofn.lpstrFile, ".mp4");
-       export_mp4(ofn.lpstrFile);
+     char temp[260] = {0};
+     if (save_dialog(temp, sizeof(temp), lang_load_string(IDS_SAVE_FILTER_MP4))) {
+       PathRenameExtension(temp, ".mp4");
+       export_mp4(temp);
      }
    }
    break;
@@ -1529,22 +1505,10 @@ int menu_on_command(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
    case MENU_ID_FILE_EXPORT_WAV: {
      song_stop_playback();
 
-     char temp[260];
-     OPENFILENAME ofn;
-     memset(&ofn, 0, sizeof(ofn));
-     ofn.lStructSize = sizeof(ofn);
-     ofn.hwndOwner = hwnd;
-     ofn.lpstrFile = temp;
-     ofn.lpstrFile[0] = 0;
-     ofn.nMaxFile = sizeof(temp);
-     ofn.lpstrFilter = lang_load_string(IDS_SAVE_FILTER_WAV);
-     ofn.nFilterIndex = 1;
-     ofn.Flags = OFN_PATHMUSTEXIST;
-     ofn.lpstrDefExt = ".wav";
-
-     if (GetSaveFileName(&ofn)) {
-       PathRenameExtension(ofn.lpstrFile, ".wav");
-       export_wav(ofn.lpstrFile);
+     char temp[260] = {0};
+     if (save_dialog(temp, sizeof(temp), lang_load_string(IDS_SAVE_FILTER_WAV))) {
+       PathRenameExtension(temp, ".wav");
+       export_wav(temp);
      }
    }
    break;
@@ -1674,10 +1638,12 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       while (int count = GetMenuItemCount(menu))
         RemoveMenu(menu, count - 1, MF_BYPOSITION);
 
+      uint enable_save = config_get_keymap()[0] ? MF_ENABLED : MF_DISABLED;
+
       // append action menus
+      AppendMenu(menu, MF_STRING | enable_save, MENU_ID_KEY_MAP_SAVE,   lang_load_string(IDS_MENU_KEYMAP_SAVE));
       AppendMenu(menu, MF_STRING, MENU_ID_KEY_MAP_LOAD,   lang_load_string(IDS_MENU_KEYMAP_LOAD));
-      AppendMenu(menu, MF_STRING, MENU_ID_KEY_MAP_SAVE,   lang_load_string(IDS_MENU_KEYMAP_SAVE));
-      AppendMenu(menu, MF_STRING | (config_get_fixed_doh() ? MF_CHECKED : 0), MENU_ID_KEY_FIXED_DOH,  lang_load_string(IDS_MENU_KEY_FIXED_DOH));
+      AppendMenu(menu, MF_STRING, MENU_ID_KEY_MAP_SAVEAS, lang_load_string(IDS_MENU_KEYMAP_SAVEAS));
       AppendMenu(menu, MF_SEPARATOR, 0, NULL);
 
       // enum key maps.
@@ -2309,7 +2275,7 @@ void gui_set_language(int lang) {
   lang_set_current(lang);
   menu_init();
   DrawMenuBar(mainhwnd);
-  display_refresh();
+  display_force_refresh();
 
   if (setting_hwnd) {
     ::DestroyWindow(setting_hwnd);

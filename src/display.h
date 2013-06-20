@@ -14,7 +14,7 @@ void display_set_image(uint type, const char *name);
 void display_render();
 
 // display refresh
-void display_refresh();
+void display_force_refresh();
 
 // display process emssage
 int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

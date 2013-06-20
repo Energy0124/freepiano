@@ -254,7 +254,7 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
 
    case SM_MIDI_NOTEON: {
      note_states[a & 0xf][b & 0x7f] = 1;
-     song_trigger_sync();
+     song_trigger_sync(SONG_SYNC_FLAG_MIDI);
    }
    break;
 
@@ -270,6 +270,10 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
      d = 0;
    }
    break;
+
+   case SM_MIDI_PITCH_BEND:
+     config_set_pitchbend(a & 0x0f, (int)c - 64);
+     break;
   }
 
   // debug print

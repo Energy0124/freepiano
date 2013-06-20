@@ -62,6 +62,9 @@
 #define SM_MIDI_PITCH_BEND        0xe0
 #define SM_MIDI_SYSEX             0xf0
 
+#define SONG_SYNC_FLAG_MIDI       0x0f
+#define SONG_SYNC_FLAG_KEYDOWN    0x10
+
 struct song_info_t {
   uint version;
   char title[256];
@@ -138,8 +141,8 @@ int song_open(const char *filename);
 song_info_t* song_get_info();
 
 // translate message
-bool song_translate_event(byte &a, byte &b, byte &c, byte &d);
+bool song_translate_note(byte &a, byte &b, byte &c, byte &d);
 
 // trigger sync
-void song_trigger_sync();
+void song_trigger_sync(uint flags);
 

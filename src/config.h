@@ -184,6 +184,12 @@ byte config_get_controller(byte channel, byte id);
 // set midi program
 void config_set_controller(byte channel, byte id, byte value);
 
+// get midi pitch bend
+char config_get_pitchbend(byte channel);
+
+// set pitch bend
+void config_set_pitchbend(byte channel, char msb);
+
 // get setting group
 uint config_get_setting_group();
 
@@ -207,6 +213,9 @@ const char* config_get_key_name(byte code);
 
 // get note name
 const char* config_get_note_name(byte note);
+
+// translate key label
+int config_default_keylabel(char* buff, size_t size, key_bind_t bind);
 
 // instrument show midi 
 bool config_get_instrument_show_midi();

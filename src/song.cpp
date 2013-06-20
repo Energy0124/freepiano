@@ -1,10 +1,5 @@
 #include "pch.h"
 
-#include <dinput.h>
-#include <Shlwapi.h>
-
-#include <zlib.h>
-
 #include "song.h"
 #include "display.h"
 #include "midi.h"
@@ -13,6 +8,13 @@
 #include "gui.h"
 #include "language.h"
 #include "utilities.h"
+
+#include <dinput.h>
+#include <Shlwapi.h>
+#include <zlib.h>
+#include <list>
+#include <vector>
+
 
 struct song_event_t {
   double time;
@@ -42,23 +44,130 @@ static thread_lock_t song_lock;
 // current version
 static uint current_version = 0x01080000;
 
+// -----------------------------------------------------------------------------------------
+// SYNC and DELAY event
+// -----------------------------------------------------------------------------------------
+struct sync_event_t {
+  uint flag;
+  uint id;
+  key_bind_t map;
+};
 
+struct delay_event_t {
+  double timer;
+  key_bind_t map;
+};
+
+static std::list<sync_event_t> sync_events;
+static std::list<delay_event_t> delay_events;
+
+// sync trigger
+static uint sync_trigger = 0;
+static uint sync_id = 0;
+
+// fixed delay timer
+static const double fixed_delay_timer = 20;
+
+// reset sync events
+static void sync_event_reset() {
+  thread_lock lock(song_lock);
+  sync_events.clear();
+  sync_trigger = 0;
+  sync_id = 0;
+}
+
+// add sync event
+static void sync_event_add(uint flag, byte a, byte b, byte c, byte d) {
+  thread_lock lock(song_lock);
+
+  sync_event_t e;
+  e.flag = flag;
+  e.id = sync_id;
+  e.map.a = a;
+  e.map.b = b;
+  e.map.c = c;
+  e.map.d = d;
+  sync_events.push_back(e);
+}
+
+// update sync events
+static void sync_event_update(double time) {
+  thread_lock lock(song_lock);
+
+  // events to output
+  std::vector<key_bind_t> output_events;
+
+  // find triggered events
+  for (auto it = sync_events.begin(); it != sync_events.end();) {
+    auto e = it; ++it;
+    if (e->id != sync_id && e->flag & sync_trigger) {
+      output_events.push_back(e->map);
+      sync_events.erase(e);
+    }
+  }
+
+  // reset sync trigger
+  if (sync_trigger) {
+    sync_id ++;
+    sync_trigger = 0;
+  }
+
+  // output events
+  if (!output_events.empty()) {
+    for (auto it = output_events.begin(); it != output_events.end(); ++it) {
+      song_output_event(it->a, it->b, it->c, it->d);
+    }
+  }
+}
+
+// reset sync events
+static void delay_event_reset() {
+  thread_lock lock(song_lock);
+  delay_events.clear();
+}
+
+// add delay event
+static void delay_event_add(double timer, byte a, byte b, byte c, byte d) {
+  thread_lock lock(song_lock);
+
+  delay_event_t e;
+  e.timer = timer;
+  e.map.a = a;
+  e.map.b = b;
+  e.map.c = c;
+  e.map.d = d;
+  delay_events.push_back(e);
+}
+
+// update delay events
+static void delay_event_update(double time) {
+  thread_lock lock(song_lock);
+
+  // events should output this time
+  std::vector<key_bind_t> output_events;
+
+  // find triggered events
+  for (auto it = delay_events.begin(); it != delay_events.end();) {
+    auto e = it; ++it;
+    e->timer -= time;
+
+    if (e->timer <= 0) {
+      output_events.push_back(e->map);
+      delay_events.erase(e);
+    }
+  }
+
+  // output events
+  if (!output_events.empty()) {
+    for (auto it = output_events.begin(); it != output_events.end(); ++it) {
+      song_output_event(it->a, it->b, it->c, it->d);
+    }
+  }
+}
 
 // -----------------------------------------------------------------------------------------
 // event translator
 // -----------------------------------------------------------------------------------------
-
-// controller save state
-static struct controller_state_t {
-  double restore_timer;
-  byte   restore_value;
-  bool sync_wait;
-  byte sync_value;
-}
-midi_controller_state[16][128] = {0};
-
-// sync trigger
-static bool midi_sync_trigger = false;
 
 static inline byte translate_channel(byte ch) {
   return config_get_key_channel(ch);
@@ -91,31 +200,8 @@ static int translate_value(byte action, int value, int change) {
   return value;
 }
 
-static bool translate_controller(byte &a, byte &b, byte &c, byte &d, int id) {
-  byte ch = config_get_key_channel(b);
-  byte op = c;
-  int change = (char)d;
-  int value = config_get_controller(ch, id);
-  
-
-  // sync or press
-  if ((op & 0x0f) == SM_VALUE_PRESS || (op & 0x10)) {
-    return false;
-  }
-
-  value = default_value(value);
-  value = translate_value(op, value, change);
-  value = clamp_value(value, 0, 127);
-
-  a = SM_MIDI_CONTROLLER | ch;
-  b = id;
-  c = value;
-  d = 0;
-  return true;
-}
-
 // translate message
-bool song_translate_event(byte &a, byte &b, byte &c, byte &d) {
+bool song_translate_note(byte &a, byte &b, byte &c, byte &d) {
   switch (a) {
   case SM_NOTE_ON:
     {
@@ -151,58 +237,7 @@ bool song_translate_event(byte &a, byte &b, byte &c, byte &d) {
       return true;
     }
     break;
-
-  case SM_PRESSURE:
-    {
-      byte ch = b;
-      byte pressure = c;
-      a = SM_MIDI_CHANNEL_PRESSURE | translate_channel(ch);
-      b = translate_pressure(ch, pressure);
-      c = 0;
-      d = 0;
-      return true;
-    }
-    break;
-
-  case SM_PITCH:
-    {
-      byte ch = b;
-      a = SM_MIDI_PITCH_BEND | translate_channel(ch);
-      b = c;
-      c = d;
-      d = 0;
-      return true;
-    }
-    break;
-
-  case SM_PROGRAM:
-    {
-      byte ch = config_get_key_channel(b);
-      byte op = c;
-      char change = d;
-      int value = config_get_program(ch);
-      value = default_value(value);
-      value = translate_value(op, value, change);
-
-      a = SM_MIDI_PROGRAM | ch;
-      b = clamp_value(value, 0, 127);
-      c = 0;
-      d = 0;
-
-      return true;
-    }
-    break;
-
-  case SM_BANK_LSB:
-    return translate_controller(a, b, c, d, 0x20);
-
-  case SM_BANK_MSB:
-    return translate_controller(a, b, c, d, 0x00);
-
-  case SM_SUSTAIN:
-    return translate_controller(a, b, c, d, 64);
   }
-
   return false;
 }
 
@@ -293,25 +328,20 @@ static void output_controller(byte a, byte b, byte c, byte d, byte id) {
   int change = (char)d;
   int value = 0;
 
-  // midi controller state
-  controller_state_t &state = midi_controller_state[ch][id];
-
   value = config_get_controller(ch, id);
   value = default_value(value);
   value = translate_value(op, value, change);
   value = clamp_value(value, 0, 127);
 
-  // press
-  if ((op & 0x0f) == SM_VALUE_PRESS) {
-    state.restore_timer = 20;
-    state.restore_value = config_get_controller(ch, id);
+  // sync event
+  if (op & SM_VALUE_SYNC) {
+    sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, c & ~SM_VALUE_SYNC, d);
+    return;
   }
 
-  // sync
-  if (op & 0x10) {
-    state.sync_wait = true;
-    state.sync_value = value;
-    return;
+  // restore
+  if ((op & 0x0f) == SM_VALUE_PRESS) {
+    delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, config_get_controller(ch, id));
   }
 
   midi_output_event(SM_MIDI_CONTROLLER | ch, id, value, 0);
@@ -327,65 +357,137 @@ void song_output_event(byte a, byte b, byte c, byte d) {
   // keyboard control events
   switch (a) {
    case SM_KEY_SIGNATURE: {
+     byte op = b;
+     char change = c;
      int value = config_get_key_signature();
 
-     value = translate_value(b, value, (char)c);
-     value = wrap_value(value, -4, 7);
+     // sync event
+     if (op & SM_VALUE_SYNC) {
+       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, op & ~SM_VALUE_SYNC, c, 0);
+       return;
+     }
 
+     // restore
+     if ((op & 0x0f) == SM_VALUE_PRESS) {
+       delay_event_add(fixed_delay_timer, a, SM_VALUE_SET, value, 0);
+     }
+
+     value = translate_value(op, value, change);
+     value = wrap_value(value, -4, 7);
      config_set_key_signature(value);
    }
    break;
 
    case SM_TRANSPOSE: {
      int ch = b;
+     byte op = c;
+     char change = d;
      int value = config_get_key_transpose(ch);
 
-     value = translate_value(c, value, (char)d);
-     value = clamp_value(value, -64, 64);
+     // sync event
+     if (op & SM_VALUE_SYNC) {
+       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
+       return;
+     }
 
+     // restore
+     if ((op & 0x0f) == SM_VALUE_PRESS) {
+       delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
+     }
+
+     value = translate_value(op, value, change);
+     value = clamp_value(value, -64, 64);
      config_set_key_transpose(ch, value);
    }
    break;
 
    case SM_OCTAVE: {
      int ch = b;
+     byte op = c;
+     char change = d;
      int value = config_get_key_octshift(ch);
 
-     value = translate_value(c, value, (char)d);
-     value = wrap_value(value, -1, 1);
+     // sync event
+     if (op & SM_VALUE_SYNC) {
+       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
+       return;
+     }
 
+     // restore
+     if ((op & 0x0f) == SM_VALUE_PRESS) {
+       delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
+     }
+
+     value = translate_value(op, value, change);
+     value = wrap_value(value, -1, 1);
      config_set_key_octshift(ch, value);
    }
    break;
 
    case SM_VELOCITY: {
      int ch = b;
+     byte op = c;
+     char change = d;
      int value = config_get_key_velocity(ch);
 
-     value = translate_value(c, value, (char)d);
-     value = clamp_value(value, 0, 127);
+     // sync event
+     if (op & SM_VALUE_SYNC) {
+       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
+       return;
+     }
 
+     // restore
+     if ((op & 0x0f) == SM_VALUE_PRESS) {
+       delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
+     }
+
+     value = translate_value(op, value, change);
+     value = clamp_value(value, 0, 127);
      config_set_key_velocity(ch, value);
    }
    break;
 
    case SM_CHANNEL: {
      int ch = b;
+     byte op = c;
+     char change = d;
      int value = config_get_key_channel(ch);
 
-     value = translate_value(c, value, (char)d);
-     value = clamp_value(value, 0, 15);
+     // sync event
+     if (op & SM_VALUE_SYNC) {
+       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
+       return;
+     }
 
+     // restore
+     if ((op & 0x0f) == SM_VALUE_PRESS) {
+       delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
+     }
+
+     value = translate_value(op, value, change);
+     value = clamp_value(value, 0, 15);
      config_set_key_channel(ch, value);
    }
    break;
 
    case SM_VOLUME: {
+     byte op = b;
+     byte change = c;
      int value = config_get_output_volume();
 
-     value = translate_value(b, value, c);
-     value = clamp_value(value, 0, 200);
+     // sync event
+     if (op & SM_VALUE_SYNC) {
+       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, op & ~SM_VALUE_SYNC, c, 0);
+       return;
+     }
 
+     // restore
+     if ((op & 0x0f) == SM_VALUE_PRESS) {
+       delay_event_add(fixed_delay_timer, a, SM_VALUE_SET, value, 0);
+     }
+
+     value = translate_value(op, value, change);
+     value = clamp_value(value, 0, 200);
      config_set_output_volume(value);
    }
    break;
@@ -413,11 +515,23 @@ void song_output_event(byte a, byte b, byte c, byte d) {
      break;
 
    case SM_SETTING_GROUP: {
+     byte op = b;
+     char change = c;
      int value = config_get_setting_group();
 
-     value = translate_value(b, value, (char)c);
-     value = wrap_value(value, 0, (int)config_get_setting_group_count() - 1);
+     // sync event
+     if (op & SM_VALUE_SYNC) {
+       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, op & ~SM_VALUE_SYNC, c, 0);
+       return;
+     }
 
+     // restore
+     if ((op & 0x0f) == SM_VALUE_PRESS) {
+       delay_event_add(fixed_delay_timer, a, SM_VALUE_SET, value, 0);
+     }
+
+     value = translate_value(op, value, change);
+     value = wrap_value(value, 0, (int)config_get_setting_group_count() - 1);
      config_set_setting_group(value);
    }
    break;
@@ -430,15 +544,101 @@ void song_output_event(byte a, byte b, byte c, byte d) {
    case SM_NOTE_ON:
    case SM_NOTE_OFF:
    case SM_NOTE_PRESSURE:
-   case SM_PRESSURE:
-   case SM_PITCH:
-   case SM_PROGRAM:
-     {
-       if (song_translate_event(a, b, c, d)) {
-         midi_output_event(a, b, c, d);
-       }
+     if (song_translate_note(a, b, c, d)) {
+       midi_output_event(a, b, c, d);
      }
      break;
+
+  case SM_PRESSURE:
+    {
+      byte ch = b;
+      byte op = c;
+      char change = d;
+      int value = 0;
+      value = default_value(value);
+
+     // sync event
+     if (op & SM_VALUE_SYNC) {
+       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
+       return;
+     }
+
+     // restore
+     if ((op & 0x0f) == SM_VALUE_PRESS) {
+       delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
+     }
+
+      value = translate_value(op, value, change);
+      value = clamp_value(value, 0, 127);
+
+      a = SM_MIDI_CHANNEL_PRESSURE | translate_channel(ch);
+      b = translate_pressure(ch, value);
+      c = 0;
+      d = 0;
+      midi_output_event(a, b, c, d);
+    }
+    break;
+
+  case SM_PITCH:
+    {
+      byte ch = b;
+      byte op = c;
+      char change = d;
+      int value = config_get_pitchbend(translate_channel(ch));
+      value = 0; // keep pitch bend is no well tested.
+      value = default_value(value);
+
+      // sync event
+      if (op & SM_VALUE_SYNC) {
+        sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
+        return;
+      }
+
+      // restore
+      if ((op & 0x0f) == SM_VALUE_PRESS) {
+        delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
+      }
+
+      value = translate_value(op, value, change);
+      value = clamp_value(value, -64, 63);
+      
+      a = SM_MIDI_PITCH_BEND | translate_channel(ch);
+      b = 0;
+      c = 64 + value;
+      d = 0;
+      midi_output_event(a, b, c, d);
+    }
+    break;
+
+  case SM_PROGRAM:
+    {
+      byte ch = config_get_key_channel(b);
+      byte op = c;
+      char change = d;
+      int value = config_get_program(ch);
+      value = default_value(value);
+
+      // sync event
+      if (op & SM_VALUE_SYNC) {
+        sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
+        return;
+      }
+
+      // restore
+      if ((op & 0x0f) == SM_VALUE_PRESS) {
+        delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
+      }
+
+      value = translate_value(op, value, change);
+      value = clamp_value(value, 0, 127);
+
+      a = SM_MIDI_PROGRAM | ch;
+      b = value;
+      c = 0;
+      d = 0;
+      midi_output_event(a, b, c, d);
+    }
+    break;
 
   case SM_BANK_LSB:
     output_controller(a, b, c, d, 32);
@@ -507,14 +707,12 @@ static void song_reset_event() {
   // reset keyboard
   keyboard_reset();
 
-  // clear controller save
-  memset(midi_controller_state, 0, sizeof(midi_controller_state));
+  // reset sync and delay events
+  sync_event_reset();
+  delay_event_reset();
 
   // reset midi
   midi_reset();
-
-  // reset sync trigger
-  midi_sync_trigger = false;
 }
 
 // start record
@@ -751,39 +949,17 @@ void song_update(double time_elapsed) {
   keyboard_update(time_elapsed);
 
   // update controllers
-  for (int ch = 0; ch < 16; ch++) {
-    for (int id = 0; id < 128; id++) {
-      // midi controller state
-      controller_state_t &state = midi_controller_state[ch][id];
-
-      // sync controller
-      if (state.sync_wait) {
-        if (midi_sync_trigger) {
-          state.sync_wait = false;
-          midi_output_event(0xb0 | ch, id, state.sync_value, 0);
-        }
-      }
-
-      // restore mode
-      else if (state.restore_timer > 0) {
-        state.restore_timer -= time_elapsed;
-
-        if (state.restore_timer <= 0) {
-          midi_output_event(0xb0 | ch, id, state.restore_value, 0);
-        }
-      }
-    }
-  }
-
-  midi_sync_trigger = false;
+  sync_event_update(time_elapsed);
+  delay_event_update(time_elapsed);
 }
 
 song_info_t* song_get_info() {
   return &song_info;
 }
 
-void song_trigger_sync() {
-  midi_sync_trigger = true;
+void song_trigger_sync(uint flags) {
+  thread_lock lock(song_lock);
+  sync_trigger |= flags;
 }
 
 // -----------------------------------------------------------------------------------------

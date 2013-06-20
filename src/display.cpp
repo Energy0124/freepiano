@@ -1161,10 +1161,13 @@ struct KeyboardState {
   float y2;
   float fade;
 
+  // display options
   uint active_color;
   uint img;
-  char label[32];
   int  note;
+  char label[18];
+  char label1[18];
+  key_bind_t map;
 };
 
 struct MidiKeyState {
@@ -1616,10 +1619,7 @@ static void update_keyboard(double fade) {
 
       // key note
       int note = -1;
-      if ((map.a & 0xf0) == SM_MIDI_NOTEON) {
-        note = map.b;
-      }
-      else if (map.a == SM_NOTE_ON || map.a == SM_NOTE_OFF) {
+      if (map.a == SM_NOTE_ON || map.a == SM_NOTE_OFF) {
         byte ch = map.b;
         note = map.c + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch);
 
@@ -1631,28 +1631,24 @@ static void update_keyboard(double fade) {
         note = clamp_value(note, 0, 127);
       }
 
+      // key note changed
       if (note != key->note) {
         key->note = note;
         display_dirty = true;
       }
 
-      // key label
+      // key label changed
       const char *label = config_bind_get_label(key - keyboard_states);
-
-      // generate key label
-      if (label[0] == 0) {
-        if (note != -1) {
-          if ((map.a & 0xf0) == SM_MIDI_NOTEON) {
-            label = config_get_note_name(note);
-          }
-          else if (note <= 12 || note >= 120) {
-            label = config_get_note_name(note);
-          }
-        }
-      }
-
       if (strcmp(label, key->label)) {
         strcpy_s(key->label, label);
+        display_dirty = true;
+      }
+
+      // keymap changed
+      if (map.a != key->map.a || map.b != key->map.b || map.c != key->map.c || map.d != key->map.d) {
+        int size = config_default_keylabel(key->label1, sizeof(key->label1), map);
+        key->label1[size] = 0;
+        key->map = map;
         display_dirty = true;
       }
     }
@@ -1676,20 +1672,29 @@ static void draw_keyboard() {
         draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, key->label, 10, 1, 1);
       }
       // draw note
-      else if (key->note > 12 && key->note < 120) {
-        if (resources[notes].texture) {
-          float x3 = round(x1 + (x2 - x1 - 25.f) * 0.5f);
-          float x4 = x3 + 25.f;
-          float y3 = round(y1 + (y2 - y1 - 25.f) * 0.5f);
-          float y4 = y3 + 25.f;
-          float u3 = ((key->note - 12) % 12) * 25.f;
-          float v3 = ((key->note - 12) / 12) * 25.f;
-          float u4 = u3 + 25.f;
-          float v4 = v3 + 25.f;
+      else if (key->note != -1) {
+        if (key->note >= 12 && key->note <= 120) {
+          if (resources[notes].texture) {
+            float x3 = round(x1 + (x2 - x1 - 25.f) * 0.5f);
+            float x4 = x3 + 25.f;
+            float y3 = round(y1 + (y2 - y1 - 25.f) * 0.5f);
+            float y4 = y3 + 25.f;
+            float u3 = ((key->note - 12) % 12) * 25.f;
+            float v3 = ((key->note - 12) / 12) * 25.f;
+            float u4 = u3 + 25.f;
+            float v4 = v3 + 25.f;
 
-          set_texture(resources[notes].texture);
-          draw_sprite(x3, y3, x4, y4, u3, v3, u4, v4, 0xffffffff);
+            set_texture(resources[notes].texture);
+            draw_sprite(x3, y3, x4, y4, u3, v3, u4, v4, 0xffffffff);
+          }
         }
+        else {
+          const char* note_name = config_get_note_name(key->note);
+          draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, note_name, 10, 1, 1);
+        }
+      }
+      else if (key->label1[0]) {
+        draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, key->label1, 10, 1, 1);
       }
     }
   }
@@ -2121,7 +2126,11 @@ void display_render() {
 }
 
 // refresh display
-void display_refresh() {
+void display_force_refresh() {
+  // make all map dirty
+  for (KeyboardState *key = keyboard_states; key < keyboard_states + 256; key++) {
+    key->map.a = 0;
+  }
   display_dirty = true;
 }
 
@@ -2226,7 +2235,7 @@ static int find_control_button(int x, int y) {
 void dispatch_command(int command, int action) {
   switch (command) {
    case CMD_SUSTAIN:
-     song_send_event(SM_SUSTAIN, 0, SM_VALUE_FLIP, 0, true);
+     song_send_event(SM_SUSTAIN, 0, SM_VALUE_FLIP, 127, true);
      break;
 
    case CMD_MIDI_KEY:
@@ -2398,10 +2407,9 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
     midinote = find_midi_note(x, y, &velocity);
 
     if (midinote != -1) {
-      if (config_get_midi_transpose()) {
-        midinote = midinote + config_get_key_signature();
-        if (midinote < 0) midinote = 0;
-        if (midinote > 127) midinote = 127;
+      if (!config_get_midi_transpose()) {
+        midinote = midinote - config_get_key_signature();
+        midinote = clamp_value(midinote, 0, 127);
       }
     }
   }

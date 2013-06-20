@@ -210,7 +210,7 @@ void keyboard_send_event(int code, int keydown) {
       key_bind_t down = temp[i];
 
       // translate to real midi event
-      song_translate_event(down.a, down.b, down.c, down.d);
+      song_translate_note(down.a, down.b, down.c, down.d);
 
       // note on
       if ((down.a & 0xf0) == SM_MIDI_NOTEON) {
@@ -236,7 +236,7 @@ void keyboard_send_event(int code, int keydown) {
       key_bind_t up = temp[i];
 
       // translate to real midi event
-      song_translate_event(up.a, up.b, up.c, up.d);
+      song_translate_note(up.a, up.b, up.c, up.d);
 
       // insert keyup event to keyup map
       key_up_map.insert(std::pair<byte, key_bind_t>(code, up));
@@ -247,6 +247,9 @@ void keyboard_send_event(int code, int keydown) {
         key_up_map.insert(std::pair<byte, key_bind_t>(code, up));
       }
     }
+
+    // trigger keyboard sync
+    song_trigger_sync(SONG_SYNC_FLAG_KEYDOWN);
   }
   // keyup event
   else {
