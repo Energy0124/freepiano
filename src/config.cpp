@@ -1203,7 +1203,6 @@ static bool match_event(char **str, key_bind_t *e) {
     break;
 
   case SM_CONTROLLER_DEPRECATED:
-    map_version = 0x01070000;
     // before version 1.8 only
     if (map_version < 0x01080000) {
       uint ch;

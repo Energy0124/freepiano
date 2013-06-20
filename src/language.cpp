@@ -117,6 +117,10 @@ int lang_text_open(uint textid) {
 
   HINSTANCE module = GetModuleHandle(NULL);
   HRSRC hrsrc = FindResourceEx(module, "TEXT", MAKEINTRESOURCE(textid), system_language(lang_current));
+
+  if (hrsrc == NULL)
+    hrsrc = FindResourceEx(module, "TEXT", MAKEINTRESOURCE(textid), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL));
+
   if (hrsrc) {
     // load resource
     HGLOBAL hrc = LoadResource(0, hrsrc);

@@ -286,7 +286,10 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
     vsti_send_midi_event(a, b, c, d);
   }
   // send event to output device
-  else if (midi_out_device) {
-    midiOutShortMsg(midi_out_device, a | (b << 8) | (c << 16) | (d << 24));
+  else {
+    thread_lock lock(midi_output_lock);
+    if (midi_out_device) {
+      midiOutShortMsg(midi_out_device, a | (b << 8) | (c << 16) | (d << 24));
+    }
   }
 }

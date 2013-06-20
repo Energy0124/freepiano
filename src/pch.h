@@ -26,7 +26,7 @@ typedef unsigned long ulong;
 #define ARRAY_COUNT(a)  (sizeof(a) / sizeof(a[0]))
 #define ARRAY_END(a)    (a + sizeof(a) / sizeof(a[0]))
 
-#define APP_NAME        "FreePiano"
+#define APP_NAME        "FreePiano 1.8 beta1"
 #define APP_VERSION     0x01010000
 
 #define FULLSCREEN      0
