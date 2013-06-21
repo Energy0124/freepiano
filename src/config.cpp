@@ -482,7 +482,7 @@ static name_t boolean_names[] = {
   { "true",           1 },
 };
 
-static name_t hand_names[] = {
+static name_t channel_names[] = {
   { "In_0",      0x00 },
   { "In_1",      0x01 },
   { "In_2",      0x02 },
@@ -1333,6 +1333,9 @@ static bool match_event(char **str, key_bind_t *e) {
     break;
 
   case SM_PROGRAM:
+      if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg2))
+        return false;
+
     if (!match_change_value(str, &arg2, &arg3, NULL, 0))
       return false;
 
@@ -1346,7 +1349,7 @@ static bool match_event(char **str, key_bind_t *e) {
       uint value;
       uint op;
 
-      if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &ch))
+      if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &ch))
         return false;
 
       if (!match_value(str, controller_names, ARRAY_COUNT(controller_names), &id))
@@ -1390,7 +1393,7 @@ static bool match_event(char **str, key_bind_t *e) {
   case SM_PRESSURE:
   case SM_PITCH:
   case SM_MODULATION:
-    if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+    if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg1))
       return false;
 
       if (!match_change_value(str, &arg2, &arg3, NULL, 0))
@@ -1399,10 +1402,10 @@ static bool match_event(char **str, key_bind_t *e) {
     break;
 
   case SM_CHANNEL:
-    if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+    if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg1))
       return false;
 
-    if (!match_change_value(str, &arg2, &arg3, hand_names, ARRAY_COUNT(hand_names)))
+    if (!match_change_value(str, &arg2, &arg3, channel_names, ARRAY_COUNT(channel_names)))
         return false;
 
     break;
@@ -1410,7 +1413,7 @@ static bool match_event(char **str, key_bind_t *e) {
   case SM_NOTE_ON:
   case SM_NOTE_OFF:
   case SM_NOTE_PRESSURE:
-    if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+    if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg1))
       return false;
 
     if (!match_value(str, note_names, ARRAY_COUNT(note_names), &arg2))
@@ -1718,7 +1721,7 @@ static int print_event(char *buff, int buffer_size, key_bind_t &e, const char *s
      case SM_MODULATION:
      case SM_PRESSURE:
      case SM_PITCH:
-       s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
+       s += print_value(s, end - s, e.b, channel_names, ARRAY_COUNT(channel_names));
        s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
        s += print_value(s, end - s, (char)e.d);
        break;
@@ -1726,14 +1729,14 @@ static int print_event(char *buff, int buffer_size, key_bind_t &e, const char *s
      case SM_NOTE_ON:
      case SM_NOTE_OFF:
      case SM_NOTE_PRESSURE:
-       s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
+       s += print_value(s, end - s, e.b, channel_names, ARRAY_COUNT(channel_names));
        s += print_value(s, end - s, e.c, note_names, ARRAY_COUNT(note_names));
        if (e.d != 127)
          s += print_value(s, end - s, e.d);
        break;
 
      case SM_CHANNEL:
-       s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
+       s += print_value(s, end - s, e.b, channel_names, ARRAY_COUNT(channel_names));
        s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
        s += print_value(s, end - s, (char)e.d);
 
@@ -2672,14 +2675,14 @@ const char* config_get_note_name(byte note) {
 const char* config_get_channel_name(byte ch) {
   const char* result = NULL;
 
-  for (int i = 0; i < ARRAYSIZE(hand_names); i++) {
-    if (hand_names[i].value == ch) {
-      if (hand_names[i].lang == lang_get_current()) {
-        result = hand_names[i].name;
+  for (int i = 0; i < ARRAYSIZE(channel_names); i++) {
+    if (channel_names[i].value == ch) {
+      if (channel_names[i].lang == lang_get_current()) {
+        result = channel_names[i].name;
         break;
       }
       else if (!result) {
-        result = hand_names[i].name;
+        result = channel_names[i].name;
       }
     }
   }

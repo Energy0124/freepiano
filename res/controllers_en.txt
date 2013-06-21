@@ -1,66 +1,162 @@
+*Play control
 #Play
 keydown %s Play
-label %s Play
 #Record
 keydown %s Record
-label %s Rec
 #Stop
 keydown %s Stop
-label %s Stop
-#Increase key signature
+
+*Key signature
+#Increase by 1
 keydown %s KeySignature Inc 1
-label %s Key+
-#Decrease key signature
+#Decrease by 1
 keydown %s KeySignature Dec 1
-label %s Key-
-#Increase left octshift
-keydown %s Octshift 0 Inc 1
-label %s LO+
-#Decrease left octshift
-keydown %s Octshift 0 Dec 1
-label %s LO-
-#Increase right octshift
-keydown %s Octshift 1 Inc 1
-label %s RO+
-#Decrease right octshift
-keydown %s Octshift 1 Dec 1
-label %s RO-
+#1=bA(-4)
+keydown %s KeySignature Set -4
+#1=A(-3)
+keydown %s KeySignature Set -3
+#1=bB(-2)
+keydown %s KeySignature Set -2
+#1=B(-1)
+keydown %s KeySignature Set -1
+#1=C(0)
+keydown %s KeySignature Set 0
+#1=bD(+1)
+keydown %s KeySignature Set 1
+#1=D(+2)
+keydown %s KeySignature Set 2
+#1=bE(+3)
+keydown %s KeySignature Set 3
+#1=E(+4)
+keydown %s KeySignature Set 4
+#1=F(+5)
+keydown %s KeySignature Set 5
+#1=F(+5)
+keydown %s KeySignature Set 5
+#1=#F(+6)
+keydown %s KeySignature Set 6
+#1=G(+7)
+keydown %s KeySignature Set 7
+
+*Group
 #Next group
 keydown %s Group Inc 1
-label %s GP+
 #Previous group
 keydown %s Group Dec 1
-label %s GP-
-#Sustain pedal (Flip)
-keydown %s Controller 0 SustainPedal 0 Flip
-keyup %s Controller 0 SustainPedal 0 Flip
-label %s SUS
-#Sustain pedal (Keep Flip)
-keydown %s Controller 0 SustainPedal 0 Flip
-label %s SUS
-#Sustain pedal (Sync up)
-keydown %s Controller 0 SustainPedal 0 SyncPress
-label %s SUS
-#Next instrument
-keydown %s Program 0 1 Inc
-label %s P+
-#Previous instrument
-keydown %s Program 0 1 Dec
-label %s P-
-#Select instrument 0 (Modify script for others)
-keydown %s Program 0 1
-label %s P1
-#Program 1 (Set by 1)
-keydown %s Program 0 1 Set1
-label %s P1
-#Program 10 (Set by 10)
-keydown %s Program 0 10 Set10
-label %s P10
-#Sharp on lefthand
-Keydown %s Transpose 0 Inc 1
-Keyup %s Transpose 0 Dec 1
+#Group 0
+keydown %s Group Set 0
+#Group 1
+keydown %s Group Set 1
+#Group 2
+keydown %s Group Set 2
+#Group 3
+keydown %s Group Set 3
+#Group 4
+keydown %s Group Set 4
+#Group 5
+keydown %s Group Set 5
+#Group 6
+keydown %s Group Set 5
+
+*Sustain on right hand
+#Toggle
+keydown %s Sustain In_1 Flip 127
+#Toggle when keydown, again when keyup
+keydown %s Sustain In_1 Flip 127
+keyup   %s Sustain In_1 Flip 127
+#Disable after next note.
+keydown %s Sustain In_1 SyncPress 0
+#Enable 
+keydown %s Sustain In_1 Set 127
+#Disable
+keydown %s Sustain In_1 Set 0
+#Enable when keydown, disable when keyup
+keydown %s Sustain In_1 Set 127
+keyup   %s Sustain In_1 Set 0
+#Disable when keydown, enable when keyup
+keydown %s Sustain In_1 Set 0
+keyup   %s Sustain In_1 Set 127
+
+*Voice of Right hand
+#Next
+keydown %s Program In_1 Inc 1
+#Previous
+keydown %s Program In_1 Dec 1
+#Set to 0
+keydown %s Program In_1 Set 0
+#Modify by 1
+keydown %s Program In_1 Set1 1
+#Modify by 10
+keydown %s Program In_1 Set10 10
+
+*Octave
+#Upper left octave
+keydown %s Octave In_0 Inc 1
+#Lower left octave
+keydown %s Octave In_0 Dec 1
+#Set left octave to 0
+keydown %s Octave In_0 Set 0
+#Set left octave to 1
+keydown %s Octave In_0 Set 1
+#Set left octave to -1
+keydown %s Octave In_0 Set -1
+#Upper right octave
+keydown %s Octave In_1 Inc 1
+#Lower right octave-
+keydown %s Octave In_1 Dec 1
+#Set right octave to 0
+keydown %s Octave In_1 Set 0
+#Set right octave to 1
+keydown %s Octave In_1 Set 1
+#Set right octave to -1
+keydown %s Octave In_1 Set -1
+
+*Velocity
+#Increase left by 1
+keydown %s Velocity In_0 Inc 1
+#Increase right by 1
+keydown %s Velocity In_1 Inc 1
+#Decrease left by 1
+keydown %s Velocity In_0 Dec 1
+#Decrease right by 1
+keydown %s Velocity In_1 Dec 1
+#Increase left by 10
+keydown %s Velocity In_0 Inc 10
+#Increase right by 10
+keydown %s Velocity In_1 Inc 10
+#Decrease left by 10
+keydown %s Velocity In_0 Dec 10
+#Decrease left by 10
+keydown %s Velocity In_1 Dec 10
+#Set left to 80
+keydown %s Velocity In_0 Set 80
+#Set right to 100
+keydown %s Velocity In_1 Set 100
+
+*Transpose
+#Tempory upper left semitone
+Keydown %s Transpose In_0 Inc 1
+Keyup   %s Transpose In_0 Dec 1
 Label	%s #L
-#Sharp on righthand
-Keydown %s Transpose 1 Inc 1
-Keyup %s Transpose 1 Dec 1
+#Tempory lower left semitone
+Keydown %s Transpose In_0 Dec 1
+Keyup   %s Transpose In_0 Inc 1
+Label	%s bL
+#Tempory upper right semitone
+Keydown %s Transpose In_1 Inc 1
+Keyup   %s Transpose In_1 Dec 1
 Label	%s #R
+#Tempory lower right semitone
+keydown %s Transpose In_1 Dec 1
+keyup   %s Transpose In_1 Inc 1
+Label	%s bR
+#Upper left semitone
+Keydown %s Transpose In_0 Inc 1
+Label	%s #L
+#Lower right semitone
+Keydown %s Transpose In_1 Dec 1
+Label	%s bR
+#Reset left transpose to 0
+Keydown %s Transpose In_0 Set 0
+#Reset right transpose to 0
+Keydown %s Transpose In_1 Set 0

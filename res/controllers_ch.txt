@@ -1,67 +1,162 @@
+*播放控制
 #播放
 keydown %s Play
-label %s 播放
 #录制
 keydown %s Record
-label %s 录音
 #停止
 keydown %s Stop
-label %s 停止
+
+*曲调
 #曲调+
 keydown %s KeySignature Inc 1
-label %s 曲调+
 #曲调-
 keydown %s KeySignature Dec 1
-label %s 曲调-
-#左手八度+
-keydown %s Octshift 0 Inc 1
-label %s 八度+
-#左手八度-
-keydown %s Octshift 0 Dec 1
-label %s 八度-
-#右手八度+
-keydown %s Octshift 1 Inc 1
-label %s 八度+
-#右手八度-
-keydown %s Octshift 1 Dec 1
-label %s 八度-
+#1=bA(-4)
+keydown %s KeySignature Set -4
+#1=A(-3)
+keydown %s KeySignature Set -3
+#1=bB(-2)
+keydown %s KeySignature Set -2
+#1=B(-1)
+keydown %s KeySignature Set -1
+#1=C(0)
+keydown %s KeySignature Set 0
+#1=bD(+1)
+keydown %s KeySignature Set 1
+#1=D(+2)
+keydown %s KeySignature Set 2
+#1=bE(+3)
+keydown %s KeySignature Set 3
+#1=E(+4)
+keydown %s KeySignature Set 4
+#1=F(+5)
+keydown %s KeySignature Set 5
+#1=F(+5)
+keydown %s KeySignature Set 5
+#1=#F(+6)
+keydown %s KeySignature Set 6
+#1=G(+7)
+keydown %s KeySignature Set 7
+
+*分组
 #分组+
 keydown %s Group Inc 1
-label %s 分组+
 #分组-
 keydown %s Group Dec 1
-label %s 分组-
-#延音踏板（反转）
-keydown %s Controller 0 SustainPedal 0 Flip
-keyup %s Controller 0 SustainPedal 0 Flip
-label %s 踏板
-#延音踏板（保持反转）
-keydown %s Controller 0 SustainPedal 0 Flip
-label %s 踏板
-#延音踏板（同步止音）
-keydown %s Controller 0 SustainPedal 0 SyncPress
-label %s 踏板
-#音色+
-keydown %s Program 0 1 Inc
-label %s 音色+
-#音色-
-keydown %s Program 0 1 Dec
-label %s 音色-
-#音色0（其他音色请修改脚本）
-keydown %s Program 0 0
-label %s 音色1
-#音色1（修改个位）
-keydown %s Program 0 1 Set1
-label %s P1
-#音色10（修改十位）
-keydown %s Program 0 10 Set10
-label %s P10
-#左手升半音
-Keydown %s Transpose 0 Inc 1
-Keyup %s Transpose 0 Dec 1
-Label	%s #L
-#右手升半音
-Keydown %s Transpose 1 Inc 1
-Keyup %s Transpose 1 Dec 1
-Label	%s #R
+#分组0
+keydown %s Group Set 0
+#分组1
+keydown %s Group Set 1
+#分组2
+keydown %s Group Set 2
+#分组3
+keydown %s Group Set 3
+#分组4
+keydown %s Group Set 4
+#分组5
+keydown %s Group Set 5
+#分组6
+keydown %s Group Set 5
 
+*右手延音
+#反转
+keydown %s Sustain In_1 Flip 127
+#按下反转，松开再反转
+keydown %s Sustain In_1 Flip 127
+keyup   %s Sustain In_1 Flip 127
+#同步止音
+keydown %s Sustain In_1 SyncPress 0
+#延音
+keydown %s Sustain In_1 Set 127
+#止音
+keydown %s Sustain In_1 Set 0
+#按下延音，松开止音
+keydown %s Sustain In_1 Set 127
+keyup   %s Sustain In_1 Set 0
+#按下止音，松开延音
+keydown %s Sustain In_1 Set 0
+keyup   %s Sustain In_1 Set 127
+
+*右手音色
+#音色+
+keydown %s Program In_1 Inc 1
+#音色-
+keydown %s Program In_1 Dec 1
+#切换到音色0
+keydown %s Program In_1 Set 0
+#音色1（修改个位）
+keydown %s Program In_1 Set1 1
+#音色10（修改十位）
+keydown %s Program In_1 Set10 10
+
+*八度
+#左手八度+
+keydown %s Octave In_0 Inc 1
+#左手八度-
+keydown %s Octave In_0 Dec 1
+#左手八度0
+keydown %s Octave In_0 Set 0
+#左手八度1
+keydown %s Octave In_0 Set 1
+#左手八度-1
+keydown %s Octave In_0 Set -1
+#右手八度+
+keydown %s Octave In_1 Inc 1
+#右手八度-
+keydown %s Octave In_1 Dec 1
+#右手八度0
+keydown %s Octave In_1 Set 0
+#右手八度1
+keydown %s Octave In_1 Set 1
+#右手八度-1
+keydown %s Octave In_1 Set -1
+
+*力度
+#左手力度+1
+keydown %s Velocity In_0 Inc 1
+#右手力度+1
+keydown %s Velocity In_1 Inc 1
+#左手力度-1
+keydown %s Velocity In_0 Dec 1
+#右手力度-1
+keydown %s Velocity In_1 Dec 1
+#左手力度+10
+keydown %s Velocity In_0 Inc 10
+#右手力度+10
+keydown %s Velocity In_1 Inc 10
+#左手力度-10
+keydown %s Velocity In_0 Dec 10
+#右手力度-10
+keydown %s Velocity In_1 Dec 10
+#左手力度80
+keydown %s Velocity In_0 Set 80
+#右手力度100
+keydown %s Velocity In_1 Set 100
+
+*移调
+#左手临时升半音
+Keydown %s Transpose In_0 Inc 1
+Keyup   %s Transpose In_0 Dec 1
+Label	%s #L
+#左手临时降半音
+Keydown %s Transpose In_0 Dec 1
+Keyup   %s Transpose In_0 Inc 1
+Label	%s bL
+#右手临时升半音
+Keydown %s Transpose In_1 Inc 1
+Keyup   %s Transpose In_1 Dec 1
+Label	%s #R
+#右临时降半音
+keydown %s Transpose In_1 Dec 1
+keyup   %s Transpose In_1 Inc 1
+Label	%s bR
+#左手保持升半音
+Keydown %s Transpose In_0 Inc 1
+Label	%s #L
+#右手保持降半音
+Keydown %s Transpose In_1 Dec 1
+Label	%s bR
+#左手移调恢复0
+Keydown %s Transpose In_0 Set 0
+#右手移调恢复0
+Keydown %s Transpose In_1 Set 0
