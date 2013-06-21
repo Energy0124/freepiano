@@ -21,6 +21,15 @@
 #include <map>
 
 // -----------------------------------------------------------------------------------------
+// config defines
+// -----------------------------------------------------------------------------------------
+#define BIND_TYPE_UNKNOWN     0
+#define BIND_TYPE_KEYDOWN     1
+#define BIND_TYPE_KEYUP       2
+#define BIND_TYPE_LABEL       3
+#define BIND_TYPE_COLOR       4
+
+// -----------------------------------------------------------------------------------------
 // config constants
 // -----------------------------------------------------------------------------------------
 struct name_t {
@@ -155,15 +164,26 @@ static name_t key_names[] = {
   { "Break",          DIK_PAUSE },
 };
 
+static name_t bind_names[] = {
+  { "Keydown",            BIND_TYPE_KEYDOWN },
+  { "Keyup",              BIND_TYPE_KEYUP },
+  { "Label",              BIND_TYPE_LABEL },
+  { "Color",              BIND_TYPE_COLOR },
+
+  { "键盘按下",            BIND_TYPE_KEYDOWN,     FP_LANG_SCHINESE },
+  { "键盘松开",            BIND_TYPE_KEYUP,       FP_LANG_SCHINESE },
+  { "标签",                BIND_TYPE_LABEL,       FP_LANG_SCHINESE },
+  { "颜色",                BIND_TYPE_COLOR,       FP_LANG_SCHINESE },
+
+  // for compatibility
+  { "Key",                BIND_TYPE_KEYDOWN },
+};
+
 static name_t action_names[] = {
   { "KeySignature",       SM_KEY_SIGNATURE },
   { "Octave",             SM_OCTAVE },
-  { "Octshift",           SM_OCTAVE },
-  { "KeyboardOctshift",   SM_OCTAVE },
   { "Velocity",           SM_VELOCITY },
-  { "KeyboardVeolcity",   SM_VELOCITY },
   { "Channel",            SM_CHANNEL },
-  { "KeyboardChannel",    SM_CHANNEL },
   { "Transpose",          SM_TRANSPOSE },
   { "Volume",             SM_VOLUME },
   { "Play",               SM_PLAY },
@@ -181,8 +201,38 @@ static name_t action_names[] = {
   { "BankMSB",            SM_BANK_MSB },
   { "BankLSB",            SM_BANK_LSB },
   { "Sustain",            SM_SUSTAIN },
+  { "Modulation",         SM_MODULATION },
+
+  { "曲调",               SM_KEY_SIGNATURE,       FP_LANG_SCHINESE },
+  { "八度",               SM_OCTAVE,              FP_LANG_SCHINESE },
+  { "力度",               SM_VELOCITY,            FP_LANG_SCHINESE },
+  { "通道",               SM_CHANNEL,             FP_LANG_SCHINESE },
+  { "移位",               SM_TRANSPOSE,           FP_LANG_SCHINESE },
+  { "总音量",             SM_VOLUME,              FP_LANG_SCHINESE },
+  { "播放",               SM_PLAY,                FP_LANG_SCHINESE },
+  { "录制",               SM_RECORD,              FP_LANG_SCHINESE },
+  { "停止",               SM_STOP,                FP_LANG_SCHINESE },
+  { "分组",               SM_SETTING_GROUP,       FP_LANG_SCHINESE },
+  { "分组总数",           SM_SETTING_GROUP_COUNT, FP_LANG_SCHINESE },
+  { "音符",               SM_NOTE_ON,             FP_LANG_SCHINESE },
+  { "止音",               SM_NOTE_OFF,            FP_LANG_SCHINESE },
+  { "音符力度",           SM_NOTE_PRESSURE,       FP_LANG_SCHINESE },
+  { "通道力度",           SM_PRESSURE,            FP_LANG_SCHINESE },
+  { "弯音",               SM_PITCH,               FP_LANG_SCHINESE },
+  { "乐器",               SM_PROGRAM,             FP_LANG_SCHINESE },
+  { "乐器组1",            SM_BANK_MSB,            FP_LANG_SCHINESE },
+  { "乐器组2",            SM_BANK_LSB,            FP_LANG_SCHINESE },
+  { "延音",               SM_SUSTAIN,             FP_LANG_SCHINESE },
+  { "颤音",               SM_MODULATION,          FP_LANG_SCHINESE },
+
+  // pervious names
+  { "Octshift",           SM_OCTAVE },
+  { "KeyboardOctshift",   SM_OCTAVE },
+  { "KeyboardVeolcity",   SM_VELOCITY },
+  { "KeyboardChannel",    SM_CHANNEL },
   { "Controller",         SM_CONTROLLER_DEPRECATED },
 
+  // for parse midi message
   { "MIDI",               0xff },
 };
 
@@ -396,6 +446,19 @@ static name_t value_action_names[] = {
   { "SyncDec",        0x12 },
   { "SyncFlip",       0x13 },
   { "SyncPress",      0x14 },
+
+  { "设置为",         0x00,      FP_LANG_SCHINESE },
+  { "增加",           0x01,      FP_LANG_SCHINESE },
+  { "减少",           0x02,      FP_LANG_SCHINESE },
+  { "反转",           0x03,      FP_LANG_SCHINESE },
+  { "脉冲",           0x04,      FP_LANG_SCHINESE },
+  { "设置十位",       0x0a,      FP_LANG_SCHINESE },
+  { "设置个位",       0x0b,      FP_LANG_SCHINESE },
+  { "同步设置",       0x10,      FP_LANG_SCHINESE },
+  { "同步增加",       0x11,      FP_LANG_SCHINESE },
+  { "同步减少",       0x12,      FP_LANG_SCHINESE },
+  { "同步反转",       0x13,      FP_LANG_SCHINESE },
+  { "同步脉冲",       0x14,      FP_LANG_SCHINESE },
 };
 
 static name_t instrument_type_names[] = {
@@ -419,44 +482,93 @@ static name_t boolean_names[] = {
   { "true",           1 },
 };
 
-static name_t channel_names[] = {
-  { "Ch_0",      0 },
-  { "Ch_1",      1 },
-  { "Ch_2",      2 },
-  { "Ch_3",      3 },
-  { "Ch_4",      4 },
-  { "Ch_5",      5 },
-  { "Ch_6",      6 },
-  { "Ch_7",      7 },
-  { "Ch_8",      8 },
-  { "Ch_9",      9 },
-  { "Ch_10",     10 },
-  { "Ch_11",     11 },
-  { "Ch_12",     12 },
-  { "Ch_13",     13 },
-  { "Ch_14",     14 },
-  { "Ch_15",     15 },
-};
-
 static name_t hand_names[] = {
-  { "Ch_L",      0 },
-  { "Ch_R",      1 },
-  { "Ch_0",      0 },
-  { "Ch_1",      1 },
-  { "Ch_2",      2 },
-  { "Ch_3",      3 },
-  { "Ch_4",      4 },
-  { "Ch_5",      5 },
-  { "Ch_6",      6 },
-  { "Ch_7",      7 },
-  { "Ch_8",      8 },
-  { "Ch_9",      9 },
-  { "Ch_10",     10 },
-  { "Ch_11",     11 },
-  { "Ch_12",     12 },
-  { "Ch_13",     13 },
-  { "Ch_14",     14 },
-  { "Ch_15",     15 },
+  { "In_0",      0x00 },
+  { "In_1",      0x01 },
+  { "In_2",      0x02 },
+  { "In_3",      0x03 },
+  { "In_4",      0x04 },
+  { "In_5",      0x05 },
+  { "In_6",      0x06 },
+  { "In_7",      0x07 },
+  { "In_8",      0x08 },
+  { "In_9",      0x09 },
+  { "In_10",     0x0a },
+  { "In_11",     0x0b },
+  { "In_12",     0x0c },
+  { "In_13",     0x0d },
+  { "In_14",     0x0e },
+  { "In_15",     0x0f },
+
+  { "Out_0",     0x10 },
+  { "Out_1",     0x11 },
+  { "Out_2",     0x12 },
+  { "Out_3",     0x13 },
+  { "Out_4",     0x14 },
+  { "Out_5",     0x15 },
+  { "Out_6",     0x16 },
+  { "Out_7",     0x17 },
+  { "Out_8",     0x18 },
+  { "Out_9",     0x19 },
+  { "Out_10",    0x1a },
+  { "Out_11",    0x1b },
+  { "Out_12",    0x1c },
+  { "Out_13",    0x1d },
+  { "Out_14",    0x1e },
+  { "Out_15",    0x1f },
+
+  { "Ch_L",      0x00 },
+  { "Ch_R",      0x01 },
+  { "Ch_0",      0x00 },
+  { "Ch_1",      0x01 },
+  { "Ch_2",      0x02 },
+  { "Ch_3",      0x03 },
+  { "Ch_4",      0x04 },
+  { "Ch_5",      0x05 },
+  { "Ch_6",      0x06 },
+  { "Ch_7",      0x07 },
+  { "Ch_8",      0x08 },
+  { "Ch_9",      0x09 },
+  { "Ch_10",     0x0a },
+  { "Ch_11",     0x0b },
+  { "Ch_12",     0x0c },
+  { "Ch_13",     0x0d },
+  { "Ch_14",     0x0e },
+  { "Ch_15",     0x0f },
+
+  { "输入_0",     0x00,     FP_LANG_SCHINESE },
+  { "输入_1",     0x01,     FP_LANG_SCHINESE },
+  { "输入_2",     0x02,     FP_LANG_SCHINESE },
+  { "输入_3",     0x03,     FP_LANG_SCHINESE },
+  { "输入_4",     0x04,     FP_LANG_SCHINESE },
+  { "输入_5",     0x05,     FP_LANG_SCHINESE },
+  { "输入_6",     0x06,     FP_LANG_SCHINESE },
+  { "输入_7",     0x07,     FP_LANG_SCHINESE },
+  { "输入_8",     0x08,     FP_LANG_SCHINESE },
+  { "输入_9",     0x09,     FP_LANG_SCHINESE },
+  { "输入_10",    0x0a,     FP_LANG_SCHINESE },
+  { "输入_11",    0x0b,     FP_LANG_SCHINESE },
+  { "输入_12",    0x0c,     FP_LANG_SCHINESE },
+  { "输入_13",    0x0d,     FP_LANG_SCHINESE },
+  { "输入_14",    0x0e,     FP_LANG_SCHINESE },
+  { "输入_15",    0x0f,     FP_LANG_SCHINESE },
+
+  { "输出_0",     0x00,     FP_LANG_SCHINESE },
+  { "输出_1",     0x01,     FP_LANG_SCHINESE },
+  { "输出_2",     0x02,     FP_LANG_SCHINESE },
+  { "输出_3",     0x03,     FP_LANG_SCHINESE },
+  { "输出_4",     0x04,     FP_LANG_SCHINESE },
+  { "输出_5",     0x05,     FP_LANG_SCHINESE },
+  { "输出_6",     0x06,     FP_LANG_SCHINESE },
+  { "输出_7",     0x07,     FP_LANG_SCHINESE },
+  { "输出_8",     0x08,     FP_LANG_SCHINESE },
+  { "输出_9",     0x09,     FP_LANG_SCHINESE },
+  { "输出_10",    0x0a,     FP_LANG_SCHINESE },
+  { "输出_11",    0x0b,     FP_LANG_SCHINESE },
+  { "输出_12",    0x0c,     FP_LANG_SCHINESE },
+  { "输出_13",    0x0d,     FP_LANG_SCHINESE },
+  { "输出_14",    0x0e,     FP_LANG_SCHINESE },
+  { "输出_15",    0x0f,     FP_LANG_SCHINESE },
 };
 
 // -----------------------------------------------------------------------------------------
@@ -464,6 +576,7 @@ static name_t hand_names[] = {
 // -----------------------------------------------------------------------------------------
 struct key_label_t {
   char text[16];
+  uint color;
 };
 
 struct global_setting_t {
@@ -527,7 +640,6 @@ struct setting_t {
   char key_signature;
   char midi_program[16];
   char midi_controller[16][256];
-  char midi_pitchbend[16];
 
   void clear() {
     key_signature = 0;
@@ -545,7 +657,6 @@ struct setting_t {
       key_velocity[i] = 127;
       key_channel[i] = 0;
 
-      midi_pitchbend[i] = 0;
       midi_program[i] = -1;
 
       for (int j = 0; j < 128; j++)
@@ -564,6 +675,7 @@ static uint setting_count = 1;
 static thread_lock_t config_lock;
 
 // verison
+static uint map_language = FP_LANG_ENGLISH;
 static uint map_version = 0;
 static const uint map_current_version = 0x01080000;
 
@@ -646,6 +758,17 @@ const char* config_bind_get_label(byte code) {
   return settings[current_setting].key_label[code].text;
 }
 
+// set bind color
+void config_bind_set_color(byte code, uint color) {
+  thread_lock lock(config_lock);
+  settings[current_setting].key_label[code].color = color;
+}
+
+// get bind color
+uint config_bind_get_color(byte code) {
+  return settings[current_setting].key_label[code].color;
+}
+
 // set key signature
 void config_set_key_signature(char key) {
   thread_lock lock(config_lock);
@@ -714,31 +837,33 @@ byte config_get_key_velocity(byte channel) {
   if (channel < ARRAY_COUNT(settings[current_setting].key_velocity))
     return settings[current_setting].key_velocity[channel];
   else
-    return 0;
+    return 127;
 }
 
 // get channel
-int config_get_key_channel(byte channel) {
+int config_get_output_channel(byte channel) {
   thread_lock lock(config_lock);
 
-  if (channel < ARRAY_COUNT(settings[current_setting].key_channel))
-    return settings[current_setting].key_channel[channel];
+  if (channel <= SM_INPUT_MAX)
+    return settings[current_setting].key_channel[channel] & 0x0f;
   else
-    return 0;
+    return channel & 0x0f;
 }
 
 // get channel
-void config_set_key_channel(byte channel, byte value) {
+void config_set_output_channel(byte channel, byte value) {
   thread_lock lock(config_lock);
 
   if (channel < ARRAY_COUNT(settings[current_setting].key_channel)) {
-    settings[current_setting].key_channel[channel] = value;
+    settings[current_setting].key_channel[channel] = value & 0x0f;
   }
 }
 
 // get midi program
 byte config_get_program(byte channel) {
   thread_lock lock(config_lock);
+
+  channel = config_get_output_channel(channel);
 
   if (channel < ARRAY_COUNT(settings[current_setting].midi_program))
     return settings[current_setting].midi_program[channel];
@@ -750,6 +875,8 @@ byte config_get_program(byte channel) {
 void config_set_program(byte channel, byte value) {
   thread_lock lock(config_lock);
 
+  channel = config_get_output_channel(channel);
+
   if (channel < ARRAY_COUNT(settings[current_setting].midi_program)) {
     settings[current_setting].midi_program[channel] = value;
   }
@@ -759,35 +886,22 @@ void config_set_program(byte channel, byte value) {
 byte config_get_controller(byte channel, byte id) {
   thread_lock lock(config_lock);
 
+  channel = config_get_output_channel(channel);
+
   if (channel < ARRAY_COUNT(settings[current_setting].midi_controller))
     return settings[current_setting].midi_controller[channel][id];
   else
-    return 0;
+    return -1;
 }
 
 // set midi program
 void config_set_controller(byte channel, byte id, byte value) {
   thread_lock lock(config_lock);
 
+  channel = config_get_output_channel(channel);
+
   if (channel < ARRAY_COUNT(settings[current_setting].midi_controller)) {
     settings[current_setting].midi_controller[channel][id] = value;
-  }
-}
-
-// get midi pitch bend
-char config_get_pitchbend(byte channel) {
-  if (channel < ARRAY_COUNT(settings[current_setting].midi_controller)) {
-    return settings[current_setting].midi_pitchbend[channel];
-  }
-  return 0;
-}
-
-// set pitch bend
-void config_set_pitchbend(byte channel, char msb) {
-  thread_lock lock(config_lock);
-
-  if (channel < ARRAY_COUNT(settings[current_setting].midi_controller)) {
-    settings[current_setting].midi_pitchbend[channel] = msb;
   }
 }
 
@@ -817,12 +931,13 @@ void config_set_setting_group(uint id) {
 
   // update status
   for (int ch = 0; ch < 16; ch++) {
-    for (int i = 0; i < 127; i++)
-      if (config_get_controller(ch, i) < 128)
-        song_output_event(0xb0 | ch, i, config_get_controller(ch, i), 0);
+    for (int i = 0; i < 127; i++) {
+      if (config_get_controller(SM_OUTPUT_0 + ch, i) < 128)
+        song_output_event(0xb0 | ch, i, config_get_controller(SM_OUTPUT_0 + ch, i), 0);
+    }
 
-    if (config_get_program(ch) < 128)
-      song_output_event(0xc0 | ch, config_get_program(ch), 0, 0);
+    if (config_get_program(SM_OUTPUT_0 + ch) < 128)
+      song_output_event(0xc0 | ch, config_get_program(SM_OUTPUT_0 + ch), 0, 0);
   }
 }
 
@@ -1129,16 +1244,54 @@ static bool match_string(char **str, char *buf, uint size) {
   }
 }
 
-// match config value
-static bool match_value(char **str, name_t *names, uint count, uint *value) {
+static bool match_name(char **str, name_t *names, uint count, uint *value) {
   for (name_t *n = names; n < names + count; n++) {
     if (match_word(str, n->name)) {
       *value = n->value;
       return true;
     }
   }
+  return false;
+}
 
+// match config value
+static bool match_value(char **str, name_t *names, uint count, uint *value) {
+  if (match_name(str, names, count, value)) {
+    return true;
+  }
   return match_number(str, value);
+}
+
+// match change value action
+static bool match_change_value(char **str, uint *op, uint *value, name_t *names, uint names_size) {
+  char *s = *str;
+
+  // there are 2 methods to change a value:
+  // 1: op change
+  // 2: change [op]
+  uint tmp;
+
+  // got a op first, expect for value
+  if (match_value(&s, value_action_names, ARRAY_COUNT(value_action_names), &tmp)) {
+    if (match_value(&s, names, names_size, value)) {
+      *op = tmp;
+      *str = s;
+      return true;
+    }
+  }
+  else
+  {
+    // match value first
+    if (match_value(&s, names, names_size, value)) {
+      if (!match_value(&s, value_action_names, ARRAY_COUNT(value_action_names), op)) {
+        *op = SM_VALUE_SET;
+      }
+      *str = s;
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // match action
@@ -1174,32 +1327,15 @@ static bool match_event(char **str, key_bind_t *e) {
   case SM_KEY_SIGNATURE:
   case SM_VOLUME:
   case SM_SETTING_GROUP:
-    if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg1))
-      return false;
-
-    if (!match_value(str, 0, NULL, &arg2))
+    if (!match_change_value(str, &arg1, &arg2, NULL, 0))
       return false;
 
     break;
 
   case SM_PROGRAM:
-    if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
+    if (!match_change_value(str, &arg2, &arg3, NULL, 0))
       return false;
 
-    // version earlier than 1.8 have value before action
-    if (map_version < 0x01080000) {
-      if (!match_value(str, 0, NULL, &arg3))
-        return false;
-
-      match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2);
-    }
-    else {
-      if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
-        return false;
-
-      if (!match_value(str, 0, NULL, &arg3))
-        return false;
-    }
     break;
 
   case SM_CONTROLLER_DEPRECATED:
@@ -1216,11 +1352,8 @@ static bool match_event(char **str, key_bind_t *e) {
       if (!match_value(str, controller_names, ARRAY_COUNT(controller_names), &id))
         return false;
 
-      if (!match_number(str, &value))
+      if (!match_change_value(str, &op, &value, NULL, 0))
         return false;
-
-      if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &op))
-        op = 0;
 
       // sustain pedal
       if (id == 64) {
@@ -1256,14 +1389,12 @@ static bool match_event(char **str, key_bind_t *e) {
   case SM_SUSTAIN:
   case SM_PRESSURE:
   case SM_PITCH:
+  case SM_MODULATION:
     if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
       return false;
 
-    if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
-      return false;
-
-    if (!match_value(str, 0, NULL, &arg3))
-      return false;
+      if (!match_change_value(str, &arg2, &arg3, NULL, 0))
+        return false;
 
     break;
 
@@ -1271,12 +1402,8 @@ static bool match_event(char **str, key_bind_t *e) {
     if (!match_value(str, hand_names, ARRAY_COUNT(hand_names), &arg1))
       return false;
 
-    if (!match_value(str, value_action_names, ARRAY_COUNT(value_action_names), &arg2))
-      return false;
-
-    // before freepiano 1.8, channel map have names.
-    if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg3))
-      return false;
+    if (!match_change_value(str, &arg2, &arg3, hand_names, ARRAY_COUNT(hand_names)))
+        return false;
 
     break;
 
@@ -1332,149 +1459,111 @@ static int config_parse_keymap_line(char *s, byte override_key = 0) {
   if (*s == '#')
     return 0;
 
-  // key
-  if (match_word(&s, "Key") || match_word(&s, "Keydown")) {
-    uint key = 0;
-    key_bind_t keydown;
+  uint action;
+  key_bind_t bind;
 
-    // match key name
-    if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
-      return -1;
+  if (match_name(&s, bind_names, ARRAYSIZE(bind_names), &action)) {
+    if (action == BIND_TYPE_KEYDOWN) {
+      uint key = 0;
 
-    // override key
-    if (override_key)
-      key = override_key;
+      // match key name
+      if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
+        return -1;
 
-    // match midi event
-    if (match_event(&s, &keydown)) {
-      // set that action
-      config_bind_add_keydown(key, keydown);
+      // override key
+      if (override_key)
+        key = override_key;
+
+      // match midi event
+      if (match_event(&s, &bind)) {
+        // set that action
+        config_bind_add_keydown(key, bind);
+        return 0;
+      }
+    }
+
+    else if (action == BIND_TYPE_KEYUP) {
+      uint key = 0;
+
+      // match key name
+      if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
+        return -1;
+
+      // override key
+      if (override_key)
+        key = override_key;
+
+      // match midi event
+      if (match_event(&s, &bind)) {
+        // set that action
+        config_bind_add_keyup(key, bind);
+        return 0;
+      }
+    }
+
+    else if (action == BIND_TYPE_LABEL) {
+      uint key = 0;
+      char buff[256] = " ";
+
+      // match key name
+      if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
+        return -1;
+
+      // override key
+      if (override_key)
+        key = override_key;
+
+      // text
+      match_line(&s, buff, sizeof(buff));
+
+      // set key label
+      config_bind_set_label(key, buff);
+      return 0;
+    }
+
+    else if (action == BIND_TYPE_COLOR) {
+      uint key = 0;
+      int r = 0;
+      int g = 0;
+      int b = 0;
+      int a = 255;
+
+      // match key name
+      if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
+        return -1;
+
+      // override key
+      if (override_key)
+        key = override_key;
+
+      match_number(&s, &r);
+      match_number(&s, &g);
+      match_number(&s, &b);
+      match_number(&s, &a);
+
+      // set key color
+      config_bind_set_color(key, (a << 24) | (r << 16) | (g << 8) | b);
       return 0;
     }
   }
-  // keyup
-  else if (match_word(&s, "Keyup")) {
-    uint key = 0;
-    key_bind_t keyup;
+  else if (match_event(&s, &bind)) {
+    // execute event here
+    song_output_event(bind.a, bind.b, bind.c, bind.d);
 
-    // match key name
-    if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
-      return -1;
-
-    // override key
-    if (override_key)
-      key = override_key;
-
-    // match midi event
-    if (match_event(&s, &keyup)) {
-      // set that action
-      config_bind_add_keyup(key, keyup);
-      return 0;
-    }
-  }
-  // keylabel
-  else if (match_word(&s, "Label")) {
-    uint key = 0;
-    char buff[256] = " ";
-
-    // match key name
-    if (!match_value(&s, key_names, ARRAY_COUNT(key_names), &key))
-      return -1;
-
-    // override key
-    if (override_key)
-      key = override_key;
-
-    // text
-    match_line(&s, buff, sizeof(buff));
-
-    // set key label
-    config_bind_set_label(key, buff);
-  }
-  // octshift
-  else if (match_word(&s, "Octshift")) {
-    uint channel;
-    int value;
-
-    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
-        match_number(&s, &value)) {
-      config_set_key_octshift(channel, value);
-    }
-  }
-  // transpose
-  else if (match_word(&s, "Transpose")) {
-    uint channel;
-    int value;
-
-    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
-        match_number(&s, &value)) {
-      config_set_key_transpose(channel, value);
-    }
-  }
-  // velocity
-  else if (match_word(&s, "Velocity")) {
-    uint channel;
-    uint value;
-
-    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
-        match_number(&s, &value)) {
-      config_set_key_velocity(channel, value);
-    }
-  }
-  // output channel
-  else if (match_word(&s, "Channel")) {
-    uint channel;
-    uint value;
-
-    if (match_value(&s, hand_names, ARRAY_COUNT(hand_names), &channel) &&
-        match_value(&s, channel_names, ARRAY_COUNT(channel_names), &value)) {
-      config_set_key_channel(channel, value);
-    }
-  } else if (match_word(&s, "KeySignature")) {
-    int value;
-
-    if (match_number(&s, &value)) {
-      config_set_key_signature(value);
-    }
-  } else if (match_word(&s, "GroupCount")) {
-    int value;
-
-    if (match_number(&s, &value)) {
-      config_set_setting_group_count(value);
-
-      for (int i = value; i > 0; i--) {
-        config_set_setting_group(i - 1);
+    // clear all settings here
+    if (bind.a == SM_SETTING_GROUP_COUNT) {
+      for (int i = config_get_setting_group_count() - 1; i >= 0; i--) {
+        config_set_setting_group(i);
         config_clear_key_setting();
       }
     }
-  } else if (match_word(&s, "Group")) {
-    int value;
-
-    if (match_number(&s, &value)) {
-      config_set_setting_group(value);
-    }
-  } else if (match_word(&s, "Program")) {
-    uint channel;
-    uint value;
-
-    if (match_value(&s, channel_names, ARRAY_COUNT(channel_names), &channel) &&
-        match_number(&s, &value)) {
-      config_set_program(channel, value);
-    }
-  } else if (match_word(&s, "Controller")) {
-    uint channel;
-    uint id;
-    uint value;
-
-    if (match_value(&s, channel_names, ARRAY_COUNT(channel_names), &channel) &&
-        match_value(&s, controller_names, ARRAY_COUNT(controller_names), &id) &&
-        match_number(&s, &value)) {
-      config_set_controller(channel, id, value);
-    }
-  } else if (match_word(&s, "FreePiano")) {
+    return 0;
+  }
+  else if (match_word(&s, "FreePiano")) {
     int version = 0;
     if (match_version(&s, &version)) {
       map_version = version;
+      return 0;
     }
   }
 
@@ -1559,13 +1648,24 @@ static int print_hex(char *buff, int buff_size, int value, const char *sep = "\t
 }
 
 static int print_value(char *buff, int buff_size, int value, name_t *names = NULL, int name_count = 0, const char *sep = "\t") {
+  const char* result = NULL;
+
   for (int i = 0; i < name_count; i++) {
     if (names[i].value == value) {
-      return print_format(buff, buff_size, "%s%s", sep, names[i].name);
+      if (names[i].lang == map_language) {
+        result = names[i].name;
+        break;
+      }
+      else if (!result) {
+        result = names[i].name;
+      }
     }
   }
 
-  return print_format(buff, buff_size, "%s%d", sep, value);
+  if (result)
+    return print_format(buff, buff_size, "%s%s", sep, result);
+  else
+    return print_format(buff, buff_size, "%s%d", sep, value);
 }
 
 static int print_version(char *buff, int buff_size, uint value, const char *sep = "\t") {
@@ -1604,6 +1704,10 @@ static int print_event(char *buff, int buffer_size, key_bind_t &e, const char *s
        s += print_value(s, end - s, (char)e.c, NULL, 0);
        break;
 
+     case SM_SETTING_GROUP_COUNT:
+       s += print_value(s, end - s, e.b, NULL, 0);
+       break;
+
      case SM_OCTAVE:
      case SM_VELOCITY:
      case SM_TRANSPOSE:
@@ -1611,6 +1715,7 @@ static int print_event(char *buff, int buffer_size, key_bind_t &e, const char *s
      case SM_BANK_MSB:
      case SM_BANK_LSB:
      case SM_SUSTAIN:
+     case SM_MODULATION:
      case SM_PRESSURE:
      case SM_PITCH:
        s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
@@ -1630,7 +1735,7 @@ static int print_event(char *buff, int buffer_size, key_bind_t &e, const char *s
      case SM_CHANNEL:
        s += print_value(s, end - s, e.b, hand_names, ARRAY_COUNT(hand_names));
        s += print_value(s, end - s, e.c, value_action_names, ARRAY_COUNT(value_action_names));
-       s += print_value(s, end - s, (char)e.d, channel_names, ARRAY_COUNT(channel_names));
+       s += print_value(s, end - s, (char)e.d);
 
      case SM_PLAY:
      case SM_RECORD:
@@ -1697,7 +1802,7 @@ static int config_save_keybind(int key, char *buff, int buffer_size) {
   first = true;
   for (int i = 0; i < count; i++) {
     if (temp[i].a) {
-      s += print_format(s, end - s, first ? "Keydown" : "Keydown");
+      s += print_value(s, end - s, BIND_TYPE_KEYDOWN, bind_names, ARRAYSIZE(bind_names), "");
       s += print_keyboard_event(s, end - s, key, temp[i]);
       s += print_format(s, end - s, "\r\n");
       first = false;
@@ -1708,7 +1813,7 @@ static int config_save_keybind(int key, char *buff, int buffer_size) {
   first = true;
   for (int i = 0; i < count; i++) {
     if (temp[i].a) {
-      s += print_format(s, end - s, first ? "Keyup" : "Keyup");
+      s += print_value(s, end - s, BIND_TYPE_KEYUP, bind_names, ARRAYSIZE(bind_names), "");
       s += print_keyboard_event(s, end - s, key, temp[i]);
       s += print_format(s, end - s, "\r\n");
       first = false;
@@ -1716,11 +1821,42 @@ static int config_save_keybind(int key, char *buff, int buffer_size) {
   }
 
   if (*config_bind_get_label(key)) {
-    s += print_format(s, end - s, "Label");
+    s += print_value(s, end - s, BIND_TYPE_LABEL, bind_names, ARRAYSIZE(bind_names), "");
     s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
     s += print_format(s, end - s, "\t%s\r\n", config_bind_get_label(key));
   }
 
+  if (config_bind_get_color(key)) {
+    uint color = config_bind_get_color(key);
+    byte a = color >> 24;
+    byte r = color >> 16;
+    byte g = color >> 8;
+    byte b = color;
+
+    s += print_value(s, end - s, BIND_TYPE_COLOR, bind_names, ARRAYSIZE(bind_names), "");
+    s += print_value(s, end - s, key, key_names, ARRAY_COUNT(key_names));
+
+    if (a != 0xff)
+      s += print_format(s, end - s, "\t%d %d %d %d\r\n", r, g, b, a);
+    else
+      s += print_format(s, end - s, "\t%d %d %d\r\n", r, g, b);
+  }
+
+  return s - buff;
+}
+
+// save controller
+static int config_save_controller(char *buff, int buffer_size, int action, int controller) {
+  char *end = buff + buffer_size;
+  char *s = buff;
+  for (int ch = SM_OUTPUT_0; ch <= SM_OUTPUT_MAX; ch++) {
+    int value = config_get_controller(ch, controller);
+    if (value < 128) {
+      key_bind_t bind(action, ch, SM_VALUE_SET, value);
+      s += print_event(s, end - s, bind, "");
+      s += print_format(s, end - s, "\r\n");
+    }
+  }
   return s - buff;
 }
 
@@ -1730,70 +1866,70 @@ static int config_save_key_settings(char *buff, int buffer_size) {
   char *s = buff;
 
   // save key signature
-  s += print_format(s, end - s, "KeySignature\t%d\r\n", config_get_key_signature());
+  s += print_event(s, end - s, key_bind_t(SM_KEY_SIGNATURE, SM_VALUE_SET, config_get_key_signature(), 0), "");
+  s += print_format(s, end - s, "\r\n");
 
   // save keyboard status
-  for (int ch = 0; ch < 16; ch++) {
-    if (config_get_key_octshift(ch) != 0) {
-      s += print_format(s, end - s, "Octshift");
-      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
-      s += print_value(s, end - s, config_get_key_octshift(ch));
+  for (int ch = SM_INPUT_0; ch <= SM_INPUT_MAX; ch++) {
+    int value = config_get_key_octshift(ch);
+    if (value != 0) {
+      key_bind_t bind(SM_OCTAVE, ch, SM_VALUE_SET, value);
+      s += print_event(s, end - s, bind, "");
       s += print_format(s, end - s, "\r\n");
     }
   }
 
   // transpose
-  for (int ch = 0; ch < 16; ch++) {
-    if (config_get_key_transpose(ch) != 0) {
-      s += print_format(s, end - s, "Transpose");
-      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
-      s += print_value(s, end - s, config_get_key_transpose(ch));
+  for (int ch = SM_INPUT_0; ch <= SM_INPUT_MAX; ch++) {
+    int value = config_get_key_transpose(ch);
+    if (value != 0) {
+      key_bind_t bind(SM_TRANSPOSE, ch, SM_VALUE_SET, value);
+      s += print_event(s, end - s, bind, "");
       s += print_format(s, end - s, "\r\n");
     }
   }
 
   // velocity
-  for (int ch = 0; ch < 16; ch++) {
-    if (config_get_key_velocity(ch) != 127) {
-      s += print_format(s, end - s, "Velocity");
-      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
-      s += print_value(s, end - s, config_get_key_velocity(ch));
+  for (int ch = SM_INPUT_0; ch <= SM_INPUT_MAX; ch++) {
+    int value = config_get_key_velocity(ch);
+    if (value != 127) {
+      key_bind_t bind(SM_VELOCITY, ch, SM_VALUE_SET, value);
+      s += print_event(s, end - s, bind, "");
       s += print_format(s, end - s, "\r\n");
     }
   }
 
   // channel
-  for (int ch = 0; ch < 16; ch++) {
-    if (config_get_key_channel(ch) != 0) {
-      s += print_format(s, end - s, "Channel");
-      s += print_value(s, end - s, ch, hand_names, ARRAY_COUNT(hand_names));
-      s += print_value(s, end - s, config_get_key_channel(ch), channel_names, ARRAY_COUNT(channel_names));
+  for (int ch = SM_INPUT_0; ch <= SM_INPUT_MAX; ch++) {
+    int value = config_get_output_channel(ch);
+    if (value != 0) {
+      key_bind_t bind(SM_CHANNEL, ch, SM_VALUE_SET, value);
+      s += print_event(s, end - s, bind, "");
       s += print_format(s, end - s, "\r\n");
     }
   }
 
   // program
-  for (int ch = 0; ch < 16; ch++) {
-    if (config_get_program(ch) < 128) {
-      s += print_format(s, end - s, "Program");
-      s += print_value(s, end - s, ch, channel_names, ARRAY_COUNT(channel_names));
-      s += print_value(s, end - s, config_get_program(ch));
+  for (int ch = SM_OUTPUT_0; ch <= SM_OUTPUT_MAX; ch++) {
+    int value = config_get_program(ch);
+    if (value < 128) {
+      key_bind_t bind(SM_PROGRAM, ch, SM_VALUE_SET, value);
+      s += print_event(s, end - s, bind, "");
       s += print_format(s, end - s, "\r\n");
     }
   }
 
-  // controller
-  for (int ch = 0; ch < 16; ch++) {
-    for (int id = 0; id < 127; id++) {
-      if (config_get_controller(ch, id) < 128) {
-        s += print_format(s, end - s, "Controller");
-        s += print_value(s, end - s, ch, channel_names, ARRAY_COUNT(channel_names));
-        s += print_value(s, end - s, id, controller_names, ARRAY_COUNT(controller_names));
-        s += print_value(s, end - s, config_get_controller(ch, id), NULL, NULL);
-        s += print_format(s, end - s, "\r\n");
-      }
-    }
-  }
+  // bank msb
+  s += config_save_controller(s, end - s, SM_BANK_MSB, 0);
+
+  // bank lsb
+  s += config_save_controller(s, end - s, SM_BANK_LSB, 32);
+
+  // sustain
+  s += config_save_controller(s, end - s, SM_SUSTAIN, 64);
+
+  // modulation
+  s += config_save_controller(s, end - s, SM_SUSTAIN, 1);
 
   // save key bindings
   for (int key = 0; key < 256; key++) {
@@ -1804,7 +1940,7 @@ static int config_save_key_settings(char *buff, int buffer_size) {
 }
 
 // save keymap
-char* config_save_keymap() {
+char* config_save_keymap(uint lang) {
   thread_lock lock(config_lock);
   size_t buffer_size = 4096 * 10;
   char * buffer = (char*)malloc(buffer_size);
@@ -1812,13 +1948,16 @@ char* config_save_keymap() {
   char *s = buffer;
   char *end = buffer + buffer_size;
 
+  map_language = lang < FP_LANG_COUNT ? lang : lang_get_current();
+
   // save map version
   s += print_format(s, end - s, "FreePiano");
   s += print_version(s, end - s, map_current_version, " ");
   s += print_format(s, end - s, "\r\n\r\n");
 
   // save group count
-  s += print_format(s, end - s, "GroupCount\t%d\r\n", config_get_setting_group_count());
+  s += print_event(s, end - s, key_bind_t(SM_SETTING_GROUP_COUNT, config_get_setting_group_count(), 0, 0), "");
+  s += print_format(s, end - s, "\r\n");
 
   // current setting group
   int current_setting = config_get_setting_group();
@@ -1829,7 +1968,8 @@ char* config_save_keymap() {
 
     for(;;) {
       // change group
-      s += print_format(s, end - s, "\r\nGroup\t%d\r\n", i);
+      s += print_event(s, end - s, key_bind_t(SM_SETTING_GROUP, SM_VALUE_SET, i, 0), "");
+      s += print_format(s, end - s, "\r\n");
 
       // change to group i
       config_set_setting_group(i);
@@ -1855,10 +1995,12 @@ char* config_save_keymap() {
 }
 
 // dump key bind
-char* config_dump_keybind(byte code) {
+char* config_dump_keybind(byte code, uint lang) {
   size_t buffer_size = 8192;
   char * buffer = (char*)malloc(buffer_size);
   buffer[0] = 0;
+
+  map_language = lang < FP_LANG_COUNT ? lang : lang_get_current();
 
   for (;;) {
     config_save_keybind(code, buffer, buffer_size);
@@ -2526,6 +2668,25 @@ const char* config_get_note_name(byte note) {
   return note < 128 ? name_map[note] : "";
 }
 
+// get channel name
+const char* config_get_channel_name(byte ch) {
+  const char* result = NULL;
+
+  for (int i = 0; i < ARRAYSIZE(hand_names); i++) {
+    if (hand_names[i].value == ch) {
+      if (hand_names[i].lang == lang_get_current()) {
+        result = hand_names[i].name;
+        break;
+      }
+      else if (!result) {
+        result = hand_names[i].name;
+      }
+    }
+  }
+
+  return result ? result : "";
+}
+
 // print default action
 static int print_default_action(char *buff, size_t size, int action, int value) {
   char *s = buff;
@@ -2639,6 +2800,10 @@ int config_default_keylabel(char* buff, size_t size, key_bind_t bind) {
       s += print_format(s, end - s, "%s", lang_load_string(IDS_KEY_LABEL_PITCH));
       break;
 
+    case SM_MODULATION:
+      s += print_format(s, end - s, "%s", lang_load_string(IDS_KEY_LABEL_MODULATION));
+      break;
+
     case SM_PROGRAM:
       s += print_format(s, end - s, "%s", lang_load_string(IDS_KEY_LABEL_PROGRAM));
       s += print_default_action(s, end - s, bind.c, (char)bind.d);
@@ -2653,7 +2818,6 @@ int config_default_keylabel(char* buff, size_t size, key_bind_t bind) {
     case SM_SUSTAIN:
       s += print_format(s, end - s, "%s", lang_load_string(IDS_KEY_LABEL_SUSTAIN));
       s += print_default_action(s, end - s, bind.c, (char)bind.d);
-      break;
       break;
     }
   }

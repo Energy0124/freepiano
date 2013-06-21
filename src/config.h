@@ -104,13 +104,13 @@ const char* config_get_keymap();
 int config_set_keymap(const char *mapname);
 
 // save keymap
-char* config_save_keymap();
+char* config_save_keymap(uint lang = -1);
 
 // parse keymap
 int config_parse_keymap(const char *command, byte override_key = 0, uint version = 0);
 
 // dump key bind
-char* config_dump_keybind(byte code);
+char* config_dump_keybind(byte code, uint lang = -1);
 
 // clear key binding
 void config_bind_clear_keydown(byte code);
@@ -124,11 +124,17 @@ int config_bind_get_keyup(byte code, key_bind_t *buffer, int size);
 void config_bind_add_keydown(byte code, key_bind_t bind);
 void config_bind_add_keyup(byte code, key_bind_t bind);
 
-// set label
+// set bind label
 void config_bind_set_label(byte code, const char *label);
 
-// get keyboard label
+// get bind label
 const char* config_bind_get_label(byte code);
+
+// set bind color
+void config_bind_set_color(byte code, uint color);
+
+// get bind color
+uint config_bind_get_color(byte code);
 
 // clear key setting
 void config_clear_key_setting();
@@ -166,11 +172,11 @@ void config_set_key_velocity(byte channel, byte velocity);
 // get velocity
 byte config_get_key_velocity(byte channel);
 
-// get channel
-int config_get_key_channel(byte channel);
+// get output channel
+int config_get_output_channel(byte channel);
 
 // get channel
-void config_set_key_channel(byte channel, byte value);
+void config_set_output_channel(byte channel, byte value);
 
 // get program
 byte config_get_program(byte channel);
@@ -183,12 +189,6 @@ byte config_get_controller(byte channel, byte id);
 
 // set midi program
 void config_set_controller(byte channel, byte id, byte value);
-
-// get midi pitch bend
-char config_get_pitchbend(byte channel);
-
-// set pitch bend
-void config_set_pitchbend(byte channel, char msb);
 
 // get setting group
 uint config_get_setting_group();
@@ -213,6 +213,9 @@ const char* config_get_key_name(byte code);
 
 // get note name
 const char* config_get_note_name(byte note);
+
+// get channel name
+const char* config_get_channel_name(byte ch);
 
 // translate key label
 int config_default_keylabel(char* buff, size_t size, key_bind_t bind);

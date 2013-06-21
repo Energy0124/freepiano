@@ -1150,7 +1150,7 @@ static int d3d_device_reset() {
   device->SetFVF(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1);
 
   // refresh display
-  display_dirty = true;
+  display_force_refresh();
   return 0;
 }
 
@@ -1168,6 +1168,7 @@ struct KeyboardState {
   char label[18];
   char label1[18];
   key_bind_t map;
+  uint color;
 };
 
 struct MidiKeyState {
@@ -1599,8 +1600,14 @@ static void update_keyboard(double fade) {
       else
         key->fade = 0 + fade * (key->fade - 0);
 
+      // color
+      uint key_color = config_bind_get_color(key - keyboard_states);
+      if (key_color == 0) {
+        key_color = 0xffffffff;
+      }
+
       // active color
-      uint color = (uint(255 * key->fade) << 24) | 0xffffff;
+      uint color = (uint(255 * key->fade) << 24) | (key_color & 0x00ffffff);
       if (color != key->active_color) {
         key->active_color = color;
         display_dirty = true;
@@ -1709,8 +1716,8 @@ static void update_midi_keyboard(double fade) {
         note += config_get_key_signature();
       }
 
-      if (midi_get_note_status(config_get_key_channel(0), note) ||
-          midi_get_note_status(config_get_key_channel(1), note))
+      if (midi_get_note_status(config_get_output_channel(SM_INPUT_0), note) ||
+          midi_get_note_status(config_get_output_channel(SM_INPUT_1), note))
         key->fade = 1.0f;
       else
         key->fade = 0 + fade * (key->fade - 0);
@@ -1877,11 +1884,11 @@ static void update_keyboard_controls() {
 
   // sustain pedal
   {
-    byte sustain = config_get_controller(0, 0x40);
+    byte sustain = config_get_controller(SM_INPUT_1, 0x40);
     ctl = find_control(CTL_TEXTBOX, CMD_SUSTAIN);
 
     if (sustain < 128)
-      control_set_text(ctl, "%d", config_get_controller(0, 0x40));
+      control_set_text(ctl, "%d", config_get_controller(SM_INPUT_1, 0x40));
     else
       control_set_text(ctl, "-");
   }
@@ -2112,15 +2119,19 @@ void display_render() {
   if (display_dirty) {
     display_dirty = false;
     display_draw();
+    display_present();
+  }
+}
 
-    HRESULT hr = device->Present(NULL, NULL, NULL, NULL);
-    if (hr == D3DERR_DEVICELOST) {
-      hr = device->TestCooperativeLevel();
+// present
+void display_present() {
+  HRESULT hr = device->Present(NULL, NULL, NULL, NULL);
+  if (hr == D3DERR_DEVICELOST) {
+    hr = device->TestCooperativeLevel();
 
-      if (D3DERR_DEVICENOTRESET == hr) {
-        d3d_device_lost();
-        d3d_device_reset();
-      }
+    if (D3DERR_DEVICENOTRESET == hr) {
+      d3d_device_lost();
+      d3d_device_reset();
     }
   }
 }

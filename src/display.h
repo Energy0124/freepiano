@@ -13,6 +13,9 @@ void display_set_image(uint type, const char *name);
 // display render
 void display_render();
 
+// present
+void display_present();
+
 // display refresh
 void display_force_refresh();
 

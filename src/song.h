@@ -4,6 +4,7 @@
 #define SMS_KEY_NOP               0x00
 #define SMS_KEY_MAP             	0x01
 #define SMS_KEY_LABEL           	0x02
+#define SMS_KEY_COLOR           	0x03
 
 // FreePiano 1.0 messages
 #define SM_SYSTEM                 0x00
@@ -38,16 +39,7 @@
 #define SM_BANK_MSB               0x16
 #define SM_BANK_LSB               0x17
 #define SM_SUSTAIN                0x18
-
-// value op
-#define SM_VALUE_SET              0x00
-#define SM_VALUE_INC              0x01
-#define SM_VALUE_DEC              0x02
-#define SM_VALUE_FLIP             0x03
-#define SM_VALUE_PRESS            0x04
-#define SM_VALUE_SET10            0x0a
-#define SM_VALUE_SET1             0x0b
-#define SM_VALUE_SYNC             0x10
+#define SM_MODULATION             0x19
 
 // MIDI messages
 #define SM_MIDI_MASK_MSG          0xf0
@@ -62,8 +54,33 @@
 #define SM_MIDI_PITCH_BEND        0xe0
 #define SM_MIDI_SYSEX             0xf0
 
+// value op
+#define SM_VALUE_SET              0x00
+#define SM_VALUE_INC              0x01
+#define SM_VALUE_DEC              0x02
+#define SM_VALUE_FLIP             0x03
+#define SM_VALUE_PRESS            0x04
+#define SM_VALUE_SET10            0x0a
+#define SM_VALUE_SET1             0x0b
+#define SM_VALUE_SYNC             0x10
+
+// tracks
+#define SM_INPUT_0                0x00
+#define SM_INPUT_1                0x01
+#define SM_INPUT_2                0x02
+#define SM_INPUT_3                0x03
+#define SM_INPUT_MAX              0x0f
+
+#define SM_OUTPUT_0              0x10
+#define SM_OUTPUT_1              0x11
+#define SM_OUTPUT_2              0x12
+#define SM_OUTPUT_3              0x13
+#define SM_OUTPUT_MAX            0x1f
+
+// song sync flag
 #define SONG_SYNC_FLAG_MIDI       0x0f
 #define SONG_SYNC_FLAG_KEYDOWN    0x10
+
 
 struct song_info_t {
   uint version;
@@ -146,3 +163,5 @@ bool song_translate_note(byte &a, byte &b, byte &c, byte &d);
 // trigger sync
 void song_trigger_sync(uint flags);
 
+// update pressure
+void song_update_pressure(byte ch, byte pressure);

@@ -101,7 +101,7 @@ static void CALLBACK midi_input_callback(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR d
     // remap channel
     if (device->remap >= 1 && device->remap <= 16) {
       byte op = a & 0xf0;
-      byte ch = config_get_key_channel(device->remap - 1);
+      byte ch = config_get_output_channel(device->remap - 1);
 
       a = op | ch;
 
@@ -214,11 +214,11 @@ void midi_reset() {
     }
 
     for (int i = 0; i < 128; i++)
-      if (config_get_controller(ch, i) < 128)
-        midi_output_event(SM_MIDI_CONTROLLER | ch, i, config_get_controller(ch, i), 0);
+      if (config_get_controller(SM_OUTPUT_0 + ch, i) < 128)
+        midi_output_event(SM_MIDI_CONTROLLER | ch, i, config_get_controller(SM_OUTPUT_0 + ch, i), 0);
 
-    if (config_get_program(ch) < 128)
-      midi_output_event(SM_MIDI_PROGRAM | ch, config_get_program(ch), 0, 0);
+    if (config_get_program(SM_OUTPUT_0 + ch) < 128)
+      midi_output_event(SM_MIDI_PROGRAM | ch, config_get_program(SM_OUTPUT_0 + ch), 0, 0);
   }
 }
 
@@ -259,21 +259,17 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
    break;
 
    case SM_MIDI_CONTROLLER: {
-     config_set_controller(a & 0x0f, b & 0x7f, c);
+     config_set_controller(SM_OUTPUT_0 + (a & 0x0f), b & 0x7f, c);
      d = 0;
    }
    break;
 
    case SM_MIDI_PROGRAM: {
-     config_set_program(a & 0x0f, b);
+     config_set_program(SM_OUTPUT_0 + (a & 0x0f), b);
      c = 0;
      d = 0;
    }
    break;
-
-   case SM_MIDI_PITCH_BEND:
-     config_set_pitchbend(a & 0x0f, (int)c - 64);
-     break;
   }
 
   // debug print

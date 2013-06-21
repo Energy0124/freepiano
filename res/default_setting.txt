@@ -1,129 +1,108 @@
 FreePiano 1.7
 
 #	keyname	action	channel	note
-key	left	NoteOn	1	c3
-key	down	NoteOn	1	d3
-key	right	NoteOn	1	e3
-key	up	NoteOn	1	f3
-key	num0	NoteOn	1	g3
-key	num.	NoteOn	1	a3
-key	numenter	NoteOn	1	b3
-key	num1	NoteOn	1	c4
-key	num2	NoteOn	1	d4
-key	num3	NoteOn	1	e4
-key	num4	NoteOn	1	f4
-key	num5	NoteOn	1	g4
-key	num6	NoteOn	1	a4
-key	num7	NoteOn	1	b4
-key	num8	NoteOn	1	c5
-key	num9	NoteOn	1	d5
-key	num+	NoteOn	1	e5
-key	numlock	NoteOn	1	f5
-key	num/	NoteOn	1	g5
-key	num*	NoteOn	1	a5
-key	num-	NoteOn	1	b5
-key	delete	NoteOn	1	c6
-key	end	NoteOn	1	d6
-key	pgdn	NoteOn	1	e6
-key	insert	NoteOn	1	f6
-key	home	NoteOn	1	g6
-key	pgup	NoteOn	1	a6
+keydown	left	NoteOn	in_1	c3
+keydown	down	NoteOn	in_1	d3
+keydown	right	NoteOn	in_1	e3
+keydown	up	NoteOn	in_1	f3
+keydown	num0	NoteOn	in_1	g3
+keydown	num.	NoteOn	in_1	a3
+keydown	numenter	NoteOn	in_1	b3
+keydown	num1	NoteOn	in_1	c4
+keydown	num2	NoteOn	in_1	d4
+keydown	num3	NoteOn	in_1	e4
+keydown	num4	NoteOn	in_1	f4
+keydown	num5	NoteOn	in_1	g4
+keydown	num6	NoteOn	in_1	a4
+keydown	num7	NoteOn	in_1	b4
+keydown	num8	NoteOn	in_1	c5
+keydown	num9	NoteOn	in_1	d5
+keydown	num+	NoteOn	in_1	e5
+keydown	numlock	NoteOn	in_1	f5
+keydown	num/	NoteOn	in_1	g5
+keydown	num*	NoteOn	in_1	a5
+keydown	num-	NoteOn	in_1	b5
+keydown	delete	NoteOn	in_1	c6
+keydown	end	NoteOn	in_1	d6
+keydown	pgdn	NoteOn	in_1	e6
+keydown	insert	NoteOn	in_1	f6
+keydown	home	NoteOn	in_1	g6
+keydown	pgup	NoteOn	in_1	a6
 
-key	shift	NoteOn	0	b1
-key	z	NoteOn	0	c2
-key	x	NoteOn	0	d2
-key	c	NoteOn	0	e2
-key	v	NoteOn	0	f2
-key	b	NoteOn	0	g2
-key	n	NoteOn	0	a2
-key	m	NoteOn	0	b2
-key	,	NoteOn	0	c3
-key	.	NoteOn	0	d3
-key	/	NoteOn	0	e3
-key	rshift	NoteOn	0	f3
+keydown	shift	NoteOn	in_0	b1
+keydown	z	NoteOn	in_0	c2
+keydown	x	NoteOn	in_0	d2
+keydown	c	NoteOn	in_0	e2
+keydown	v	NoteOn	in_0	f2
+keydown	b	NoteOn	in_0	g2
+keydown	n	NoteOn	in_0	a2
+keydown	m	NoteOn	in_0	b2
+keydown	,	NoteOn	in_0	c3
+keydown	.	NoteOn	in_0	d3
+keydown	/	NoteOn	in_0	e3
+keydown	rshift	NoteOn	in_0	f3
 
-key	caps	NoteOn	0	b2
-key	a	NoteOn	0	c3
-key	s	NoteOn	0	d3
-key	d	NoteOn	0	e3
-key	f	NoteOn	0	f3
-key	g	NoteOn	0	g3
-key	h	NoteOn	0	a3
-key	j	NoteOn	0	b3
-key	k	NoteOn	0	c4
-key	l	NoteOn	0	d4
-key	;	NoteOn	0	e4
-key	'	NoteOn	0	f4
-key	enter	NoteOn	0	g4
+keydown	caps	NoteOn	in_0	b2
+keydown	a	NoteOn	in_0	c3
+keydown	s	NoteOn	in_0	d3
+keydown	d	NoteOn	in_0	e3
+keydown	f	NoteOn	in_0	f3
+keydown	g	NoteOn	in_0	g3
+keydown	h	NoteOn	in_0	a3
+keydown	j	NoteOn	in_0	b3
+keydown	k	NoteOn	in_0	c4
+keydown	l	NoteOn	in_0	d4
+keydown	;	NoteOn	in_0	e4
+keydown	'	NoteOn	in_0	f4
+keydown	enter	NoteOn	in_0	g4
 
-key	tab	NoteOn	0	b3
-key	q	NoteOn	0	c4
-key	w	NoteOn	0	d4
-key	e	NoteOn	0	e4
-key	r	NoteOn	0	f4
-key	t	NoteOn	0	g4
-key	y	NoteOn	0	a4
-key	u	NoteOn	0	b4
-key	i	NoteOn	0	c5
-key	o	NoteOn	0	d5
-key	p	NoteOn	0	e5
-key	[	NoteOn	0	f5
-key	]	NoteOn	0	g5
-key	\	NoteOn	0	a5
+keydown	tab	NoteOn	in_0	b3
+keydown	q	NoteOn	in_0	c4
+keydown	w	NoteOn	in_0	d4
+keydown	e	NoteOn	in_0	e4
+keydown	r	NoteOn	in_0	f4
+keydown	t	NoteOn	in_0	g4
+keydown	y	NoteOn	in_0	a4
+keydown	u	NoteOn	in_0	b4
+keydown	i	NoteOn	in_0	c5
+keydown	o	NoteOn	in_0	d5
+keydown	p	NoteOn	in_0	e5
+keydown	[	NoteOn	in_0	f5
+keydown	]	NoteOn	in_0	g5
+keydown	\	NoteOn	in_0	a5
 
-key	`	NoteOn	0	b4
-key	1	NoteOn	0	c5
-key	2	NoteOn	0	d5
-key	3	NoteOn	0	e5
-key	4	NoteOn	0	f5
-key	5	NoteOn	0	g5
-key	6	NoteOn	0	a5
-key	7	NoteOn	0	b5
-key	8	NoteOn	0	c6
-key	9	NoteOn	0	d6
-key	0	NoteOn	0	e6
-key	-	NoteOn	0	f6
-key	=	NoteOn	0	g6
-key	back	NoteOn	0	a6
+keydown	`	NoteOn	in_0	b4
+keydown	1	NoteOn	in_0	c5
+keydown	2	NoteOn	in_0	d5
+keydown	3	NoteOn	in_0	e5
+keydown	4	NoteOn	in_0	f5
+keydown	5	NoteOn	in_0	g5
+keydown	6	NoteOn	in_0	a5
+keydown	7	NoteOn	in_0	b5
+keydown	8	NoteOn	in_0	c6
+keydown	9	NoteOn	in_0	d6
+keydown	0	NoteOn	in_0	e6
+keydown	-	NoteOn	in_0	f6
+keydown	=	NoteOn	in_0	g6
+keydown	back	NoteOn	in_0	a6
 
 keydown	F1	Group		Inc	1
 keydown	F2	Group		Dec	1
 keydown	F3	KeySignature	Inc	1
 keydown	F4	KeySignature	Dec	1
 
-keydown	F5	Octshift	0	Inc	1
-keydown	F6	Octshift	0	Dec	1
-keydown	F7	Octshift	1	Inc	1
-keydown	F8	Octshift	1	Dec	1
+keydown	F5	Octave	in_0	Inc	1
+keydown	F6	Octave	in_0	Dec	1
+keydown	F7	Octave	in_1	Inc	1
+keydown	F8	Octave	in_1	Dec	1
 
-label	F5	LV+
-label	F6	LV-
-label	F7	RV+
-label	F8	RV-
-
-keydown	F9	Velocity	0	Inc	1
-keydown	F10	Velocity	0	Dec	1
-keydown	F11	Velocity	1	Inc	1
-keydown	F12	Velocity	1	Dec	1
+keydown	F9	Velocity	in_0	Inc	1
+keydown	F10	Velocity	in_0	Dec	1
+keydown	F11	Velocity	in_1	Inc	1
+keydown	F12	Velocity	in_1	Dec	1
 
 keydown	ScrollLock	Record
 keydown	PrintScreen	Play
 keydown	Pause	Stop
 
-label	F1	GP+
-label	F2	GP-
-label	F3	Key+
-label	F4	Key-
-label	F5	LO+
-label	F6	LO-
-label	F7	RO+
-label	F8	RO-
-label	F9	LV+
-label	F10	LV-
-label	F11	RV+
-label	F12	RV-
-
-label	ScrollLock	Rec
-label	PrintScreen	Play
-label	Pause	Stop
 label	space	FreePiano

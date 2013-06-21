@@ -67,6 +67,7 @@ static uint sync_id = 0;
 
 // fixed delay timer
 static const double fixed_delay_timer = 20;
+static const double fixed_smooth_timer = 2;
 
 // reset sync events
 static void sync_event_reset() {
@@ -170,7 +171,7 @@ static void delay_event_update(double time) {
 // -----------------------------------------------------------------------------------------
 
 static inline byte translate_channel(byte ch) {
-  return config_get_key_channel(ch);
+  return config_get_output_channel(ch) & 0x0f;
 }
 
 static inline byte translate_note(byte ch, byte note) {
@@ -217,7 +218,7 @@ bool song_translate_note(byte &a, byte &b, byte &c, byte &d) {
     break;
   case SM_NOTE_OFF:
     {
-      a = SM_MIDI_NOTEOFF | config_get_key_channel(b);
+      a = SM_MIDI_NOTEOFF | translate_channel(b);
       b = translate_note(b, c);
       c = 0;
       d = 0;
@@ -242,6 +243,46 @@ bool song_translate_note(byte &a, byte &b, byte &c, byte &d) {
 }
 
 // -----------------------------------------------------------------------------------------
+// smoothd parameters
+// -----------------------------------------------------------------------------------------
+struct smooth_param_t {
+  char target;
+  char current;
+  double timer;
+};
+
+static inline bool smooth_param_update(smooth_param_t &param, double time_elapsed) {
+  param.timer -= time_elapsed;
+
+  if (param.timer < 0) {
+    char cur = param.current;
+
+    if (param.target != param.current) {
+      param.timer = fixed_smooth_timer;
+
+      if (param.current > param.target) --param.current;
+      if (param.current < param.target) ++param.current;
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static smooth_param_t pitch_smooth[16] = {0};
+
+static void pitch_update(double time) {
+  for (int ch = 0; ch < 16; ch++) {
+    if (smooth_param_update(pitch_smooth[ch], time)) {
+      byte a = SM_MIDI_PITCH_BEND | ch;
+      byte c = 64 + clamp_value<char>(pitch_smooth[ch].current, -64, 63);
+      midi_output_event(a, 0, c, 0);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------------------
 // event parser
 // -----------------------------------------------------------------------------------------
 
@@ -254,6 +295,7 @@ static byte keyboard_map_key_type = 0;
 static byte keyboard_label_key_code = 0;
 static byte keyboard_label_key_size = 0;
 static char keyboard_label_text[256];
+static byte keyboard_color_key_code = 0;
 
 // keyboard event map
 static void keyboard_event_map(int code, int type) {
@@ -266,6 +308,11 @@ static void keyboard_event_label(int code, int length) {
   keyboard_label_key_code = code;
   keyboard_label_key_size = length;
   keyboard_label_text[0] = 0;
+}
+
+// keyboard event color
+static void keyboard_event_color(int code, int length) {
+  keyboard_color_key_code = code;
 }
 
 // event message
@@ -309,12 +356,21 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record) {
     return;
   }
 
+  // color
+  if (keyboard_color_key_code) {
+    uint color = (a << 24) | (b << 16) | (c << 8) | d;
+    config_bind_set_color(keyboard_color_key_code, color);
+    keyboard_color_key_code = 0;
+    return;
+  }
+
   // special events
   if (a == SM_SYSTEM) {
     switch (b) {
      case SMS_KEY_EVENT: keyboard_send_event(c, d); break;
      case SMS_KEY_MAP:   keyboard_event_map(c, d); break;
      case SMS_KEY_LABEL: keyboard_event_label(c, d); break;
+     case SMS_KEY_COLOR: keyboard_event_color(c, d); break;
     }
     return;
   }
@@ -323,7 +379,7 @@ void song_send_event(byte a, byte b, byte c, byte d, bool record) {
 }
 
 static void output_controller(byte a, byte b, byte c, byte d, byte id) {
-  byte ch = config_get_key_channel(b);
+  byte ch = b;
   byte op = c;
   int change = (char)d;
   int value = 0;
@@ -344,7 +400,7 @@ static void output_controller(byte a, byte b, byte c, byte d, byte id) {
     delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, config_get_controller(ch, id));
   }
 
-  midi_output_event(SM_MIDI_CONTROLLER | ch, id, value, 0);
+  midi_output_event(SM_MIDI_CONTROLLER | translate_channel(ch), id, value, 0);
 }
 
 void song_output_event(byte a, byte b, byte c, byte d) {
@@ -451,7 +507,7 @@ void song_output_event(byte a, byte b, byte c, byte d) {
      int ch = b;
      byte op = c;
      char change = d;
-     int value = config_get_key_channel(ch);
+     int value = config_get_output_channel(ch);
 
      // sync event
      if (op & SM_VALUE_SYNC) {
@@ -466,7 +522,7 @@ void song_output_event(byte a, byte b, byte c, byte d) {
 
      value = translate_value(op, value, change);
      value = clamp_value(value, 0, 15);
-     config_set_key_channel(ch, value);
+     config_set_output_channel(ch, value);
    }
    break;
 
@@ -551,41 +607,37 @@ void song_output_event(byte a, byte b, byte c, byte d) {
 
   case SM_PRESSURE:
     {
-      byte ch = b;
+      byte ch = translate_channel(b);
       byte op = c;
       char change = d;
       int value = 0;
-      value = default_value(value);
 
-     // sync event
-     if (op & SM_VALUE_SYNC) {
-       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
-       return;
-     }
+      // sync event
+      if (op & SM_VALUE_SYNC) {
+        sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
+        return;
+      }
 
-     // restore
-     if ((op & 0x0f) == SM_VALUE_PRESS) {
-       delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
-     }
+      // restore
+      if ((op & 0x0f) == SM_VALUE_PRESS) {
+        delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
+      }
 
       value = translate_value(op, value, change);
-      value = clamp_value(value, 0, 127);
+      value = translate_pressure(b, value);
 
-      a = SM_MIDI_CHANNEL_PRESSURE | translate_channel(ch);
-      b = translate_pressure(ch, value);
-      c = 0;
-      d = 0;
-      midi_output_event(a, b, c, d);
+      a = SM_MIDI_CHANNEL_PRESSURE | ch;
+      b = value;
+      midi_output_event(a, b, 0, 0);
     }
     break;
 
   case SM_PITCH:
     {
-      byte ch = b;
+      byte ch = translate_channel(b);
       byte op = c;
       char change = d;
-      int value = config_get_pitchbend(translate_channel(ch));
-      value = 0; // keep pitch bend is no well tested.
+      int value = pitch_smooth[ch].target;
       value = default_value(value);
 
       // sync event
@@ -601,18 +653,14 @@ void song_output_event(byte a, byte b, byte c, byte d) {
 
       value = translate_value(op, value, change);
       value = clamp_value(value, -64, 63);
-      
-      a = SM_MIDI_PITCH_BEND | translate_channel(ch);
-      b = 0;
-      c = 64 + value;
-      d = 0;
-      midi_output_event(a, b, c, d);
+
+      pitch_smooth[ch].target = value;
     }
     break;
 
   case SM_PROGRAM:
     {
-      byte ch = config_get_key_channel(b);
+      byte ch = b;
       byte op = c;
       char change = d;
       int value = config_get_program(ch);
@@ -632,7 +680,7 @@ void song_output_event(byte a, byte b, byte c, byte d) {
       value = translate_value(op, value, change);
       value = clamp_value(value, 0, 127);
 
-      a = SM_MIDI_PROGRAM | ch;
+      a = SM_MIDI_PROGRAM | translate_channel(ch);
       b = value;
       c = 0;
       d = 0;
@@ -650,6 +698,10 @@ void song_output_event(byte a, byte b, byte c, byte d) {
 
   case SM_SUSTAIN:
     output_controller(a, b, c, d, 64);
+    break;
+
+  case SM_MODULATION:
+    output_controller(a, b, c, d, 1);
     break;
   }
 }
@@ -733,32 +785,47 @@ void song_start_record() {
   for (int i = 0; i < total_groups; i++) {
     // change current setting group
     config_set_setting_group(i);
-    song_add_event(0, SM_SETTING_GROUP, 0, i, 0);
+    song_add_event(0, SM_SETTING_GROUP, SM_VALUE_SET, i, 0);
 
     // record current configs
-    song_add_event(0, SM_KEY_SIGNATURE, 0, config_get_key_signature(), 0);
+    song_add_event(0, SM_KEY_SIGNATURE, SM_VALUE_SET, config_get_key_signature(), 0);
 
-    // record key settings
-    for (int ch = 0; ch < 16; ch++) {
+    // record input settings
+    for (int ch = SM_INPUT_0; ch <= SM_INPUT_MAX; ch++) {
       if (config_get_key_octshift(ch))
-        song_add_event(0, SM_OCTAVE, ch, 0, config_get_key_octshift(ch));
+        song_add_event(0, SM_OCTAVE, ch, SM_VALUE_SET, config_get_key_octshift(ch));
 
       if (config_get_key_transpose(ch))
-        song_add_event(0, SM_TRANSPOSE, ch, 0, config_get_key_transpose(ch));
+        song_add_event(0, SM_TRANSPOSE, ch, SM_VALUE_SET, config_get_key_transpose(ch));
 
       if (config_get_key_velocity(ch) != 127)
-        song_add_event(0, SM_VELOCITY, ch, 0, config_get_key_velocity(ch));
+        song_add_event(0, SM_VELOCITY, ch, SM_VALUE_SET, config_get_key_velocity(ch));
 
-      if (config_get_key_channel(ch))
-        song_add_event(0, SM_CHANNEL, ch, 0, config_get_key_channel(ch));
+      if (config_get_output_channel(ch))
+        song_add_event(0, SM_CHANNEL, ch, SM_VALUE_SET, config_get_output_channel(ch));
+    }
 
+    // record output settings
+    for (int ch = SM_OUTPUT_0; ch <= SM_OUTPUT_MAX; ch++) {
+      // program
       if (config_get_program(ch) < 128)
-        song_add_event(0, 0xc0 | ch, config_get_program(ch), 0, 0);
+        song_add_event(0, SM_PROGRAM, ch, SM_VALUE_SET, config_get_program(ch));
 
-      for (int id = 0; id < 128; id++) {
-        if (config_get_controller(ch, id) < 128)
-          song_add_event(0, 0xb0 | ch, id, config_get_controller(ch, id), 0);
-      }
+      // bank msb
+      if (config_get_controller(ch, 0) < 128)
+        song_add_event(0, SM_BANK_MSB, ch, SM_VALUE_SET, config_get_controller(ch, 0));
+
+      // bank lsb
+      if (config_get_controller(ch, 32) < 128)
+        song_add_event(0, SM_BANK_LSB, ch, SM_VALUE_SET, config_get_controller(ch, 32));
+
+      // sustain
+      if (config_get_controller(ch, 64) < 128)
+        song_add_event(0, SM_SUSTAIN, ch, SM_VALUE_SET, config_get_controller(ch, 64));
+
+      // modulation
+      if (config_get_controller(ch, 1) < 128)
+        song_add_event(0, SM_MODULATION, ch, SM_VALUE_SET, config_get_controller(ch, 1));
     }
 
     // record keymaps
@@ -793,15 +860,18 @@ void song_start_record() {
           label += 4;
         }
       }
+
+      if (config_bind_get_color(i)) {
+        uint color = config_bind_get_color(i);
+        song_add_event(0, SM_SYSTEM, SMS_KEY_COLOR, i, 1);
+        song_add_event(0, color >> 24, color >> 16, color >> 8, color);
+      }
     }
   }
 
   // restore current group
   config_set_setting_group(current_group);
   song_add_event(0, SM_SETTING_GROUP, 0, current_group, 0);
-
-  // pedal
-  song_add_event(0, 0xb0, 0x40, config_get_controller(0, 0x40), 0);
 }
 
 // stop record
@@ -951,6 +1021,9 @@ void song_update(double time_elapsed) {
   // update controllers
   sync_event_update(time_elapsed);
   delay_event_update(time_elapsed);
+
+  // update smooth pitch
+  pitch_update(time_elapsed);
 }
 
 song_info_t* song_get_info() {
@@ -1288,6 +1361,9 @@ static void check_compatibility() {
       if (a == SM_SYSTEM) {
         if (b == SMS_KEY_LABEL) {
           e += (d + 3) / 4;
+        }
+        else if (b == SMS_KEY_COLOR) {
+          e ++;
         }
       }
 
