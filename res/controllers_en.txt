@@ -31,8 +31,6 @@ keydown %s KeySignature Set 3
 keydown %s KeySignature Set 4
 #1=F(+5)
 keydown %s KeySignature Set 5
-#1=F(+5)
-keydown %s KeySignature Set 5
 #1=#F(+6)
 keydown %s KeySignature Set 6
 #1=G(+7)

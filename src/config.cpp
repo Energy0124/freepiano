@@ -1065,7 +1065,7 @@ static bool match_hex(char **str, uint *value) {
     else break;
   }
 
-  if (s > (*str + 1)) {
+  if (s > *str) {
     if (!match_space(&s) && !match_end(&s))
       return false;
 
@@ -1272,7 +1272,7 @@ static bool match_change_value(char **str, uint *op, uint *value, name_t *names,
   uint tmp;
 
   // got a op first, expect for value
-  if (match_value(&s, value_action_names, ARRAY_COUNT(value_action_names), &tmp)) {
+  if (match_name(&s, value_action_names, ARRAY_COUNT(value_action_names), &tmp)) {
     if (match_value(&s, names, names_size, value)) {
       *op = tmp;
       *str = s;
@@ -1333,7 +1333,7 @@ static bool match_event(char **str, key_bind_t *e) {
     break;
 
   case SM_PROGRAM:
-      if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg2))
+      if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg1))
         return false;
 
     if (!match_change_value(str, &arg2, &arg3, NULL, 0))
@@ -1647,7 +1647,7 @@ static int print_format(char *buff, int buff_size, const char *format, ...) {
 }
 
 static int print_hex(char *buff, int buff_size, int value, const char *sep = "\t") {
-  return print_format(buff, buff_size, "%s%x", sep, value);
+  return print_format(buff, buff_size, "%s%02x", sep, value);
 }
 
 static int print_value(char *buff, int buff_size, int value, name_t *names = NULL, int name_count = 0, const char *sep = "\t") {

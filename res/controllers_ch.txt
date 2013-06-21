@@ -31,8 +31,6 @@ keydown %s KeySignature Set 3
 keydown %s KeySignature Set 4
 #1=F(+5)
 keydown %s KeySignature Set 5
-#1=F(+5)
-keydown %s KeySignature Set 5
 #1=#F(+6)
 keydown %s KeySignature Set 6
 #1=G(+7)
@@ -160,3 +158,17 @@ Label	%s bR
 Keydown %s Transpose In_0 Set 0
 #”“ ÷“∆µ˜ª÷∏¥0
 Keydown %s Transpose In_1 Set 0
+
+*∆‰À˚
+#”“ ÷Õ‰“Ù£®+∞Î“Ù£©
+Keydown %s Pitch In_1 Set 32
+Keyup   %s Pitch In_1 Set 0
+#”“ ÷Õ‰“Ù£®+»´“Ù£©
+Keydown %s Pitch In_1 Set 64
+Keyup   %s Pitch In_1 Set 0
+#”“ ÷Õ‰“Ù£®-∞Î“Ù£©
+Keydown %s Pitch In_1 Set -32
+Keyup   %s Pitch In_1 Set 0
+#”“ ÷Õ‰“Ù£®-»´“Ù£©
+Keydown %s Pitch In_1 Set -64
+Keyup   %s Pitch In_1 Set 0
