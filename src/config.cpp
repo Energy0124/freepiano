@@ -185,6 +185,7 @@ static name_t action_names[] = {
   { "Velocity",           SM_VELOCITY },
   { "Channel",            SM_CHANNEL },
   { "Transpose",          SM_TRANSPOSE },
+  { "FollowKey",          SM_FOLLOW_KEY },
   { "Volume",             SM_VOLUME },
   { "Play",               SM_PLAY },
   { "Record",             SM_RECORD },
@@ -208,6 +209,7 @@ static name_t action_names[] = {
   { "力度",               SM_VELOCITY,            FP_LANG_SCHINESE },
   { "通道",               SM_CHANNEL,             FP_LANG_SCHINESE },
   { "移位",               SM_TRANSPOSE,           FP_LANG_SCHINESE },
+  { "跟随曲调",           SM_FOLLOW_KEY,          FP_LANG_SCHINESE },
   { "总音量",             SM_VOLUME,              FP_LANG_SCHINESE },
   { "播放",               SM_PLAY,                FP_LANG_SCHINESE },
   { "录制",               SM_RECORD,              FP_LANG_SCHINESE },
@@ -638,6 +640,7 @@ struct setting_t {
   char key_velocity[16];
   char key_channel[16];
   char key_signature;
+  char follow_key[16];
   char midi_program[16];
   char midi_controller[16][256];
 
@@ -656,6 +659,7 @@ struct setting_t {
       key_transpose[i] = 0;
       key_velocity[i] = 127;
       key_channel[i] = 0;
+      follow_key[i] = 1;
 
       midi_program[i] = -1;
 
@@ -838,6 +842,23 @@ byte config_get_key_velocity(byte channel) {
     return settings[current_setting].key_velocity[channel];
   else
     return 127;
+}
+
+// set follow key
+void config_set_follow_key(byte channel, byte value) {
+  thread_lock lock(config_lock);
+
+  if (channel < ARRAY_COUNT(settings[current_setting].follow_key)) {
+    settings[current_setting].follow_key[channel] = value;
+  }
+}
+
+// get follow key
+byte config_get_follow_key(byte channel) {
+  if (channel < ARRAY_COUNT(settings[current_setting].follow_key))
+    return settings[current_setting].follow_key[channel];
+  else
+    return 0;
 }
 
 // get channel
@@ -1332,15 +1353,6 @@ static bool match_event(char **str, key_bind_t *e) {
 
     break;
 
-  case SM_PROGRAM:
-      if (!match_value(str, channel_names, ARRAY_COUNT(channel_names), &arg1))
-        return false;
-
-    if (!match_change_value(str, &arg2, &arg3, NULL, 0))
-      return false;
-
-    break;
-
   case SM_CONTROLLER_DEPRECATED:
     // before version 1.8 only
     if (map_version < 0x01080000) {
@@ -1384,7 +1396,9 @@ static bool match_event(char **str, key_bind_t *e) {
     }
     break;
 
+  case SM_PROGRAM:
   case SM_TRANSPOSE:
+  case SM_FOLLOW_KEY:
   case SM_OCTAVE:
   case SM_VELOCITY:
   case SM_BANK_MSB:
@@ -1714,6 +1728,7 @@ static int print_event(char *buff, int buffer_size, key_bind_t &e, const char *s
      case SM_OCTAVE:
      case SM_VELOCITY:
      case SM_TRANSPOSE:
+     case SM_FOLLOW_KEY:
      case SM_PROGRAM:
      case SM_BANK_MSB:
      case SM_BANK_LSB:
@@ -1892,6 +1907,16 @@ static int config_save_key_settings(char *buff, int buffer_size) {
     }
   }
 
+  // follow key
+  for (int ch = SM_INPUT_0; ch <= SM_INPUT_MAX; ch++) {
+    int value = config_get_follow_key(ch);
+    if (value == 0) {
+      key_bind_t bind(SM_FOLLOW_KEY, ch, SM_VALUE_SET, value);
+      s += print_event(s, end - s, bind, "");
+      s += print_format(s, end - s, "\r\n");
+    }
+  }
+
   // velocity
   for (int ch = SM_INPUT_0; ch <= SM_INPUT_MAX; ch++) {
     int value = config_get_key_velocity(ch);
@@ -1932,7 +1957,7 @@ static int config_save_key_settings(char *buff, int buffer_size) {
   s += config_save_controller(s, end - s, SM_SUSTAIN, 64);
 
   // modulation
-  s += config_save_controller(s, end - s, SM_SUSTAIN, 1);
+  s += config_save_controller(s, end - s, SM_MODULATION, 1);
 
   // save key bindings
   for (int key = 0; key < 256; key++) {
@@ -2744,6 +2769,10 @@ int config_default_keylabel(char* buff, size_t size, key_bind_t bind) {
     case SM_TRANSPOSE:
       s += print_format(s, end - s, "%s", lang_load_string(IDS_KEY_LABEL_TRANSPOSE));
       s += print_default_action(s, end - s, bind.c, (char)bind.d);
+      break;
+
+    case SM_FOLLOW_KEY:
+      s += print_format(s, end - s, "%s", lang_load_string(IDS_KEY_LABEL_FOLLOW_KEY));
       break;
 
     case SM_OCTAVE:

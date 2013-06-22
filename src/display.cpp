@@ -1884,11 +1884,11 @@ static void update_keyboard_controls() {
 
   // sustain pedal
   {
-    byte sustain = config_get_controller(SM_INPUT_1, 0x40);
+    byte sustain = config_get_controller(SM_INPUT_0, 0x40);
     ctl = find_control(CTL_TEXTBOX, CMD_SUSTAIN);
 
     if (sustain < 128)
-      control_set_text(ctl, "%d", config_get_controller(SM_INPUT_1, 0x40));
+      control_set_text(ctl, "%d", config_get_controller(SM_INPUT_0, 0x40));
     else
       control_set_text(ctl, "-");
   }
@@ -2419,9 +2419,14 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
 
     if (midinote != -1) {
       if (!config_get_midi_transpose()) {
-        midinote = midinote - config_get_key_signature();
-        midinote = clamp_value(midinote, 0, 127);
+        if (config_get_follow_key(0))
+          midinote = midinote - config_get_key_signature();
       }
+      else {
+        if (!config_get_follow_key(0))
+          midinote = midinote + config_get_key_signature();
+      }
+      midinote = clamp_value(midinote, 0, 127);
     }
   }
 
@@ -2439,7 +2444,7 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
   // update midi button
   if (midinote != previous_midi_note) {
     if (previous_midi_note != -1)
-      song_send_event(SM_NOTE_ON, 0, previous_midi_note, 0, true);
+      song_send_event(SM_NOTE_OFF, 0, previous_midi_note, 0, true);
 
     if (midinote != -1)
       song_send_event(SM_NOTE_ON, 0, midinote, velocity, true);
@@ -2540,6 +2545,7 @@ int display_process_message(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
    case WM_SIZE:
      d3d_device_lost();
      d3d_device_reset();
+     display_render();
      break;
 
    case WM_LBUTTONDOWN:

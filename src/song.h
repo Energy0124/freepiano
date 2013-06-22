@@ -40,6 +40,7 @@
 #define SM_BANK_LSB               0x17
 #define SM_SUSTAIN                0x18
 #define SM_MODULATION             0x19
+#define SM_FOLLOW_KEY             0x1a
 
 // MIDI messages
 #define SM_MIDI_MASK_MSG          0xf0

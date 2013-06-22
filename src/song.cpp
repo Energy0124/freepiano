@@ -175,7 +175,14 @@ static inline byte translate_channel(byte ch) {
 }
 
 static inline byte translate_note(byte ch, byte note) {
-  return clamp_value((int)note + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch) + config_get_key_signature(), 0, 127);
+  int value = note;
+  value += config_get_key_octshift(ch) * 12;
+  value += config_get_key_transpose(ch);
+
+  if (config_get_follow_key(ch))
+    value += config_get_key_signature();
+
+  return clamp_value(value, 0, 127);
 }
 
 static inline byte translate_pressure(byte ch, byte pressure) {
@@ -454,6 +461,29 @@ void song_output_event(byte a, byte b, byte c, byte d) {
      value = translate_value(op, value, change);
      value = clamp_value(value, -64, 64);
      config_set_key_transpose(ch, value);
+   }
+   break;
+
+   case SM_FOLLOW_KEY: {
+     int ch = b;
+     byte op = c;
+     char change = d;
+     int value = config_get_follow_key(ch);
+
+     // sync event
+     if (op & SM_VALUE_SYNC) {
+       sync_event_add(SONG_SYNC_FLAG_KEYDOWN, a, b, op & ~SM_VALUE_SYNC, d);
+       return;
+     }
+
+     // restore
+     if ((op & 0x0f) == SM_VALUE_PRESS) {
+       delay_event_add(fixed_delay_timer, a, b, SM_VALUE_SET, value);
+     }
+
+     value = translate_value(op, value, change);
+     value = clamp_value(value, 0, 1);
+     config_set_follow_key(ch, value);
    }
    break;
 

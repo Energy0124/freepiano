@@ -98,7 +98,6 @@
     <ClInclude Include="..\3rd\libfaac\frame.h" />
     <ClInclude Include="..\3rd\libfaac\huffman.h" />
     <ClInclude Include="..\3rd\libfaac\hufftab.h" />
-    <ClInclude Include="..\3rd\libfaac\joint.h" />
     <ClInclude Include="..\3rd\libfaac\ltp.h" />
     <ClInclude Include="..\3rd\libfaac\psych.h" />
     <ClInclude Include="..\3rd\libfaac\tns.h" />

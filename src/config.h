@@ -10,8 +10,7 @@
 #define OUTPUT_TYPE_ASIO            3
 
 #define MIDI_REMAP_ORIGIN           0
-#define MIDI_REMAP_LEFT             1
-#define MIDI_REMAP_RIGHT            2
+#define MIDI_REMAP_IN_0             1
 
 struct key_bind_t {
   byte a;
@@ -171,6 +170,12 @@ void config_set_key_velocity(byte channel, byte velocity);
 
 // get velocity
 byte config_get_key_velocity(byte channel);
+
+// set follow key
+void config_set_follow_key(byte channel, byte value);
+
+// get follow key
+byte config_get_follow_key(byte channel);
 
 // get output channel
 int config_get_output_channel(byte channel);

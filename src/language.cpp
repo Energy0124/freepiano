@@ -183,7 +183,7 @@ void lang_set_last_error(const char *format, ...) {
   va_start(args, format);
   vsprintf_s(error_message, format, args);
   va_end(args);
-  fputs(error_message, stderr);
+  fprintf(stderr, "last_error: %s\n", error_message);
 }
 
 // set last error
@@ -193,7 +193,7 @@ void lang_set_last_error(uint id, ...) {
   va_start(args, id);
   vsprintf_s(error_message, format, args);
   va_end(args);
-  fputs(error_message, stderr);
+  fprintf(stderr, "last_error: %s\n", error_message);
 }
 
 // get last error
