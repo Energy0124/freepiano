@@ -2216,12 +2216,6 @@ int config_load(const char *filename) {
         match_value(&s, boolean_names, ARRAY_COUNT(boolean_names), &enable);
         config_set_enable_hotkey(enable != 0);
       }
-      // doh
-      else if (match_word(&s, "fixed-doh")) {
-        uint enable = 0;
-        match_value(&s, boolean_names, ARRAY_COUNT(boolean_names), &enable);
-        config_set_fixed_doh(enable != 0);
-      }
       else if (match_word(&s, "key-fade")) {
         uint value = 0;
         match_number(&s, &value);
@@ -2312,9 +2306,6 @@ int config_save(const char *filename) {
 
   if (!config_get_enable_resize_window())
     fprintf(fp, "resize disable\r\n");
-
-  if (config_get_fixed_doh())
-    fprintf(fp, "fixed-doh enable\r\n");
 
   if (config_get_key_fade()) {
     fprintf(fp, "key-fade %d\r\n", config_get_key_fade());
@@ -2921,18 +2912,6 @@ bool config_get_instrument_show_vsti() {
 void config_set_instrument_show_vsti(bool value) {
   thread_lock lock(config_lock);
   global.instrument_show_vsti = value;
-}
-
-
-// fixed doh
-bool config_get_fixed_doh() {
-  thread_lock lock(config_lock);
-  return global.fixed_doh != 0;
-}
-
-void config_set_fixed_doh(bool value) {
-  thread_lock lock(config_lock);
-  global.fixed_doh = value;
 }
 
 // key fade speed

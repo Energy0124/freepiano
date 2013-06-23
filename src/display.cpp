@@ -1148,6 +1148,7 @@ struct KeyboardState {
   uint color1;
   uint color2;
   int  note;
+  int  notename;
   char label[18];
   char label1[18];
   key_bind_t map;
@@ -1676,22 +1677,36 @@ static void update_keyboard(double fade) {
 
       // key note
       int note = -1;
+      int notename = -1;
       if (map.a == SM_NOTE_ON || map.a == SM_NOTE_OFF) {
         byte ch = map.b;
         note = map.c + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch);
 
-        // fixed-doh
-        if (config_get_fixed_doh()) {
+        switch (config_get_note_display()) {
+        case NOTE_DISPLAY_DOH:
+          note = clamp_value(note, 0, 127);
+          break;
+
+        case NOTE_DIAPLAY_FIXED_DOH:
           note += config_get_key_signature();
+          note = clamp_value(note, 0, 127);
+          break;
+
+        case NOTE_DISPLAY_NAME:
+          note += config_get_key_signature();
+          notename = note;
+          note = -1;
+          break;
         }
-
-        note = clamp_value(note, 0, 127);
       }
-
       // key note changed
       if (note != key->note) {
         key->note = note;
         display_dirty = true;
+      }
+      if (notename != key->notename) {
+        key->notename = notename;
+        key->note = note;
       }
 
       // key label changed
@@ -1846,6 +1861,10 @@ static void draw_keyboard() {
           const char* note_name = config_get_note_name(key->note);
           draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, note_name, 10, 1, 1);
         }
+      }
+      else if (key->notename != -1) {
+        const char* note_name = config_get_note_name(key->notename);
+        draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, note_name, 10, 1, 1);
       }
       else if (key->label1[0]) {
         draw_string(floor((x1 + x2 - 1) * 0.5f), floor((y1 + y2 - 1) * 0.5f), 0xff6e6e6e, key->label1, 10, 1, 1);

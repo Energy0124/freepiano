@@ -860,9 +860,9 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
   };
 
   static combo_option_t note_display_options[] = {
-    { NOTE_DISPLAY_NAME,        IDS_SETTING_GUI_NOTE_DISPLAY_NAME },
     { NOTE_DISPLAY_DOH,         IDS_SETTING_GUI_NOTE_DISPLAY_DOH },
     { NOTE_DIAPLAY_FIXED_DOH,   IDS_SETTING_GUI_NOTE_DISPLAY_FIXED_DOH },
+    { NOTE_DISPLAY_NAME,        IDS_SETTING_GUI_NOTE_DISPLAY_NAME },
   };
 
   struct helpers {
