@@ -30,3 +30,6 @@ void midi_reset();
 
 // get key status
 byte midi_get_note_status(byte ch, byte note);
+
+// get key status
+byte midi_get_note_pressure(byte ch, byte note);

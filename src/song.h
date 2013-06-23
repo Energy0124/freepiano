@@ -2,26 +2,26 @@
 
 #define SMS_KEY_EVENT             0x00
 #define SMS_KEY_NOP               0x00
-#define SMS_KEY_MAP             	0x01
-#define SMS_KEY_LABEL           	0x02
-#define SMS_KEY_COLOR           	0x03
+#define SMS_KEY_MAP               0x01
+#define SMS_KEY_LABEL             0x02
+#define SMS_KEY_COLOR             0x03
 
 // FreePiano 1.0 messages
 #define SM_SYSTEM                 0x00
-#define SM_KEY_SIGNATURE        	0x01
-#define SM_OCTAVE               	0x02
-#define SM_VELOCITY             	0x03
-#define SM_CHANNEL              	0x04
-#define SM_VOLUME               	0x05
-#define SM_PLAY                 	0x06
-#define SM_RECORD               	0x07
-#define SM_STOP                 	0x08
+#define SM_KEY_SIGNATURE          0x01
+#define SM_OCTAVE                 0x02
+#define SM_VELOCITY               0x03
+#define SM_CHANNEL                0x04
+#define SM_VOLUME                 0x05
+#define SM_PLAY                   0x06
+#define SM_RECORD                 0x07
+#define SM_STOP                   0x08
 
 // FreePiano 1.1 messages
 #define SM_SETTING_GROUP          0x09
-#define SM_SETTING_GROUP_COUNT  	0x0a
-#define SM_AUTO_PEDAL_OBSOLETE  	0x0b
-#define SM_DELAY_KEYUP_OBSOLETE 	0x0c
+#define SM_SETTING_GROUP_COUNT    0x0a
+#define SM_AUTO_PEDAL_OBSOLETE    0x0b
+#define SM_DELAY_KEYUP_OBSOLETE   0x0c
 
 // FreePiano 1.7 messages
 #define SM_TRANSPOSE              0x0d

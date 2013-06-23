@@ -155,4 +155,7 @@
       <Filter>res</Filter>
     </ResourceCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\res\keyboard_note_empty.png" />
+  </ItemGroup>
 </Project>

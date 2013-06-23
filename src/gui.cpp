@@ -848,6 +848,43 @@ static INT_PTR CALLBACK settings_keymap_proc(HWND hWnd, UINT uMsg, WPARAM wParam
 }
 
 static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  struct combo_option_t {
+    int value;
+    int name;
+  };
+
+  static combo_option_t auto_color_options[] = {
+    { AUTO_COLOR_CLASSIC,   IDS_SETTING_GUI_AUTO_COLOR_CLASSIC },
+    { AUTO_COLOR_CHANNEL,   IDS_SETTING_GUI_AUTO_COLOR_CHANNEL },
+    { AUTO_COLOR_VELOCITY,  IDS_SETTING_GUI_AUTO_COLOR_VELOCITY },
+  };
+
+  static combo_option_t note_display_options[] = {
+    { NOTE_DISPLAY_NAME,        IDS_SETTING_GUI_NOTE_DISPLAY_NAME },
+    { NOTE_DISPLAY_DOH,         IDS_SETTING_GUI_NOTE_DISPLAY_DOH },
+    { NOTE_DIAPLAY_FIXED_DOH,   IDS_SETTING_GUI_NOTE_DISPLAY_FIXED_DOH },
+  };
+
+  struct helpers {
+    static void refresh_combobox(HWND combo, combo_option_t *options, int num_options, int value) {
+      for (int i = 0; i < num_options; i++) {
+        const char *name = lang_load_string(options[i].name);
+        ComboBox_AddString(combo, name);
+        if (options[i].value == value) {
+          ComboBox_SetCurSel(combo, ComboBox_GetCount(combo) - 1);
+        }
+      }
+    }
+
+    static int combobox_get_value(HWND combo, combo_option_t *options, int num_options) {
+      int current = ComboBox_GetCurSel(combo);
+      if (current < num_options) {
+        return options[current].value;
+      }
+      return 0;
+    }
+  };
+
   switch (uMsg) {
    case WM_INITDIALOG: {
      lang_localize_dialog(hWnd);
@@ -857,7 +894,7 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
      CheckDlgButton(hWnd, IDC_GUI_MIDI_TRANSPOSE, config_get_midi_transpose());
      CheckDlgButton(hWnd, IDC_GUI_INSTRUMENT_SHOW_MIDI, config_get_instrument_show_midi());
      CheckDlgButton(hWnd, IDC_GUI_INSTRUMENT_SHOW_VSTI, config_get_instrument_show_vsti());
-
+     CheckDlgButton(hWnd, IDC_GUI_PREVIEW_COLOR, config_get_preview_color());
 
      // key fade slider
      HWND key_fade = GetDlgItem(hWnd, IDC_GUI_KEY_ANIMATE);
@@ -868,6 +905,21 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
      HWND key_trans = GetDlgItem(hWnd, IDC_GUI_TRANSPARENCY);
      SendMessage(key_trans, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELONG(0, 255));
      SendMessage(key_trans, TBM_SETPOS,   (WPARAM)TRUE, (LPARAM)config_get_gui_transparency());
+
+     // auto color combo box
+     HWND auto_color = GetDlgItem(hWnd, IDC_GUI_AUTO_COLOR);
+     helpers::refresh_combobox(auto_color, auto_color_options, ARRAYSIZE(auto_color_options),
+       config_get_auto_color());
+
+     // note display
+     HWND note_display = GetDlgItem(hWnd, IDC_GUI_NOTE_DISPLAY);
+     helpers::refresh_combobox(note_display, note_display_options, ARRAYSIZE(note_display_options),
+       config_get_note_display());
+
+     // preview color
+     HWND preview_color = GetDlgItem(hWnd, IDC_GUI_PREVIEW_COLOR);
+     SendMessage(preview_color, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELONG(0, 100));
+     SendMessage(preview_color, TBM_SETPOS,   (WPARAM)TRUE, (LPARAM)config_get_preview_color());
    }
    break;
 
@@ -886,18 +938,31 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
         break;
 
       case IDC_GUI_INSTRUMENT_SHOW_MIDI:
-       config_set_instrument_show_midi(0 != IsDlgButtonChecked(hWnd, IDC_GUI_INSTRUMENT_SHOW_MIDI));
-       break;
+        config_set_instrument_show_midi(0 != IsDlgButtonChecked(hWnd, IDC_GUI_INSTRUMENT_SHOW_MIDI));
+        break;
 
       case IDC_GUI_INSTRUMENT_SHOW_VSTI:
-       config_set_instrument_show_vsti(0 != IsDlgButtonChecked(hWnd, IDC_GUI_INSTRUMENT_SHOW_VSTI));
-       break;
+        config_set_instrument_show_vsti(0 != IsDlgButtonChecked(hWnd, IDC_GUI_INSTRUMENT_SHOW_VSTI));
+        break;
+
+      case IDC_GUI_AUTO_COLOR:
+        if (HIWORD(wParam) == CBN_SELCHANGE) {
+          config_set_auto_color(helpers::combobox_get_value((HWND)lParam, auto_color_options, ARRAYSIZE(auto_color_options)));
+        }
+        break;
+
+      case IDC_GUI_NOTE_DISPLAY:
+        if (HIWORD(wParam) == CBN_SELCHANGE) {
+          config_set_note_display(helpers::combobox_get_value((HWND)lParam, note_display_options, ARRAYSIZE(note_display_options)));
+        }
+        break;
      }
      break;
 
    case WM_HSCROLL: {
      HWND key_animate = GetDlgItem(hWnd, IDC_GUI_KEY_ANIMATE);
      HWND gui_transparency = GetDlgItem(hWnd, IDC_GUI_TRANSPARENCY);
+     HWND gui_preview_color = GetDlgItem(hWnd, IDC_GUI_PREVIEW_COLOR);
 
      if (key_animate == (HWND)lParam) {
        int pos = SendMessage(key_animate, TBM_GETPOS, 0, 0);
@@ -910,6 +975,11 @@ static INT_PTR CALLBACK settings_gui_proc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 
        // update output delay
        config_set_gui_transparency(pos);
+     }
+     else if (gui_preview_color == (HWND)lParam) {
+       int pos = SendMessage(gui_preview_color, TBM_GETPOS, 0, 0);
+
+       config_set_preview_color(pos);
      }
    } break;
   }
@@ -2231,8 +2301,6 @@ void gui_show() {
   SetActiveWindow(mainhwnd);
   SetForegroundWindow(mainhwnd);
   display_render();
-
-  settings_show();
 }
 
 // get selected key

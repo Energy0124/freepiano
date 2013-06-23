@@ -600,6 +600,9 @@ struct global_setting_t {
   uint fixed_doh;
   uint key_fade;
   byte gui_transparency;
+  byte auto_color;
+  byte preview_color;
+  byte note_display;
 
   std::map<std::string, midi_input_config_t> midi_inputs;
 
@@ -621,6 +624,9 @@ struct global_setting_t {
     enable_resize = true;
     midi_transpose = false;
     fixed_doh = false;
+    auto_color = 0;
+    preview_color = 0;
+    note_display = 0;
 
     key_fade = 0;
   }
@@ -2228,6 +2234,21 @@ int config_load(const char *filename) {
           value = 255;
         config_set_gui_transparency(value);
       }
+      else if (match_word(&s, "gui-auto-color")) {
+        uint value = 0;
+        match_number(&s, &value);
+        config_set_auto_color(value);
+      }
+      else if (match_word(&s, "gui-preview-color")) {
+        uint value = 0;
+        match_number(&s, &value);
+        config_set_preview_color(value);
+      }
+      else if (match_word(&s, "gui-note-display")) {
+        uint value = 0;
+        match_number(&s, &value);
+        config_set_note_display(value);
+      }
     }
 
     fclose(fp);
@@ -2301,6 +2322,18 @@ int config_save(const char *filename) {
 
   if (config_get_gui_transparency() != 255) {
     //fprintf(fp, "gui-transparency %d\r\n", config_get_gui_transparency());
+  }
+
+  if (config_get_auto_color()) {
+    fprintf(fp, "gui-auto-color %d\r\n", config_get_auto_color());
+  }
+
+  if (config_get_preview_color()) {
+    fprintf(fp, "gui-preview-color %d\r\n", config_get_preview_color());
+  }
+
+  if (config_get_note_display()) {
+    fprintf(fp, "gui-note-display %d\r\n", config_get_note_display());
   }
 
   fclose(fp);
@@ -2928,7 +2961,32 @@ byte config_get_gui_transparency() {
   return global.gui_transparency;
 }
 
-// remap note
-byte config_translate_note(byte ch, byte note) {
-  return clamp_value<int>((int)note + config_get_key_octshift(ch) * 12 + config_get_key_transpose(ch) + config_get_key_signature(), 0, 127);
+// get auto color mode
+byte config_get_auto_color() {
+  return global.auto_color;
+}
+
+// set auto color mode
+void config_set_auto_color(byte value) {
+  global.auto_color = value;
+}
+
+// get preview color mode
+uint config_get_preview_color() {
+  return global.preview_color;
+}
+
+// set preview color mode
+void config_set_preview_color(uint value) {
+  global.preview_color = clamp_value<int>(value, 0, 100);
+}
+
+// get auto color mode
+uint config_get_note_display() {
+  return global.note_display;
+}
+
+// set auto color mode
+void config_set_note_display(uint value) {
+  global.note_display = value;
 }

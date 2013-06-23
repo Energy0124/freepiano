@@ -31,6 +31,7 @@ static thread_lock_t midi_output_lock;
 
 // note state
 static byte note_states[16][128] = {0};
+static byte note_pressure[16][128] = {0};
 
 // auto generated keyup events
 struct midi_keyup_t {
@@ -42,6 +43,11 @@ static std::multimap<byte, midi_keyup_t> key_up_map;
 // get key status
 byte midi_get_note_status(byte ch, byte note) {
     return note_states[ch & 0x0f][note & 0x7f];
+}
+
+// get key status
+byte midi_get_note_pressure(byte ch, byte note) {
+    return note_pressure[ch & 0x0f][note & 0x7f];
 }
 
 // open output device
@@ -253,8 +259,14 @@ void midi_output_event(byte a, byte b, byte c, byte d) {
    break;
 
    case SM_MIDI_NOTEON: {
-     note_states[a & 0xf][b & 0x7f] = 1;
+     note_states[a & 0xf][b & 0x7f] = c;
+     note_pressure[a & 0xf][b & 0x7f] = c;
      song_trigger_sync(SONG_SYNC_FLAG_MIDI);
+   }
+   break;
+
+   case SM_MIDI_PRESSURE: {
+     note_pressure[a & 0xf][b & 0x7f] = c;
    }
    break;
 

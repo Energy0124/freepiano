@@ -12,6 +12,15 @@
 #define MIDI_REMAP_ORIGIN           0
 #define MIDI_REMAP_IN_0             1
 
+
+#define AUTO_COLOR_CLASSIC          0
+#define AUTO_COLOR_CHANNEL          1
+#define AUTO_COLOR_VELOCITY         2
+
+#define NOTE_DISPLAY_DOH            0
+#define NOTE_DIAPLAY_FIXED_DOH      1
+#define NOTE_DISPLAY_NAME           2
+
 struct key_bind_t {
   byte a;
   byte b;
@@ -244,3 +253,21 @@ void config_set_key_fade(int value);
 // gui transparency
 void config_set_gui_transparency(byte value);
 byte config_get_gui_transparency();
+
+// get auto color mode
+byte config_get_auto_color();
+
+// set auto color mode
+void config_set_auto_color(byte value);
+
+// get auto color mode
+uint config_get_preview_color();
+
+// set auto color mode
+void config_set_preview_color(uint value);
+
+// get note display
+uint config_get_note_display();
+
+// set note display
+void config_set_note_display(uint value);

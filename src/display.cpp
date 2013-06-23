@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <windowsx.h>
-#include <gdiplus.h>
 #include <mbctype.h>
 #include <Shlwapi.h>
 
@@ -66,10 +65,9 @@ static D3DMATRIX matrix_identity = {
 enum resource_type {
   background,
   notes,
-  keyboard_unmapped_down,
-  keyboard_unmapped_up,
   keyboard_note_down,
   keyboard_note_up,
+  keyboard_note_empty,
   midi_black_down,
   midi_black_up,
   midi_white_down,
@@ -678,7 +676,7 @@ static LPDIRECT3DTEXTURE9 create_texture_from_png(png_structp png_ptr, png_infop
       }
     }
   } else if (color_type == PNG_COLOR_TYPE_RGB) {
-    if (SUCCEEDED(device->CreateTexture(width, height, 1, 0, D3DFMT_R8G8B8, D3DPOOL_MANAGED, &texture, NULL))) {
+    if (SUCCEEDED(device->CreateTexture(width, height, 1, 0, D3DFMT_X8R8G8B8, D3DPOOL_MANAGED, &texture, NULL))) {
       byte * *data = png_get_rows(png_ptr, info_ptr);
       uint rowbytes = png_get_rowbytes(png_ptr, info_ptr);
 
@@ -693,8 +691,9 @@ static LPDIRECT3DTEXTURE9 create_texture_from_png(png_structp png_ptr, png_infop
             dst[0] = src[2];
             dst[1] = src[1];
             dst[2] = src[0];
+            dst[3] = 0xff;
 
-            dst += 3;
+            dst += 4;
             src += 3;
           }
           line += lock_rect.Pitch;
@@ -995,23 +994,6 @@ static int load_tga_from_resource(const char *name, LPDIRECT3DTEXTURE9 *texture)
   return hr;
 }
 
-// set texture
-static void set_texture(LPDIRECT3DTEXTURE9 texture) {
-  D3DSURFACE_DESC desc;
-  texture->GetLevelDesc(0, &desc);
-  float w = 1.0f / desc.Width;
-  float h = 1.0f / desc.Height;
-  D3DMATRIX matrix = {
-    w, 0, 0, 0,
-    0, h, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-  };
-  device->SetTexture(0, texture);
-  device->SetTransform(D3DTS_TEXTURE0, &matrix);
-}
-
-
 // terminate dx9
 static void d3d_shutdown() {
   d3d_device_lost();
@@ -1162,13 +1144,13 @@ struct KeyboardState {
   float fade;
 
   // display options
-  uint active_color;
-  uint img;
+  uint bg_image;
+  uint color1;
+  uint color2;
   int  note;
   char label[18];
   char label1[18];
   key_bind_t map;
-  uint color;
 };
 
 struct MidiKeyState {
@@ -1179,7 +1161,8 @@ struct MidiKeyState {
   bool black;
   float fade;
 
-  uint  active_color;
+  uint  color1;
+  uint  color2;
 };
 
 
@@ -1407,10 +1390,9 @@ void display_default_skin() {
     const char *default_skins[] = {
       "background.png",
       "notes.png",
-      "keyboard_unmapped_down.png",
-      "keyboard_unmapped_up.png",
       "keyboard_note_down.png",
       "keyboard_note_up.png",
+      "keyboard_note_empty.png",
       "midi_black_down.png",
       "midi_black_up.png",
       "midi_white_down.png",
@@ -1432,6 +1414,32 @@ void display_default_skin() {
       resources[i].texture = load_png_from_resource(MAKEINTRESOURCE(IDR_SKIN_RES0) + i);
   }
 
+}
+
+// get texture size
+static void get_texture_size(LPDIRECT3DTEXTURE9 texture, int *width, int *height) {
+  D3DSURFACE_DESC desc;
+  texture->GetLevelDesc(0, &desc);
+  *width = desc.Width;
+  *height = desc.Height;
+}
+
+// set texture
+static void set_texture(LPDIRECT3DTEXTURE9 texture, int width = 0, int height = 0) {
+  D3DSURFACE_DESC desc;
+  texture->GetLevelDesc(0, &desc);
+  float w = width;
+  float h = height;
+  if (w == 0) w = desc.Width;
+  if (h == 0) h = desc.Height;
+  D3DMATRIX matrix = {
+    1.0f / w, 0, 0, 0,
+    0, 1.0f / h, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  };
+  device->SetTexture(0, texture);
+  device->SetTransform(D3DTS_TEXTURE0, &matrix);
 }
 
 // darw string
@@ -1457,15 +1465,19 @@ static void draw_string(float x, float y, uint color, const char *text, int size
 }
 
 // draw sprite
-static void draw_sprite(float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, uint color) {
+static void draw_sprite(float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, uint color1, uint color2) {
   Vertex v[4] = {
-    { x1, y1, 0, color, u1, v1 },
-    { x2, y1, 0, color, u2, v1 },
-    { x1, y2, 0, color, u1, v2 },
-    { x2, y2, 0, color, u2, v2 },
+    { x1, y1, 0, color1, u1, v1 },
+    { x2, y1, 0, color1, u2, v1 },
+    { x1, y2, 0, color2, u1, v2 },
+    { x2, y2, 0, color2, u2, v2 },
   };
 
   device->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, v, sizeof(Vertex));
+}
+
+static void draw_sprite(float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, uint color) {
+  draw_sprite(x1, y1, x2, y2, u1, v1, u2, v2, color, color);
 }
 
 // draw image
@@ -1475,49 +1487,29 @@ static void draw_image(uint resource_id, float x1, float x2, float y1, float y2,
     return;
 
   if (resource_id < resource_count) {
-    LPDIRECT3DTEXTURE9 texture = resources[resource_id].texture;
-    if (texture) {
-      D3DSURFACE_DESC desc;
-      texture->GetLevelDesc(0, &desc);
-      float w = (float)desc.Width;
-      float h = (float)desc.Height;
-      D3DMATRIX matrix = {
-        1.0f / w, 0, 0, 0,
-        0, 1.0f / h, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
-      };
-      device->SetTexture(0, texture);
-      device->SetTransform(D3DTS_TEXTURE0, &matrix);
-      draw_sprite(x1, x2, y1, y2, 0, 0, w, h, color);
-    }
+    set_texture(resources[resource_id].texture, 1, 1);
+    draw_sprite(x1, x2, y1, y2, 0, 0, 1, 1, color);
   }
 }
 
-// draw texture node
-static void draw_node_unscaled(float x, float y, texture_node_t *node, uint color) {
-  if (node) {
-    if (resource_texture) {
-      D3DSURFACE_DESC desc;
-      resource_texture->GetLevelDesc(0, &desc);
-      float w = (float)desc.Width;
-      float h = (float)desc.Height;
-      D3DMATRIX matrix = {
-        1.0f / w, 0, 0, 0,
-        0, 1.0f / h, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
-      };
-      device->SetTexture(0, resource_texture);
-      device->SetTransform(D3DTS_TEXTURE0, &matrix);
-
-      draw_sprite(x, y, x + node->width, y + node->height, (float)node->min_u, (float)node->min_v, (float)node->min_u + (float)node->width, (float)node->min_v + (float)node->height, color);
-    }
+// draw image2
+static void draw_image(uint resource_id, float x1, float x2, float y1, float y2, uint color1, uint color2) {
+  if ((color1 & 0xff000000) == 0 && (color2 & 0xff000000) == 0)
+      return;
+    
+  if (resource_id < resource_count) {
+    set_texture(resources[resource_id].texture, 1, 1);
+    draw_sprite(x1, x2, y1, y2, 0, 0, 1, 1, color1, color2);
   }
 }
 
-// draw scaleable sprite
-static void draw_sprite_border(float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, float lm, float rm, float tm, float bm, uint color) {
+// draw scaleabe sprite
+static void draw_sprite_border(
+  float x1, float y1, float x2, float y2,
+  float u1, float v1, float u2, float v2,
+  float lm, float rm, float tm, float bm,
+  uint color1, uint color2)
+{
   ushort index[18 * 3] = {
     0, 1, 4, 1, 4, 5,
     1, 2, 5, 2, 5, 6,
@@ -1557,70 +1549,128 @@ static void draw_sprite_border(float x1, float y1, float x2, float y2, float u1,
   v[8].v = v[9].v = v[10].v = v[11].v = v2 - bm;
   v[12].v = v[13].v = v[14].v = v[15].v = v2;
 
-  v[0].color = v[1].color = v[2].color = v[3].color = color;
-  v[4].color = v[5].color = v[6].color = v[7].color = color;
-  v[8].color = v[9].color = v[10].color = v[11].color = color;
-  v[12].color = v[13].color = v[14].color = v[15].color = color;
+  v[0].color = v[1].color = v[2].color = v[3].color = color1;
+  v[4].color = v[5].color = v[6].color = v[7].color = color1;
+  v[8].color = v[9].color = v[10].color = v[11].color = color2;
+  v[12].color = v[13].color = v[14].color = v[15].color = color2;
 
   // darw primitive
   device->DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, 16, 18, index, D3DFMT_INDEX16, v, sizeof(Vertex));
+}
 
+// draw scaleable sprite
+static void draw_sprite_border(float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, float lm, float rm, float tm, float bm, uint color) {
+  draw_sprite_border(x1, y1, x2, y2, u1, v1, u2, v2, lm, rm , tm, bm, color, color);
 }
 
 // draw image
-static void draw_image_border(uint resource_id, float x1, float x2, float y1, float y2, float lm, float rm, float tm, float bm, uint color) {
+static void draw_image_border(uint resource_id, float x1, float y1, float x2, float y2, float lm, float rm, float tm, float bm, uint color) {
   if (resource_id < resource_count) {
-    LPDIRECT3DTEXTURE9 texture = resources[resource_id].texture;
-    if (texture) {
-      D3DSURFACE_DESC desc;
-      texture->GetLevelDesc(0, &desc);
-      float w = (float)desc.Width;
-      float h = (float)desc.Height;
-      D3DMATRIX matrix = {
-        1.0f / w, 0, 0, 0,
-        0, 1.0f / h, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
-      };
-      device->SetTexture(0, texture);
-      device->SetTransform(D3DTS_TEXTURE0, &matrix);
-      draw_sprite_border(x1, x2, y1, y2, 0, 0, w, h, lm, rm, tm, bm, color);
-    }
+    int w, h;
+    get_texture_size(resources[resource_id].texture, &w, &h);
+    set_texture(resources[resource_id].texture, w, h);
+    draw_sprite_border(x1, y1, x2, y2, 0, 0, w, h, lm, rm, tm, bm, color, color);
   }
 }
 
+static void draw_image_border(uint resource_id, float x1, float y1, float x2, float y2, float lm, float rm, float tm, float bm, uint color1, uint color2) {
+  if (resource_id < resource_count) {
+    int w, h;
+    get_texture_size(resources[resource_id].texture, &w, &h);
+    set_texture(resources[resource_id].texture, w, h);
+    draw_sprite_border(x1, y1, x2, y2, 0, 0, w, h, lm, rm, tm, bm, color1, color2);
+  }
+}
+
+static void hsv2rgb(float &r, float &g, float &b, float h, float s, float v) {
+  int in;
+  float fl;
+  float m,n;
+  h = clamp_value<float>(h, 0, 360);
+  s = clamp_value<float>(s, 0, 1);
+  v = clamp_value<float>(v, 0, 1);
+  in = (int)floor(h / 60);
+  fl = (h / 60) - in;
+
+  if( !(in & 1) ) fl = 1 - fl;
+  m = v * (1 - s);
+  n = v * (1 - s * fl);
+  switch(in) {
+  case 0: r = v; g = n; b = m; break;
+  case 1: r = n; g = v; b = m; break;
+  case 2: r = m; g = v; b = n; break;
+  case 3: r = m; g = n; b = v; break;
+  case 4: r = n; g = m; b = v; break;
+  case 5: r = v; g = m; b = n; break; 
+  }
+}
+
+static void rgb2hsv( float &H, float &S, float &V, float R, float G, float B )
+{
+  float Z;
+  float r,g,b;
+  V = std::max(R, std::max(G, B));
+  Z = std::min(R, std::min(G, B));
+
+  if( V != 0.0f )
+    S = (V - Z) / V;
+  else
+    S = 0.0f;
+
+  if((V - Z) != 0) {
+    r = (V - R) / (V - Z);
+    g = (V - G) / (V - Z);
+    b = (V - B) / (V - Z);
+  } else {
+    r = g = b = 0;
+  }
+
+  if( V == R )
+    H = 60 * ( b - g );
+  else if( V == G )
+    H = 60 * (2 + r - b);
+  else
+    H = 60 * (4 + g - r);
+
+  if( H < 0.0f )
+    H = H + 360;
+}
+
+static inline void rgba2uint(float r, float g, float b, float a, uint &rgba) {
+  rgba =
+    clamp_value<uint>(a * 255, 0, 255) << 24 |
+    clamp_value<uint>(r * 255, 0, 255) << 16 |
+    clamp_value<uint>(g * 255, 0, 255) << 8 |
+    clamp_value<uint>(b * 255, 0, 255) << 0;
+}
+
+static inline void uint2rgba(uint value, float &r, float &g, float &b, float &a) {
+  a = ((value >> 24) & 0xff) / 255.f;
+  r = ((value >> 16) & 0xff) / 255.f;
+  g = ((value >> 8) & 0xff) / 256.f;
+  b = ((value >> 0) & 0xff) / 255.f;
+}
+
+static inline uint hsv2color(float h, float s, float v, float alpha) {
+  uint color;
+  float r, g, b;
+  hsv2rgb(r, g, b, h, s, v);
+  rgba2uint(r, g, b, alpha, color);
+  return color;
+}
 
 static void update_keyboard(double fade) {
   for (KeyboardState *key = keyboard_states; key < keyboard_states + 256; key++) {
     if (key->x2 > key->x1) {
-
-      // active status
-      if (keyboard_get_status(key - keyboard_states) || (keyboard_states + gui_get_selected_key() == key))
-        key->fade = 1.0f;
-      else
-        key->fade = 0 + fade * (key->fade - 0);
-
-      // color
-      uint key_color = config_bind_get_color(key - keyboard_states);
-      if (key_color == 0) {
-        key_color = 0xffffffff;
-      }
-
-      // active color
-      uint color = (uint(255 * key->fade) << 24) | (key_color & 0x00ffffff);
-      if (color != key->active_color) {
-        key->active_color = color;
-        display_dirty = true;
-      }
-
       key_bind_t map;
 
       // get keyboard map
       config_bind_get_keydown(key - keyboard_states, &map, 1);
 
-      uint img = map.a ? keyboard_note_down : keyboard_unmapped_down;
-      if (img != key->img) {
-        key->img = img;
+      // bg image
+      uint bg_image = map.a ? keyboard_note_up : keyboard_note_empty;
+      if (key->bg_image != bg_image) {
+        key->bg_image = bg_image;
         display_dirty = true;
       }
 
@@ -1658,6 +1708,103 @@ static void update_keyboard(double fade) {
         key->map = map;
         display_dirty = true;
       }
+
+      // fade
+      if (keyboard_get_status(key - keyboard_states) || (keyboard_states + gui_get_selected_key() == key)) {
+        key->fade = 1.0f;
+      }
+      else {
+        float to = config_get_preview_color() / 100.f;
+        key->fade = to + fade * (key->fade - to);
+      }
+
+      // color
+      float h = 30;
+      float s = 0;
+      float v = 0.9f;
+
+      uint key_color = config_bind_get_color(key - keyboard_states);
+
+      if (key_color != 0) {
+        float r, g, b, a;
+        uint2rgba(key_color, r, g, b, a);
+        rgb2hsv(h, s, v, r, g, b);
+      }
+      else {
+        if (config_get_auto_color() == AUTO_COLOR_VELOCITY) {
+          if (map.a) {
+            switch (map.a) {
+            case SM_NOTE_ON:
+            case SM_NOTE_OFF:
+            case SM_NOTE_PRESSURE:
+              {
+                int vel = map.d * config_get_key_velocity(map.b) / 256;
+                vel = clamp_value<int>(vel, 0, 64);
+                h = 64 - vel;
+                s = 1;
+                v = 0.9f;
+              }
+              break;
+
+            default:
+              h = 120;
+              s = 1;
+              v = 0.9f;
+              break;
+            }
+          }
+        }
+        else if (config_get_auto_color() == AUTO_COLOR_CHANNEL) {
+          if (map.a) {
+            static float channel_colors[16] = {
+              30, 10, 350, 330, 310, 290, 270, 210, 190, 170, 150, 130, 110, 90, 70, 50, 
+            };
+            switch (map.a) {
+            case SM_OCTAVE:
+            case SM_VELOCITY:
+            case SM_CHANNEL:
+            case SM_TRANSPOSE:
+            case SM_NOTE_OFF:
+            case SM_NOTE_ON:
+            case SM_NOTE_PRESSURE:
+            case SM_PRESSURE:
+            case SM_PITCH:
+            case SM_PROGRAM:
+            case SM_BANK_MSB:
+            case SM_BANK_LSB:
+            case SM_SUSTAIN:
+            case SM_MODULATION:
+            case SM_FOLLOW_KEY:
+              h = channel_colors[map.b & 0x0f];
+              s = 1;
+              v = 0.9f;
+              break;
+
+            default:
+              h = 120;
+              s = 1;
+              v = 0.9f;
+              break;
+            }
+          }
+        }
+        else {
+          h = 30;
+          s = 1;
+          v = 0.9f;
+        }
+      }
+
+      // active color
+      uint color1 = hsv2color(h, s - 0.3f, v + 0.1f, key->fade);
+      uint color2 = hsv2color(h, s - 0.0f, v + 0.0f, key->fade);
+
+      // check if color is changed
+      if (color1 != key->color1 || color2 != key->color2) {
+        key->color1 = color1;
+        key->color2 = color2;
+        display_dirty = true;
+      }
     }
   }
 }
@@ -1671,8 +1818,8 @@ static void draw_keyboard() {
       float x2 = key->x2;
       float y2 = key->y2;
 
-      draw_image_border(key->img + 1, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
-      draw_image_border(key->img, x1, y1, x2, y2, 6, 6, 6, 6, key->active_color);
+      draw_image_border(key->bg_image, x1, y1, x2, y2, 6, 6, 6, 6, 0xffffffff);
+      draw_image_border(keyboard_note_down, x1, y1, x2, y2, 6, 6, 6, 6, key->color1, key->color2);
 
       // key label
       if (key->label[0]) {
@@ -1722,9 +1869,26 @@ static void update_midi_keyboard(double fade) {
       else
         key->fade = 0 + fade * (key->fade - 0);
 
-      uint color = (uint(255 * key->fade) << 24) | 0xffffff;
-      if (color != key->active_color) {
-        key->active_color = color;
+      uint color1;
+      uint color2;
+
+      if (config_get_auto_color() == AUTO_COLOR_CLASSIC) {
+        color1 = hsv2color(27, 0.3f, 1.0f, key->fade);
+        color2 = hsv2color(30, 1.0f, 1.0f, key->fade);
+      }
+      else {
+        int vel1 = midi_get_note_pressure(config_get_output_channel(SM_INPUT_0), note);
+        int vel2 = midi_get_note_pressure(config_get_output_channel(SM_INPUT_1), note);
+        int vel = std::max(vel1, vel2);
+
+        vel = 64 - clamp_value<int>(vel / 2, 0, 64);
+        color1 = hsv2color(vel, 0.3f, 1.0f, key->fade);
+        color2 = hsv2color(vel, 1.0f, 1.0f, key->fade);
+      }
+
+      if (color1 != key->color1 || color2 != key->color2) {
+        key->color1 = color1;
+        key->color2 = color2;
         display_dirty = true;
       }
     }
@@ -1737,7 +1901,7 @@ static void draw_midi_keyboard() {
     if (!key->black) {
       if (key->x2 > key->x1) {
         draw_image(midi_white_up, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
-        draw_image(midi_white_down, key->x1, key->y1, key->x2, key->y2, key->active_color);
+        draw_image(midi_white_down, key->x1, key->y1, key->x2, key->y2, key->color1, key->color2);
       }
     }
   }
@@ -1746,7 +1910,7 @@ static void draw_midi_keyboard() {
     if (key->black) {
       if (key->x2 > key->x1) {
         draw_image(midi_black_up, key->x1, key->y1, key->x2, key->y2, 0xffffffff);
-        draw_image(midi_black_down, key->x1, key->y1, key->x2, key->y2, key->active_color);
+        draw_image(midi_black_down, key->x1, key->y1, key->x2, key->y2, key->color1, key->color2);
       }
     }
   }
@@ -2416,9 +2580,11 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
   if (!handled) {
     keycode = find_keyboard_key(x, y);
     midinote = find_midi_note(x, y, &velocity);
+    midinote -= config_get_key_octshift(0) * 12;
 
     if (midinote != -1) {
       if (!config_get_midi_transpose()) {
+
         if (config_get_follow_key(0))
           midinote = midinote - config_get_key_signature();
       }

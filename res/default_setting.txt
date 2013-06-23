@@ -1,4 +1,7 @@
-FreePiano 1.7
+FreePiano 1.8
+
+velocity in_0 set 80
+velocity in_1 set 100
 
 #	keyname	action	channel	note
 keydown	left	NoteOn	in_1	c3
