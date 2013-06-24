@@ -4,7 +4,7 @@ FreePiano is a virtual MIDI keyboard and a piano for Windows.
 
 You can use freepiano to Play piano with computer keyboard or MIDI keyboard with any vst instrument you like, or output through MIDI, or generate any MIDI message with any key on the keyboard. You can also record your song and export a MP4 movie to share with your friends.
 
-![ScreenShot](res/screenshot-1.0.jpg)
+![ScreenShot](res/screenshot.jpg)
 
 ## Features of FreePiano:
 
@@ -17,6 +17,28 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 
 ## Change logs
+**2013-06-24  FreePiano 1.8**
+* Raw MIDI message support, with 'MIDI' command you can send at most 3 hex
+  digitals as a midi message. all other script commands are nolonger MIDI
+  signals.
+* All script commands works correct with all value operators now, including
+  'Sync' and 'Press' modifier.
+* Supports at most 16 input channels, which are then mapped to 16 MIDI output
+  MIDI channels.
+* Adds a 'Follow key' option on input channels, which can control a input
+  channel not to follow current key signature.
+* Adds a 'Bank' option on output channels, which equals midi controller 0.
+* Optimized key popup settings dialog and settings dialog.
+* Optimized main screen refresh, freepiano uses less GPU now.
+* Preset menu now support groups, adds a lot of preset scripts in common use.
+* Language can be changed correctly on windows XP.
+* Localized script support.
+* Keyboard color support, and you can display note names as 'C D E F G A B' now.
+* A new 'WAV' file exportor.
+* New update notification.
+* Fixed a bug that notes will lower an octave when copy group key maps.
+
+
 **2013-05-24  FreePiano 1.7**
 * Play settings page, can change midi output channel and voice.
 * New Set1 and Set10 modifier, can change value by mask 1 or 10.
