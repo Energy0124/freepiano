@@ -603,6 +603,7 @@ struct global_setting_t {
   byte auto_color;
   byte preview_color;
   byte note_display;
+  uint update_version;
 
   std::map<std::string, midi_input_config_t> midi_inputs;
 
@@ -627,6 +628,7 @@ struct global_setting_t {
     auto_color = 0;
     preview_color = 0;
     note_display = 0;
+    update_version = 0;
 
     key_fade = 0;
   }
@@ -658,6 +660,7 @@ struct setting_t {
 
     for (int i = 0; i < 256; i++) {
       memset(key_label[i].text, 0, sizeof(key_label[i].text));
+      key_label[i].color = 0;
     }
 
     for (int i = 0; i < 16; i++) {
@@ -687,7 +690,7 @@ static thread_lock_t config_lock;
 // verison
 static uint map_language = FP_LANG_ENGLISH;
 static uint map_version = 0;
-static const uint map_current_version = 0x01080000;
+static const uint map_current_version = APP_VERSION;
 
 
 int config_bind_get_keydown(byte code, key_bind_t *buff, int size) {
@@ -759,7 +762,7 @@ void config_bind_add_keyup(byte code, key_bind_t bind) {
 void config_bind_set_label(byte code, const char *label) {
   thread_lock lock(config_lock);
 
-  strncpy(settings[current_setting].key_label[code].text, label ? label : "", sizeof(key_label_t));
+  strcpy_s(settings[current_setting].key_label[code].text, label ? label : "");
 }
 
 const char* config_bind_get_label(byte code) {
@@ -1158,7 +1161,7 @@ static bool match_number(char **str, int *value) {
 }
 
 // match version 
-static bool match_version(char **str, int *value) {
+bool match_version(char **str, int *value) {
   int version = 0;
   int digit = 3;
   char *s = *str;
@@ -1637,13 +1640,11 @@ int config_load_keymap(const char *filename) {
   if (!fp)
     return -1;
 
-  // current group
-  int group_id = config_get_setting_group();
-
   // undefined version
   map_version = 0;
 
-  // clear keyboard binds
+  // clear settings
+  config_set_setting_group_count(0);
   config_clear_key_setting();
 
   // read lines
@@ -1654,7 +1655,7 @@ int config_load_keymap(const char *filename) {
   fclose(fp);
 
   // restore current group
-  config_set_setting_group(group_id);
+  config_set_setting_group(0);
   return 0;
 }
 
@@ -1691,7 +1692,7 @@ static int print_value(char *buff, int buff_size, int value, name_t *names = NUL
     return print_format(buff, buff_size, "%s%d", sep, value);
 }
 
-static int print_version(char *buff, int buff_size, uint value, const char *sep = "\t") {
+int print_version(char *buff, int buff_size, uint value, const char *sep = "\t") {
   int digit[4] = {
     (value >> 24) & 0xff,
     (value >> 16) & 0xff,
@@ -2243,6 +2244,11 @@ int config_load(const char *filename) {
         match_number(&s, &value);
         config_set_note_display(value);
       }
+      else if (match_word(&s, "update-version")) {
+        int value = 0;
+        match_version(&s, &value);
+        config_set_update_version(value);
+      }
     }
 
     fclose(fp);
@@ -2325,6 +2331,14 @@ int config_save(const char *filename) {
 
   if (config_get_note_display()) {
     fprintf(fp, "gui-note-display %d\r\n", config_get_note_display());
+  }
+
+
+  // update version
+  if (config_get_update_version()) {
+    char buff[256];
+    print_version(buff, sizeof(buff), config_get_update_version(), "");
+    fprintf(fp, "update-version %s\r\n", buff);
   }
 
   fclose(fp);
@@ -2968,4 +2982,14 @@ uint config_get_note_display() {
 // set auto color mode
 void config_set_note_display(uint value) {
   global.note_display = value;
+}
+
+// get neweset version
+uint config_get_update_version() {
+  return global.update_version;
+}
+
+// set update version
+void config_set_update_version(uint version) {
+  global.update_version = version;
 }

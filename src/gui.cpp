@@ -52,8 +52,8 @@ static bool open_dialog(char *buff, size_t size, const char* filters, const char
   ofn.lpstrFilter = filters;
   ofn.nFilterIndex = 1;
   ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-  //ofn.lpstrDefExt = ".map";
   ofn.nFileExtension = 0;
+  //ofn.lpstrDefExt = ".map";
 
   if (init_dir) {
     config_get_media_path(dir, sizeof(dir), init_dir);
@@ -74,7 +74,7 @@ static bool save_dialog(char *buff, size_t size, const char *filters, const char
   ofn.lpstrFile = buff;
   ofn.lpstrFile[0] = 0;
   ofn.nMaxFile = size;
-  ofn.lpstrFilter = lang_load_string(IDS_FILTER_MAP);
+  ofn.lpstrFilter = filters;
   ofn.nFilterIndex = 1;
   ofn.Flags = OFN_PATHMUSTEXIST;
   ofn.nFileExtension = 0;
@@ -1651,10 +1651,6 @@ int menu_on_popup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         midi_enum_output(midi_cb);
       }
 
-      if (!midi_cb.found && config_get_instrument_type() == INSTRUMENT_TYPE_MIDI) {
-        midi_cb(config_get_instrument_path());
-      }
-
       enum_vsti_callback vsti_cb;
       if (config_get_instrument_show_vsti()) {
         vsti_enum_plugins(vsti_cb);
@@ -1957,6 +1953,7 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 
        else if (ctl == IDC_KEY_SETTING_BUTTON_CLEAR) {
          config_bind_set_label(selected_key, NULL);
+         config_bind_set_color(selected_key, 0);
          config_bind_clear_keydown(selected_key);
          config_bind_clear_keyup(selected_key);
          helpers::refresh_controls(hWnd);
@@ -1992,6 +1989,7 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
                config_bind_clear_keydown(selected_key);
                config_bind_clear_keyup(selected_key);
                config_bind_set_label(selected_key, NULL);
+               config_bind_set_color(selected_key, 0);
 
                DWORD id = 0;
                char line[4096];
@@ -2064,10 +2062,33 @@ void gui_popup_keymenu(byte code, int x, int y) {
   SetActiveWindow(key_setting_window);
 }
 
+
+static void notify_new_upate(uint version) {
+  // from config.cpp
+  extern int print_version(char *buff, int buff_size, uint value, const char *sep);
+
+  if (version > APP_VERSION)
+  if (version > config_get_update_version()) {
+    char content[1024];
+    char version_str[32];
+    print_version(version_str, sizeof(version_str), version, "");
+    lang_format_string(content, sizeof(content), IDS_NOTIFY_UPDATE, version_str);
+
+    int result = ::MessageBox(gui_get_window(), content, lang_load_string(IDS_NOTIFY_UPDATE_TITLE), MB_YESNO);
+    if (result == IDYES) {
+      ShellExecute(NULL, "open", "http://freepiano.tiwb.com", NULL, NULL, 0);
+    }
+
+    config_set_update_version(version);
+    config_save("freepiano.cfg");
+  }
+}
 // -----------------------------------------------------------------------------------------
 // main window functions
 // -----------------------------------------------------------------------------------------
 static HWND mainhwnd = NULL;
+
+#define WM_NEW_UPDATE     (WM_USER + 14)
 
 static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static bool in_sizemove = false;
@@ -2200,6 +2221,10 @@ static LRESULT CALLBACK windowproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
      midi_open_inputs();
    }
    break;
+
+   case WM_NEW_UPDATE:
+     notify_new_upate(lParam);
+     break;
   }
 
   // display process message
@@ -2377,4 +2402,9 @@ void gui_set_language(int lang) {
   if (setting_hwnd) {
     ::DestroyWindow(setting_hwnd);
   }
+}
+
+// notify update
+void gui_notify_update(uint version) {
+  PostMessage(mainhwnd, WM_NEW_UPDATE, 0, version);
 }

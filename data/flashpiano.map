@@ -1,6 +1,8 @@
-FreePiano 1.7
+FreePiano 1.8
 
-Controller 0 SustainPedal 127
+Sustain 0 Set 127
+Velocity 0 Set 100
+Velocity 1 Set 100
 
 key	a	NoteOn	0	c2
 key	b	NoteOn	0	d2

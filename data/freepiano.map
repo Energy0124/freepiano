@@ -1,8 +1,8 @@
-FreePiano 1.7
+FreePiano 1.8
 
-Controller 0 SustainPedal 127
-Velocity 0 80
-Velocity 1 100
+Velocity In_0 80
+Velocity In_1 100
+Sustain In_0 127
 
 #	keyname	action	channel	note
 key	left	NoteOn	1	c3
@@ -105,10 +105,10 @@ label	F6	LV-
 label	F7	RV+
 label	F8	RV-
 
-keydown	F9	Velocity	0	Inc	1
-keydown	F10	Velocity	0	Dec	1
-keydown	F11	Velocity	1	Inc	1
-keydown	F12	Velocity	1	Dec	1
+keydown	F9	Velocity	In_0	Inc	1
+keydown	F10	Velocity	In_0	Dec	1
+keydown	F11	Velocity	In_1	Inc	1
+keydown	F12	Velocity	In_1	Dec	1
 
 keydown	PrintScreen	Play
 keydown	ScrollLock	Record

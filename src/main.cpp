@@ -6,6 +6,7 @@
 #include "song.h"
 #include "export_mp4.h"
 #include "language.h"
+#include "update.h"
 
 #ifdef _DEBUG
 int main()
@@ -51,6 +52,11 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
 
   // load default config
   config_load("freepiano.cfg");
+
+  // check for update
+#ifndef _DEBUG
+  update_check_async();
+#endif
 
   // open lyt
   //song_open_lyt("test3.lyt");

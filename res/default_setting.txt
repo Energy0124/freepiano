@@ -1,5 +1,6 @@
 FreePiano 1.8
 
+sustain in_0 set 127
 velocity in_0 set 80
 velocity in_1 set 100
 

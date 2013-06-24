@@ -117,6 +117,7 @@
     <ClCompile Include="..\src\pch.cpp" />
     <ClCompile Include="..\src\song.cpp" />
     <ClCompile Include="..\src\synthesizer_vst.cpp" />
+    <ClCompile Include="..\src\update.cpp" />
     <ClCompile Include="..\src\utilities.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -130,6 +131,7 @@
     <ClInclude Include="..\src\export_wav.h" />
     <ClInclude Include="..\src\language.h" />
     <ClInclude Include="..\src\language_strdef.h" />
+    <ClInclude Include="..\src\update.h" />
     <ClInclude Include="..\src\utilities.h" />
     <ClInclude Include="..\src\vst\aeffect.h" />
     <ClInclude Include="..\src\vst\aeffectx.h" />

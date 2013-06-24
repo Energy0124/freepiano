@@ -1,6 +1,6 @@
-FreePiano 1.7
+FreePiano 1.8
 
-Controller 0 SustainPedal 127
+Sustain 0 127
 Velocity 0 80
 Velocity 1 100
 
@@ -76,94 +76,10 @@ key	5	NoteOn	0	g5
 key	6	NoteOn	0	a5
 key	7	NoteOn	0	b5
 key	8	NoteOn	0	c6
-
-keydown	F1	Group		Inc	1
-keydown	F2	Group		Dec	1
-keydown	F3	KeySignature	Inc	1
-keydown	F4	KeySignature	Dec	1
-
-keydown	F5	Octshift	0	Inc	1
-keydown	F6	Octshift	0	Dec	1
-keydown	F7	Octshift	1	Inc	1
-keydown	F8	Octshift	1	Dec	1
-
-label	F5	LV+
-label	F6	LV-
-label	F7	RV+
-label	F8	RV-
-
-keydown	F9	Velocity	0	Inc	1
-keydown	F10	Velocity	0	Dec	1
-keydown	F11	Velocity	1	Inc	1
-keydown	F12	Velocity	1	Dec	1
-
-keydown	ScrollLock	Record
-keydown	PrintScreen	Play
-keydown	Pause	Stop
-
-label	F1	GP+
-label	F2	GP-
-label	F3	Key+
-label	F4	Key-
-label	F5	LO+
-label	F6	LO-
-label	F7	RO+
-label	F8	RO-
-label	F9	LV+
-label	F10	LV-
-label	F11	RV+
-label	F12	RV-
-
-label	ScrollLock	Rec
-label	PrintScreen	Play
-label	Pause	Stop
-
 key	9	NoteOn	0	d6
 key	0	NoteOn	0	e6
 key	-	NoteOn	0	f6
 key	=	NoteOn	0	g6
 key	\	NoteOn	0	a6
-
-keydown	F1	Group		Inc	1
-keydown	F2	Group		Dec	1
-keydown	F3	KeySignature	Inc	1
-keydown	F4	KeySignature	Dec	1
-
-keydown	F5	Octshift	0	Inc	1
-keydown	F6	Octshift	0	Dec	1
-keydown	F7	Octshift	1	Inc	1
-keydown	F8	Octshift	1	Dec	1
-
-label	F5	LV+
-label	F6	LV-
-label	F7	RV+
-label	F8	RV-
-
-keydown	F9	Velocity	0	Inc	1
-keydown	F10	Velocity	0	Dec	1
-keydown	F11	Velocity	1	Inc	1
-keydown	F12	Velocity	1	Dec	1
-
-keydown	ScrollLock	Record
-keydown	PrintScreen	Play
-keydown	Pause	Stop
-
-label	F1	GP+
-label	F2	GP-
-label	F3	Key+
-label	F4	Key-
-label	F5	LO+
-label	F6	LO-
-label	F7	RO+
-label	F8	RO-
-label	F9	LV+
-label	F10	LV-
-label	F11	RV+
-label	F12	RV-
-
-label	ScrollLock	Rec
-label	PrintScreen	Play
-label	Pause	Stop
-
 
 label	space	FreePiano

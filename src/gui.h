@@ -38,3 +38,6 @@ bool gui_is_exporting();
 
 // set language
 void gui_set_language(int lang);
+
+// notify update
+void gui_notify_update(uint version);

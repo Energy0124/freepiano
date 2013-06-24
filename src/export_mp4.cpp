@@ -276,6 +276,7 @@ static DWORD __stdcall export_rendering_thread(void *parameter) {
   uint progress = 0;
   uint frame_count = 0;
   uint frame_duration = mp4_time_scale / frames_per_sec;
+  uint finish_wait = frame_size * 100;
 
   double total_time = 0;
   double capture_time = 0;
@@ -360,9 +361,6 @@ static DWORD __stdcall export_rendering_thread(void *parameter) {
 
     total_samples += frame_size;
 
-    if (!song_is_playing())
-      input_samples = 0;
-
     // call the actual encoding routine
     int32_t *src = (int32_t *)input_buffer + input_buffer_id * input_samples;
     int bytes_encoded = faacEncEncode(faac_encoder, src, input_samples, faac_buffer, output_size);
@@ -371,15 +369,22 @@ static DWORD __stdcall export_rendering_thread(void *parameter) {
       goto done;
     }
 
-    // all done
-    if (!song_is_playing() && !bytes_encoded) {
+    // exporting breaked
+    if (!gui_is_exporting()) {
       result = 0;
       break;
     }
 
-    // exporting breaked
-    if (!gui_is_exporting())
-      break;
+    // export finished
+    if (!song_is_playing()) {
+      if (finish_wait > frame_size) {
+        finish_wait -= frame_size;
+      }
+      else {
+        result = 0;
+        break;
+      }
+    }
 
     if (bytes_encoded > 0) {
       uint samples_left = total_samples - encoded_samples + delay_samples;

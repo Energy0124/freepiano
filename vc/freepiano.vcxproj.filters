@@ -38,6 +38,7 @@
     <ClCompile Include="..\src\export_wav.cpp" />
     <ClCompile Include="..\src\export.cpp" />
     <ClCompile Include="..\src\utilities.cpp" />
+    <ClCompile Include="..\src\update.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\asio\asio.h">
@@ -84,6 +85,7 @@
     <ClInclude Include="..\src\export.h" />
     <ClInclude Include="..\src\language_strdef.h" />
     <ClInclude Include="..\src\utilities.h" />
+    <ClInclude Include="..\src\update.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\res\background.png">
@@ -156,6 +158,8 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\res\keyboard_note_empty.png" />
+    <Image Include="..\res\keyboard_note_empty.png">
+      <Filter>res</Filter>
+    </Image>
   </ItemGroup>
 </Project>

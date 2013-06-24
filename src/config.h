@@ -267,3 +267,9 @@ uint config_get_note_display();
 
 // set note display
 void config_set_note_display(uint value);
+
+// get neweset version
+uint config_get_update_version();
+
+// set update version
+void config_set_update_version(uint version);

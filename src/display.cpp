@@ -2599,9 +2599,10 @@ static int mouse_control(HWND window, uint msg, int x, int y, int z) {
   if (!handled) {
     keycode = find_keyboard_key(x, y);
     midinote = find_midi_note(x, y, &velocity);
-    midinote -= config_get_key_octshift(0) * 12;
 
     if (midinote != -1) {
+      midinote -= config_get_key_octshift(0) * 12;
+
       if (!config_get_midi_transpose()) {
 
         if (config_get_follow_key(0))
