@@ -1746,6 +1746,11 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
   static bool auto_apply = true;
   static bool need_apply = false;
 
+  static const char* note_display_doh[12] =  { "1", "#1", "2", "#2", "3", "4", "#4", "5", "#5", "6", "#6", "7" };
+  static const char* note_display_name[12] = { "C", "#C", "D", "#D", "E", "F", "#F", "G", "#G", "A", "#A", "B" };
+  static const char* note_octave_doh[12] =   { "-4", "-3", "-2", "-1", "0", "+1", "+2", "+3", "+4" };
+  static const char* note_octave_name[12] =  { "0", "1", "2", "3", "4", "5", "6", "7", "8" };
+
   struct helpers {
     static void refresh_controls(HWND hWnd) {
       key_bind_t keydown;
@@ -1834,6 +1839,30 @@ static INT_PTR CALLBACK key_setting_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 
      CheckDlgButton(hWnd, IDC_KEY_SETTING_AUTOCLOSE, auto_close);
      CheckDlgButton(hWnd, IDC_KEY_SETTING_AUTOAPPLY, auto_apply);
+
+     // set note names
+     switch (config_get_note_display()) {
+     case NOTE_DISPLAY_DOH:
+       for (int i = 0; i < 12; i++)
+         SetDlgItemText(hWnd, IDC_KEY_SETTING_NOTE_1 + i, note_display_doh[i]);
+       for (int i = 0; i < 9; i++)
+         SetDlgItemText(hWnd, IDC_KEY_SETTING_OCTAVE_0 + i, note_octave_doh[i]);
+       break;
+
+     case NOTE_DIAPLAY_FIXED_DOH:
+       for (int i = 0; i < 12; i++)
+         SetDlgItemText(hWnd, IDC_KEY_SETTING_NOTE_1 + i, note_display_doh[(i + config_get_key_signature()) % 12]);
+       for (int i = 0; i < 9; i++)
+         SetDlgItemText(hWnd, IDC_KEY_SETTING_OCTAVE_0 + i, note_octave_doh[i]);
+       break;
+
+     case NOTE_DISPLAY_NAME:
+       for (int i = 0; i < 12; i++)
+         SetDlgItemText(hWnd, IDC_KEY_SETTING_NOTE_1 + i, note_display_name[(i + config_get_key_signature()) % 12]);
+       for (int i = 0; i < 9; i++)
+         SetDlgItemText(hWnd, IDC_KEY_SETTING_OCTAVE_0 + i, note_octave_name[i]);
+       break;
+     }
 
      helpers::refresh_controls(hWnd);
    }
