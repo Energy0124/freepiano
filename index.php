@@ -9,8 +9,9 @@ $lang_remap = array(
   "zh" => "cn"
 );
 
-if (!is_array($lang, array_keys($lang_remap)))
+if (!in_array($lang, array_keys($lang_remap)))
   $lang = "en";
 
 header('Location: {{ site.baseurl }}/' . $lang_remap[$lang]);
+exit(0);
 ?>

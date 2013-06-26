@@ -9,7 +9,7 @@ lang: en
 FreePiano is a opensource software that can let you play music with your computer keyboard.
 
 <div class="play_video" id="video1">
-<img src="{{ site.baseurl }}/img/screenshot.jpg"/>
+<img src="{{ site.baseurl }}/en/img/screenshot.jpg"/>
 </div>
 
 Download lastest version: [FreePiano 1.8](http://sourceforge.net/projects/freepiano/files/freepiano_1.8.zip)

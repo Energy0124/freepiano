@@ -9,7 +9,7 @@ lang: cn
 FreePiano是一款使用电脑键盘演奏音乐的开源软件。
 
 <div class="play_video" id="video1">
-<img src="{{ site.baseurl }}/img/screenshot.jpg"/>
+<img src="{{ site.baseurl }}/cn/img/screenshot.jpg"/>
 </div>
 
 最新版下载： [FreePiano 1.8](http://sourceforge.net/projects/freepiano/files/freepiano_1.8.zip)
