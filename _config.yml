@@ -1,0 +1,6 @@
+pygments: true
+permalink: /:categories/:title/
+relative_permalinks: false
+markdown: rdiscount
+title: FreePiano
+baidu_tongji_id: 3Ff6ab68cc096f940626bf1f7448a1c42d

@@ -1,0 +1,38 @@
+{% assign posts = site.categories[page.categories.last] %}
+{% assign previous_id = null %}
+{% assign next_id = null %}
+{% assign matched = false %}
+{% for post in posts %}
+  {% if post.id == page.id %}
+    {% assign matched = true %}
+  {% else %}
+    {% assign page_categories = page.categories | join: ',' %}
+    {% assign post_categories = post.categories | join: ',' %}
+    {% if post_categories == page_categories %}
+      {% if matched %}
+        {% if previous_id == null %}
+          {% assign previous_id = post.id %}
+        {% endif %}
+      {% else %}
+        {% assign next_id = post.id %}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+{% endfor %}
+<div class="section-nav">
+  <div class="left align-right">
+    {% if previous_id != null %}
+      <a href="{{ site.baseurl }}{{ previous_id }}" class="prev">Back</a>
+    {% else %}
+      <span class="prev disabled">Back</span>
+    {% endif %}
+  </div>
+  <div class="right align-left">
+    {% if next_id != null %}
+      <a href="{{ site.baseurl }}{{ next_id }}" class="next">Next</a>
+    {% else %}
+      <span class="next disabled">Next</span>
+    {% endif %}
+  </div>
+  <div class="clear"></div>
+</div>

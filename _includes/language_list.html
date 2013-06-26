@@ -1,0 +1,10 @@
+{% assign lang_ids = 'en,cn' | split: ',' %}
+{% assign lang_names = 'English,中文' | split: ',' %}
+<ul>
+  {% for lang_id in lang_ids %}
+  <li class="lang_flag_{{ lang_id }}{% if page.lang == lang_id %} active{% endif %}">
+    <a href="{{ site.baseurl }}{{ lang_id }}">{{ lang_names[forloop.index0] }}</a>
+  </li>
+  {% endfor %}
+</ul>
+

@@ -1,0 +1,20 @@
+{% assign posts = site.categories[page.categories.last] %}
+{% case page.lang %}
+{% when 'en' %}Contents
+{% when 'cn' %}目录
+{% endcase %}
+<div class="doc-contents">
+<ol>
+  {% for post in posts reversed %}
+    {% assign page_categories = page.categories | join: ',' %}
+    {% assign post_categories = post.categories | join: ',' %}
+    {% if post_categories == page_categories %}
+      {% if post.id == page.id %}
+        <li class="current">{{ post.title }}</li>
+        {% else %}
+        <li><a href="{{ site.baseurl }}{{ post.id }}">{{ post.title }}</a></li>
+        {% endif %}
+    {% endif %}
+  {% endfor %}
+</ol>
+</div>

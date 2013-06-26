@@ -1,0 +1,20 @@
+---
+layout: default
+---
+<section class="docs">
+  <div class="grid">
+    <article>
+      <div class="unit one-fifth pull-right">
+        {% include docs_nav.html %}
+      </div>
+      <div class="unit four-fifths">
+        <h1>{{ page.title }}</h1>
+        {{ content }}
+      </div>
+      <div class="unit">
+        {% include section_nav.html %}
+      </div>
+      <div class="clear"></div>
+    </article>
+  </div>
+</section>
