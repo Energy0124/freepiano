@@ -14,7 +14,7 @@ function lang_redirect(url) {
   }
   if (lang === undefined) lang = "en"
 
-  var dest = "{{ site.baseurl }}" + lang + "/" + url
+  var dest = "{{ site.baseurl }}/" + lang + "/" + url
 
   if (window) {
     if (window.location.replace) {

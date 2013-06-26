@@ -4,7 +4,7 @@
       {% include language_list.html %}
     </div>
     <h1>
-      <a href="{{ site.baseurl }}">FreePiano</a>
+      <a href="{{ site.baseurl }}/">FreePiano</a>
     </h1>
     <h2>Advanced virtual MIDI keyboard.</h2>
   </div>
@@ -14,16 +14,16 @@
     <nav class="main-nav">
       <ul>
         <li class="{% if category == 'updates' %}current{% endif %}">
-          <a href="{{ site.baseurl }}{{ page.lang }}">Home</a>
+          <a href="{{ site.baseurl }}/{{ page.lang }}">Home</a>
         </li>
         <li>
         <a target="_blank" href="http://sourceforge.net/projects/freepiano/files/">Download</a>
         </li>
         <li class="{% if category == 'docs' %}current{% endif %}">
-        <a href="{{ site.baseurl }}{{ page.lang }}/docs/quickstart">Documents</a>
+        <a href="{{ site.baseurl }}/{{ page.lang }}/docs/quickstart">Documents</a>
         </li>
         <li class="{% if category == 'about' %}current{% endif %}">
-        <a href="{{ site.baseurl }}{{ page.lang }}/about">About</a>
+        <a href="{{ site.baseurl }}/{{ page.lang }}/about">About</a>
         </li>
       </ul>
     </nav>
@@ -32,16 +32,16 @@
     <nav class="main-nav">
       <ul>
         <li class="{% if category == 'updates' %}current{% endif %}">
-          <a href="{{ site.baseurl }}{{ page.lang }}">主页</a>
+          <a href="{{ site.baseurl }}/{{ page.lang }}">主页</a>
         </li>
         <li>
         <a target="_blank" href="http://sourceforge.net/projects/freepiano/files/">下载</a>
         </li>
         <li class="{% if category == 'docs' %}current{% endif %}">
-        <a href="{{ site.baseurl }}{{ page.lang }}/docs/quickstart">使用帮助</a>
+        <a href="{{ site.baseurl }}/{{ page.lang }}/docs/quickstart">使用帮助</a>
         </li>
         <li class="{% if category == 'about' %}current{% endif %}">
-        <a href="{{ site.baseurl }}{{ page.lang }}/about">关于</a>
+        <a href="{{ site.baseurl }}/{{ page.lang }}/about">关于</a>
         </li>
       </ul>
     </nav>

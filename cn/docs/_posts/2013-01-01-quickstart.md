@@ -14,7 +14,7 @@ FreePiano是绿色软件，下载后请解压缩到任何一个文件夹中，�
 ## FreePiano的主界面介绍
 启动程序后，您会看到FreePiano的主界面：
 
-![程序主界面]({{ site.baseurl }}cn/docs/img/main_screen.png)
+![程序主界面]({{ site.baseurl }}/cn/docs/img/main_screen.png)
 
 FreePiano使用简谱表示音符，在默认音符布局下，键盘被分为左手和右手2个部分，主键盘（回车左边的部分）用来演奏歌曲的伴奏，数字键盘和功能键部分（包括上下左右键）用来演奏歌曲的主旋律。在演奏中，大部分情况下使用左手演奏伴奏，右手演奏主旋律。
 
