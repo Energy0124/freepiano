@@ -395,6 +395,9 @@ STR_SCHINESE (IDS_SONG_INFO_AUTHOR, "演奏者：")
 STR_ENGLISH  (IDS_SONG_INFO_DESCRIPTION, "Description:")
 STR_SCHINESE (IDS_SONG_INFO_DESCRIPTION, "说明：")
 
+STR_ENGLISH  (IDS_SONG_INFO_COMPATIBITY, "(This song may incompatible with current version)")
+STR_SCHINESE (IDS_SONG_INFO_COMPATIBITY, "（这首歌使用了一些之前版本的特性，可能与当前版本不兼容）")
+
 STR_ENGLISH  (IDS_SONG_INFO_OK, "OK")
 STR_SCHINESE (IDS_SONG_INFO_OK, "确定")
 
@@ -500,3 +503,4 @@ STR_SCHINESE (IDS_NOTIFY_UPDATE_TITLE, "更新提醒")
 
 STR_ENGLISH  (IDS_NOTIFY_UPDATE, "FreePiao %s is avaiable now, would you like to check it out now?")
 STR_SCHINESE (IDS_NOTIFY_UPDATE, "FreePiano %s 已经发布了， 要去看看吗？")
+

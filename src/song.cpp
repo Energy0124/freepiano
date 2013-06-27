@@ -774,6 +774,7 @@ static void song_init_record() {
   song_info.title[0] = 0;
   song_info.comment[0] = 0;
   song_info.write_protected = false;
+  song_info.compatibility = true;
 
   song_play_speed = 1;
 }

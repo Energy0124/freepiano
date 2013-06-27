@@ -2012,7 +2012,8 @@ static void control_set_text(gui_control_t *ctl, const char *format, ...) {
 
   va_list args;
   va_start(args, format);
-  vsprintf_s(buff, format, args);
+  int len = vsnprintf(buff, sizeof(buff) - 1, format, args);
+  buff[len] = 0;
   va_end(args);
 
   if (strcmp(buff, ctl->text)) {

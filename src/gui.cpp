@@ -1120,7 +1120,15 @@ static INT_PTR CALLBACK song_info_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
      song_info_t *info = song_get_info();
      SetDlgItemText(hWnd, IDC_SONG_TITLE, info->title);
      SetDlgItemText(hWnd, IDC_SONG_AUTHOR, info->author);
-     SetDlgItemText(hWnd, IDC_SONG_COMMENT, info->comment);
+
+     if (info->compatibility) {
+       SetDlgItemText(hWnd, IDC_SONG_COMMENT, info->comment);
+     }
+     else {
+       char buff[1024];
+       sprintf_s(buff, "%s\r\n\r\n%s", lang_load_string(IDS_SONG_INFO_COMPATIBITY), info->comment);
+       SetDlgItemText(hWnd, IDC_SONG_COMMENT, buff);
+     }
    }
    break;
 
@@ -1128,9 +1136,11 @@ static INT_PTR CALLBACK song_info_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
      switch (LOWORD(wParam)) {
       case IDOK: {
         song_info_t *info = song_get_info();
-        GetDlgItemText(hWnd, IDC_SONG_TITLE, info->title, sizeof(info->title));
-        GetDlgItemText(hWnd, IDC_SONG_AUTHOR, info->author, sizeof(info->author));
-        GetDlgItemText(hWnd, IDC_SONG_COMMENT, info->comment, sizeof(info->comment));
+        if (song_allow_save()) {
+          GetDlgItemText(hWnd, IDC_SONG_TITLE, info->title, sizeof(info->title));
+          GetDlgItemText(hWnd, IDC_SONG_AUTHOR, info->author, sizeof(info->author));
+          GetDlgItemText(hWnd, IDC_SONG_COMMENT, info->comment, sizeof(info->comment));
+        }
         EndDialog(hWnd, 1);
       }
       break;

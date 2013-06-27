@@ -555,22 +555,22 @@ static name_t channel_names[] = {
   { "输入_14",    0x0e,     FP_LANG_SCHINESE },
   { "输入_15",    0x0f,     FP_LANG_SCHINESE },
 
-  { "输出_0",     0x00,     FP_LANG_SCHINESE },
-  { "输出_1",     0x01,     FP_LANG_SCHINESE },
-  { "输出_2",     0x02,     FP_LANG_SCHINESE },
-  { "输出_3",     0x03,     FP_LANG_SCHINESE },
-  { "输出_4",     0x04,     FP_LANG_SCHINESE },
-  { "输出_5",     0x05,     FP_LANG_SCHINESE },
-  { "输出_6",     0x06,     FP_LANG_SCHINESE },
-  { "输出_7",     0x07,     FP_LANG_SCHINESE },
-  { "输出_8",     0x08,     FP_LANG_SCHINESE },
-  { "输出_9",     0x09,     FP_LANG_SCHINESE },
-  { "输出_10",    0x0a,     FP_LANG_SCHINESE },
-  { "输出_11",    0x0b,     FP_LANG_SCHINESE },
-  { "输出_12",    0x0c,     FP_LANG_SCHINESE },
-  { "输出_13",    0x0d,     FP_LANG_SCHINESE },
-  { "输出_14",    0x0e,     FP_LANG_SCHINESE },
-  { "输出_15",    0x0f,     FP_LANG_SCHINESE },
+  { "输出_0",     0x10,     FP_LANG_SCHINESE },
+  { "输出_1",     0x11,     FP_LANG_SCHINESE },
+  { "输出_2",     0x12,     FP_LANG_SCHINESE },
+  { "输出_3",     0x13,     FP_LANG_SCHINESE },
+  { "输出_4",     0x14,     FP_LANG_SCHINESE },
+  { "输出_5",     0x15,     FP_LANG_SCHINESE },
+  { "输出_6",     0x16,     FP_LANG_SCHINESE },
+  { "输出_7",     0x17,     FP_LANG_SCHINESE },
+  { "输出_8",     0x18,     FP_LANG_SCHINESE },
+  { "输出_9",     0x19,     FP_LANG_SCHINESE },
+  { "输出_10",    0x1a,     FP_LANG_SCHINESE },
+  { "输出_11",    0x1b,     FP_LANG_SCHINESE },
+  { "输出_12",    0x1c,     FP_LANG_SCHINESE },
+  { "输出_13",    0x1d,     FP_LANG_SCHINESE },
+  { "输出_14",    0x1e,     FP_LANG_SCHINESE },
+  { "输出_15",    0x1f,     FP_LANG_SCHINESE },
 };
 
 // -----------------------------------------------------------------------------------------
@@ -578,6 +578,7 @@ static name_t channel_names[] = {
 // -----------------------------------------------------------------------------------------
 struct key_label_t {
   char text[16];
+  char always_0;
   uint color;
 };
 
@@ -762,7 +763,7 @@ void config_bind_add_keyup(byte code, key_bind_t bind) {
 void config_bind_set_label(byte code, const char *label) {
   thread_lock lock(config_lock);
 
-  strcpy_s(settings[current_setting].key_label[code].text, label ? label : "");
+  strncpy(settings[current_setting].key_label[code].text, label ? label : "", sizeof(settings[current_setting].key_label[code].text));
 }
 
 const char* config_bind_get_label(byte code) {
