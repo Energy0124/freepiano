@@ -22,7 +22,7 @@ Download lastest version: [FreePiano 1.8](http://sourceforge.net/projects/freepi
 5. Multi sets of keyboard layout can be switched anytime during play.
 6. Export your song to mp4 directly.
 
-##2013-06-24  FreePiano 1.8
+##2013-06-27  FreePiano 1.8
 * Raw MIDI message support, with 'MIDI' command you can send at most 3 hex
   digitals as a midi message. all other script commands are nolonger MIDI
   signals.
