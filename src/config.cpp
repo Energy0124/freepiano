@@ -1445,7 +1445,7 @@ static bool match_event(char **str, key_bind_t *e) {
 
     // version earlier than 1.7 needs to convert note names
     if (map_version < 0x01070000) {
-      arg1 -= 12;
+      arg2 -= 12;
     }
 
     // default pressure is 127
