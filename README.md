@@ -60,7 +60,8 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 * Adds fixed-doh display mode.
 * Adds keyboard animation, can be changed in gui settings.
 * Adds a 'Sync' modifier on controller command, combined use with other
-  modifiers. for example 'SyncPress' will do a 'Press' control after playing next note.
+  modifiers. for example 'SyncPress' will do a 'Press' control after playing
+  next note.
 * Fixed a bug that keyboard map script editor still has a length limit.
 
 
@@ -85,7 +86,8 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 
 **2012-10-16  FreePiano 1.4.1**
 
-* When using MIDI keyboard, you can also use KEY, VELOCITY and OCTSHIFT on the main screen.
+* When using MIDI keyboard, you can also use KEY, VELOCITY and OCTSHIFT on the
+  main screen.
 * Adds a option that can display original key or transcribed key.
 
 
@@ -117,7 +119,8 @@ You can use freepiano to Play piano with computer keyboard or MIDI keyboard with
 * Fixed a bug that midi events not recorded.
 * Fixed a bug that mapping some controls to some key may not work.
 * Fixed a but that program crashes when loading some VST plugin.
-* New extension for MIDI controller message,  Add, Sub, Flip can be used in MIDI controller message.
+* New extension for MIDI controller message,  Add, Sub, Flip can be used in
+  MIDI controller message.
 * New extension for MIDI program change message, same as controller message.
 * Programs, controller values can be save to group settings.
 
