@@ -28,7 +28,7 @@ LicenseFile=C:\Users\Tyler\projects\freepiano\LICENSE.txt
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
-OutputBaseFilename=freepiano-2.2.2.1-setup
+OutputBaseFilename=freepiano-{#MyAppVersion}-setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
